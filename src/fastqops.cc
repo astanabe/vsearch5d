@@ -218,10 +218,17 @@ void fastq_filter()
 
           if (opt_fastaout)
             {
-              fasta_print_relabel(fp_fastaout,
-                                  p, length,
-                                  d, fastq_get_header_length(h),
-                                  1, kept);
+              if (opt_eeout || opt_fastq_eeout)
+                fasta_print_relabel_ee(fp_fastaout,
+                                       p, length,
+                                       d, fastq_get_header_length(h),
+                                       1, kept,
+                                       ee);
+              else
+                fasta_print_relabel(fp_fastaout,
+                                    p, length,
+                                    d, fastq_get_header_length(h),
+                                    1, kept);
             }
           if (opt_fastqout)
             {
@@ -242,7 +249,7 @@ void fastq_filter()
                   d = hex_sha1;
                 }
               
-              if (opt_eeout)
+              if (opt_eeout || opt_fastq_eeout)
                 fastq_print_with_ee(fp_fastqout, d, p, q, ee);
               else
                 fastq_print(fp_fastqout, d, p, q);
@@ -259,10 +266,17 @@ void fastq_filter()
 
           if (opt_fastaout_discarded)
             {
-              fasta_print_relabel(fp_fastaout_discarded,
-                                  p, length,
-                                  d, fastq_get_header_length(h),
-                                  1, discarded);
+              if (opt_eeout || opt_fastq_eeout)
+                fasta_print_relabel_ee(fp_fastaout_discarded,
+                                       p, length,
+                                       d, fastq_get_header_length(h),
+                                       1, discarded,
+                                       ee);
+              else
+                fasta_print_relabel(fp_fastaout_discarded,
+                                    p, length,
+                                    d, fastq_get_header_length(h),
+                                    1, discarded);
             }
 
           if (opt_fastqout_discarded)
@@ -283,7 +297,7 @@ void fastq_filter()
                   d = hex_sha1;
                 }
 
-              if (opt_eeout)
+              if (opt_eeout || opt_fastq_eeout)
                 fastq_print_with_ee(fp_fastqout_discarded, d, p, q, ee);
               else
                 fastq_print(fp_fastqout_discarded, d, p, q);
