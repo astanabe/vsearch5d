@@ -306,7 +306,7 @@ unsigned int chrmap_mask_ambig[256] =
   };
 
 
-char chrmap_complement[256] =
+const unsigned char chrmap_complement[256] =
   {
     /*
       
@@ -337,7 +337,7 @@ char chrmap_complement[256] =
     'N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'
   };
 
-char chrmap_normalize[256] =
+const unsigned char chrmap_normalize[256] =
   {
     /*
       
@@ -369,7 +369,7 @@ char chrmap_normalize[256] =
     'N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'
   };
 
-char chrmap_upcase[256] =
+const unsigned char chrmap_upcase[256] =
   {
     /*
       
@@ -401,7 +401,7 @@ char chrmap_upcase[256] =
     'N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'
   };
 
-char chrmap_no_change[256] =
+const unsigned char chrmap_no_change[256] =
   {
     /*
       
@@ -432,7 +432,7 @@ char chrmap_no_change[256] =
     'N','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N'
   };
 
-char chrmap_identity[256] =
+const unsigned char chrmap_identity[256] =
   {
     /* identity map */
 

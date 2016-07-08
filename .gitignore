@@ -12,6 +12,7 @@
 /stamp-h1
 /eval
 /man
+/man/vsearch.1
 /test
 Makefile
 aclocal.m4
