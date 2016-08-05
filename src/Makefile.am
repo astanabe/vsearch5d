@@ -1,6 +1,6 @@
 bin_PROGRAMS = $(top_builddir)/bin/vsearch5d
 
-AM_CXXFLAGS=-Wall -Wsign-compare
+AM_CXXFLAGS=-Wall -Wsign-compare -O2 -g
 AM_CFLAGS=$(AM_CXXFLAGS)
 
 export MACOSX_DEPLOYMENT_TARGET
