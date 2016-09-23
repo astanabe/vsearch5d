@@ -161,7 +161,8 @@ void allpairs_output_results(int hit_count,
                                   query_head,
                                   qsequence,
                                   qseqlen,
-                                  qsequence_rc);
+                                  qsequence_rc,
+                                  hp->target);
               
           if (fp_userout)
             results_show_userout_one(fp_userout,
@@ -188,7 +189,8 @@ void allpairs_output_results(int hit_count,
                             query_head,
                             qsequence,
                             qseqlen,
-                            qsequence_rc);
+                            qsequence_rc,
+                            0);
       
       if (fp_userout)
         results_show_userout_one(fp_userout,

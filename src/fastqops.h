@@ -60,7 +60,8 @@
 */
 
 void fastq_chars();
+void fastq_convert();
 void fastq_filter();
 void fastq_stats();
+void fastx_filter();
 void fastx_revcomp();
-void fastq_convert();

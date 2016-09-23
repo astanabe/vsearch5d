@@ -111,6 +111,7 @@ char * opt_fastqout;
 char * opt_fastqout_discarded;
 char * opt_fastqout_notmerged_fwd;
 char * opt_fastqout_notmerged_rev;
+char * opt_fastx_filter;
 char * opt_fastx_mask;
 char * opt_fastx_revcomp;
 char * opt_fastx_subsample;
@@ -143,6 +144,7 @@ double opt_abskew;
 double opt_dn;
 double opt_fastq_maxee;
 double opt_fastq_maxee_rate;
+double opt_fastq_truncee;
 double opt_id;
 double opt_max_unmasked_pct;
 double opt_maxid;
@@ -187,6 +189,7 @@ long opt_fasta_width;
 long opt_fastq_ascii;
 long opt_fastq_asciiout;
 long opt_fastq_maxdiffs;
+long opt_fastq_maxlen;
 long opt_fastq_maxmergelen;
 long opt_fastq_maxns;
 long opt_fastq_minlen;
@@ -559,6 +562,7 @@ void args_init(int argc, char **argv)
   opt_fastq_maxdiffs = 5;
   opt_fastq_maxee = DBL_MAX;
   opt_fastq_maxee_rate = DBL_MAX;
+  opt_fastq_maxlen = LONG_MAX;
   opt_fastq_maxmergelen  = 1000000;
   opt_fastq_maxns = LONG_MAX;
   opt_fastq_mergepairs = 0;
@@ -575,10 +579,12 @@ void args_init(int argc, char **argv)
   opt_fastq_stats = 0;
   opt_fastq_stripleft = 0;
   opt_fastq_tail = 4;
+  opt_fastq_truncee = DBL_MAX;
   opt_fastq_trunclen = 0;
   opt_fastq_truncqual = LONG_MIN;
   opt_fastqout = 0;
   opt_fastqout_discarded = 0;
+  opt_fastx_filter = 0;
   opt_fastx_mask = 0;
   opt_fastx_revcomp = 0;
   opt_fastx_subsample = 0;
@@ -874,7 +880,13 @@ void args_init(int argc, char **argv)
     {"hspw",                  required_argument, 0, 0 },
     {"gzip_decompress",       no_argument,       0, 0 },
     {"bzip2_decompress",      no_argument,       0, 0 },
+<<<<<<< HEAD:src/vsearch5d.cc
     {"idoffset",              required_argument, 0, 0 },
+=======
+    {"fastq_maxlen",          required_argument, 0, 0 },
+    {"fastq_truncee",         required_argument, 0, 0 },
+    {"fastx_filter",          required_argument, 0, 0 },
+>>>>>>> upstream/master:src/vsearch.cc
     { 0, 0, 0, 0 }
   };
 
@@ -1614,18 +1626,28 @@ void args_init(int argc, char **argv)
           break;
 
         case 173:
-          /* gzip_decompress */
           opt_gzip_decompress = 1;
           break;
 
         case 174:
-          /* bzip2_decompress */
           opt_bzip2_decompress = 1;
           break;
 
         case 175:
+<<<<<<< HEAD:src/vsearch5d.cc
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
+=======
+          opt_fastq_maxlen = args_getlong(optarg);
+          break;
+
+        case 176:
+          opt_fastq_truncee = args_getdouble(optarg);
+          break;
+
+        case 177:
+          opt_fastx_filter = optarg;
+>>>>>>> upstream/master:src/vsearch.cc
           break;
 
         default:
@@ -1685,6 +1707,8 @@ void args_init(int argc, char **argv)
     commands++;
   if (opt_search_exact)
     commands++;
+  if (opt_fastx_filter)
+    commands++;
   if (opt_fastx_mask)
     commands++;
   if (opt_fastq_convert)
@@ -1722,8 +1746,8 @@ void args_init(int argc, char **argv)
   if ((opt_threads < 0) || (opt_threads > 1024))
     fatal("The argument to --threads must be in the range 0 (default) to 1024");
 
-  if ((opt_wordlength < 7) || (opt_wordlength > 15))
-    fatal("The argument to --wordlength must be in the range 7 to 15");
+  if ((opt_wordlength < 3) || (opt_wordlength > 15))
+    fatal("The argument to --wordlength must be in the range 3 to 15");
 
   if ((opt_iddef < 0) || (opt_iddef > 4))
     fatal("The argument to --iddef must in the range 0 to 4");
@@ -1846,6 +1870,7 @@ void args_init(int argc, char **argv)
       & opt_fastq_filter,
       & opt_fastq_mergepairs,
       & opt_fastq_stats,
+      & opt_fastx_filter,
       & opt_fastx_mask,
       & opt_fastx_revcomp,
       & opt_fastx_subsample,
@@ -1932,107 +1957,151 @@ void cmd_help()
               "  --bzip2_decompress          decompress input with bzip2 (required for pipes)\n"
               "  --fasta_width INT           width of FASTA seq lines, 0 for no wrap (80)\n"
               "  --gzip_decompress           decompress input with gzip (required for pipes)\n"
-              "  --help | --h                display help information\n"
+              "  --help | -h                 display help information\n"
               "  --log FILENAME              write messages, timing and memory info to file\n"
               "  --maxseqlength INT          maximum sequence length (50000)\n"
               "  --minseqlength INT          min seq length (clust/derep/search: 32, other:1)\n"
               "  --notrunclabels             do not truncate labels at first space\n"
               "  --quiet                     output just warnings and fatal errors to stderr\n"
               "  --threads INT               number of threads to use, zero for all cores (0)\n"
-              "  --version                   display version information\n"
+              "  --version | -v              display version information\n"
               "\n"
               "Chimera detection\n"
               "  --uchime_denovo FILENAME    detect chimeras de novo\n"
               "  --uchime_ref FILENAME       detect chimeras using a reference database\n"
-              "Options\n"
-              "  --abskew REAL               min abundance ratio of parent vs chimera (2.0)\n"
-              "  --alignwidth INT            width of alignment in uchimealn output (80)\n"
-              "  --borderline FILENAME       output borderline chimeric sequences to file\n"
-              "  --chimeras FILENAME         output chimeric sequences to file\n"
+              " Data\n"
               "  --db FILENAME               reference database for --uchime_ref\n"
+              " Parameters\n"
+              "  --abskew REAL               min abundance ratio of parent vs chimera (2.0)\n"
               "  --dn REAL                   'no' vote pseudo-count (1.4)\n"
-              "  --fasta_score               include chimera score in fasta output\n"
               "  --mindiffs INT              minimum number of differences in segment (3)\n"
               "  --mindiv REAL               minimum divergence from closest parent (0.8)\n"
               "  --minh REAL                 minimum score (0.28)\n"
+              "  --sizein                    propagate abundance annotation from input\n"
+              "  --self                      exclude identical labels for --uchime_ref\n"
+              "  --selfid                    exclude identical sequences for --uchime_ref\n"
+              "  --xn REAL                   'no' vote weight (8.0)\n"
+              " Output\n"
+              "  --alignwidth INT            width of alignment in uchimealn output (80)\n"
+              "  --borderline FILENAME       output borderline chimeric sequences to file\n"
+              "  --chimeras FILENAME         output chimeric sequences to file\n"
+              "  --fasta_score               include chimera score in fasta output\n"
               "  --nonchimeras FILENAME      output non-chimeric sequences to file\n"
               "  --relabel STRING            relabel nonchimeras with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
-              "  --self                      exclude identical labels for --uchime_ref\n"
-              "  --selfid                    exclude identical sequences for --uchime_ref\n"
               "  --sizeout                   include abundance information when relabelling\n"
               "  --uchimealns FILENAME       output chimera alignments to file\n"
               "  --uchimeout FILENAME        output to chimera info to tab-separated file\n"
               "  --uchimeout5                make output compatible with uchime version 5\n"
-              "  --xn REAL                   'no' vote weight (8.0)\n"
               "  --xsize                     strip abundance information in output\n"
               "\n"
               "Clustering\n"
               "  --cluster_fast FILENAME     cluster sequences after sorting by length\n"
               "  --cluster_size FILENAME     cluster sequences after sorting by abundance\n"
               "  --cluster_smallmem FILENAME cluster already sorted sequences (see -usersort)\n"
-              "Options (most searching options also apply)\n"
+              " Parameters (most searching options also apply)\n"
+              "  --cons_truncate             do not ignore terminal gaps in MSA for consensus\n"
+              "  --id REAL                   reject if identity lower, accepted values: 0-1.0\n"
+              "  --iddef INT                 id definition, 0-4=CD-HIT,all,int,MBL,BLAST (2)\n"
+              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
+              "  --sizein                    propagate abundance annotation from input\n"
+              "  --strand plus|both          cluster using plus or both strands (plus)\n"
+              "  --usersort                  indicate sequences not pre-sorted by length\n"
+              " Output\n"
               "  --centroids FILENAME        output centroid sequences to FASTA file\n"
               "  --clusterout_id             add cluster id info to consout and profile files\n"
               "  --clusterout_sort           order msaout, consout, profile by decr abundance\n"
               "  --clusters STRING           output each cluster to a separate FASTA file\n"
               "  --consout FILENAME          output cluster consensus sequences to FASTA file\n"
+<<<<<<< HEAD:src/vsearch5d.cc
               "  --cons_truncate             do not ignore terminal gaps in MSA for consensus\n"
               "  --id REAL                   reject if identity lower\n"
               "  --iddef INT                 id definition, 0-4=CD-HIT,all,int,MBL,BLAST (2)\n"
               "  --idoffset INT              id offset (0)\n"
+=======
+>>>>>>> upstream/master:src/vsearch.cc
               "  --msaout FILENAME           output multiple seq. alignments to FASTA file\n"
               "  --profile FILENAME          output sequence profile of each cluster to file\n"
-              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
               "  --relabel STRING            relabel centroids with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
-              "  --sizein                    propagate abundance annotation from input\n"
               "  --sizeorder                 sort accepted centroids by abundance (AGC)\n"
               "  --sizeout                   write cluster abundances to centroid file\n"
-              "  --strand plus|both          cluster using plus or both strands (plus)\n"
               "  --uc FILENAME               specify filename for UCLUST-like output\n"
-              "  --usersort                  indicate sequences not pre-sorted by length\n"
               "  --xsize                     strip abundance information in output\n"
               "\n"
               "Dereplication and rereplication\n"
               "  --derep_fulllength FILENAME dereplicate sequences in the given FASTA file\n"
               "  --derep_prefix FILENAME     dereplicate sequences in file based on prefixes\n"
               "  --rereplicate FILENAME      rereplicate sequences in the given FASTA file\n"
-              "Options\n"
+              " Parameters\n"
               "  --maxuniquesize INT         maximum abundance for output from dereplication\n"
               "  --minuniquesize INT         minimum abundance for output from dereplication\n"
+              "  --sizein                    propagate abundance annotation from input\n"
+              "  --strand plus|both          dereplicate plus or both strands (plus)\n"
+              " Output\n"
               "  --output FILENAME           output FASTA file\n"
               "  --relabel STRING            relabel with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
-              "  --sizein                    propagate abundance annotation from input\n"
               "  --sizeout                   write abundance annotation to output\n"
-              "  --strand plus|both          dereplicate plus or both strands (plus)\n"
               "  --topn INT                  output only n most abundant sequences after derep\n"
               "  --uc FILENAME               filename for UCLUST-like dereplication output\n"
               "  --xsize                     strip abundance information in derep output\n"
               "\n"
-              "FASTQ filtering\n"
-              "  --fastq_filter FILENAME     filter FASTQ file, output to FASTQ or FASTA file\n"
-              "Options\n"
-              "  --eeout                     include expected errors in FASTQ filter output\n"
+              "FASTQ format conversion\n"
+              "  --fastq_convert FILENAME    convert between FASTQ file formats\n"
+              " Parameters\n"
+              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
+              "  --fastq_asciiout INT        FASTQ output quality score ASCII base char (33)\n"
+              "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
+              "  --fastq_qmaxout INT         maximum base quality value for FASTQ output (41)\n"
+              "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
+              "  --fastq_qminout INT         minimum base quality value for FASTQ output (0)\n"
+              " Output\n"
+              "  --fastqout FILENAME         FASTQ output filename for converted sequences\n"
+              "\n"
+              "FASTQ format detection and quality analysis\n"
+              "  --fastq_chars FILENAME      analyse FASTQ file for version and quality range\n"
+              " Parameters\n"
+              "  --fastq_tail INT            min length of tails to count for fastq_chars (4)\n"
+              "\n"
+              "FASTQ quality statistics\n"
+              "  --fastq_stats FILENAME      report statistics on FASTQ file\n"
+              "  --fastq_eestats FILENAME    quality score and expected error statistics\n"
+              " Parameters\n"
+              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
+              "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
+              "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
+              " Output\n"
+              "  --log FILENAME              output statistics\n"
+              "\n"
+              "Filtering\n"
+              "  --fastx_filter FILENAME     filter and truncate sequences in FASTA/FASTQ file\n"
+              "  --fastq_filter FILENAME     filter and truncate sequences in FASTQ file\n"
+              " Parameters\n"
+              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
+              "  --fastq_maxee REAL          maximum expected error value for filter\n"
+              "  --fastq_maxee_rate REAL     maximum expected error rate for filter\n"
+              "  --fastq_maxlen INT          maximum length of sequence for filter\n"
+              "  --fastq_maxns INT           maximum number of N's for filter\n"
+              "  --fastq_minlen INT          minimum length of sequence for filter\n"
+              "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
+              "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
+              "  --fastq_stripleft INT       bases on the left to delete\n"
+              "  --fastq_truncee REAL        maximum total expected error for truncation\n"
+              "  --fastq_trunclen INT        read length for sequence truncation\n"
+              "  --fastq_truncqual INT       minimum base quality value for truncation\n"
+              " Output\n"
+              "  --eeout                     include expected errors in output\n"
               "  --fastaout FILENAME         FASTA output filename for passed sequences\n"
               "  --fastaout_discarded FNAME  FASTA filename for discarded sequences\n"
               "  --fastqout FILENAME         FASTQ output filename for passed sequences\n"
               "  --fastqout_discarded FNAME  FASTQ filename for discarded sequences\n"
-              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
-              "  --fastq_maxee REAL          maximum expected error value for FASTQ filter\n"
-              "  --fastq_maxee_rate REAL     maximum expected error rate for FASTQ filter\n"
-              "  --fastq_maxns INT           maximum number of N's for FASTQ filter\n"
-              "  --fastq_minlen INT          minimum length for FASTQ filter\n"
-              "  --fastq_stripleft INT       bases on the left to delete for FASTQ filter\n"
-              "  --fastq_trunclen INT        read length for FASTQ filter truncation\n"
-              "  --fastq_truncqual INT       base quality value for FASTQ filter truncation\n"
               "  --relabel STRING            relabel filtered sequences with given prefix\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel filtered sequences with md5 digest\n"
@@ -2040,32 +2109,36 @@ void cmd_help()
               "  --sizeout                   include abundance information when relabelling\n"
               "  --xsize                     strip abundance information in output\n"
               "\n"
-              "FASTQ format conversion\n"
-              "  --fastq_convert FILENAME    convert between FASTQ file formats\n"
-              "Options\n"
+              "Masking (new)\n"
+              "  --fastx_mask FILENAME       mask sequences in the given FASTA or FASTQ file\n"
+              " Parameters\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
-              "  --fastq_asciiout INT        FASTQ output quality score ASCII base char (33)\n"
               "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
-              "  --fastq_qmaxout INT         maximum base quality value for FASTQ output (41)\n"
               "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
-              "  --fastq_qminout INT         minimum base quality value for FASTQ output (0)\n"
+              "  --hardmask                  mask by replacing with N instead of lower case\n"
+              "  --max_unmasked_pct          max unmasked %% of sequences to keep (100.0)\n"
+              "  --min_unmasked_pct          min unmasked %% of sequences to keep (0.0)\n"
+              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
+              " Output\n"
+              "  --fastaout FILENAME         output to specified FASTA file\n"
+              "  --fastqout FILENAME         output to specified FASTQ file\n"
               "\n"
-              "FASTQ format detection and quality analysis\n"
-              "  --fastq_chars FILENAME      analyse FASTQ file for version and quality range\n"
-              "Options\n"
-              "  --fastq_tail INT            min length of tails to count for fastq_chars (4)\n"
+              "Masking (old)\n"
+              "  --maskfasta FILENAME        mask sequences in the given FASTA file\n"
+              " Parameters\n"
+              "  --hardmask                  mask by replacing with N instead of lower case\n"
+              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
+              " Output\n"
+              "  --output FILENAME           output to specified FASTA file\n"
               "\n"
-              "FASTQ paired-end reads merging\n"
+              "Paired-end reads merging\n"
               "  --fastq_mergepairs FILENAME merge paired-end reads into one sequence\n"
-              "Options:\n"
-              "  --eetabbedout FILENAME      output error statistics to specified file\n"
-              "  --fastaout FILENAME         FASTA output filename for merged sequences\n"
-              "  --fastaout_notmerged_fwd FN FASTA filename for non-merged forward sequences\n"
-              "  --fastaout_notmerged_rev FN FASTA filename for non-merged reverse sequences\n"
+              " Data\n"
+              "  --reverse FILENAME          specify FASTQ file with reverse reads\n"
+              " Parameters\n"
               "  --fastq_allowmergestagger   Allow merging of staggered reads\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
-              "  --fastq_eeout               include expected errors in FASTQ output\n"
-              "  --fastq_maxdiffs            maximum number of different bases in overlap (5)\n"
+              "  --fastq_maxdiffs INT        maximum number of different bases in overlap (5)\n"
               "  --fastq_maxee REAL          maximum expected error value for merged sequence\n"
               "  --fastq_maxmergelen         maximum length of entire merged sequence\n"
               "  --fastq_maxns INT           maximum number of N's\n"
@@ -2078,67 +2151,41 @@ void cmd_help()
               "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
               "  --fastq_qminout INT         minimum base quality value for FASTQ output (0)\n"
               "  --fastq_truncqual INT       base quality value for truncation\n"
+              " Output\n"
+              "  --eetabbedout FILENAME      output error statistics to specified file\n"
+              "  --fastaout FILENAME         FASTA output filename for merged sequences\n"
+              "  --fastaout_notmerged_fwd FN FASTA filename for non-merged forward sequences\n"
+              "  --fastaout_notmerged_rev FN FASTA filename for non-merged reverse sequences\n"
+              "  --fastq_eeout               include expected errors in FASTQ output\n"
               "  --fastqout FILENAME         FASTQ output filename for merged sequences\n"
               "  --fastqout_notmerged_fwd  F FASTQ filename for non-merged forward sequences\n"
               "  --fastqout_notmerged_rev  F FASTQ filename for non-merged reverse sequences\n"
               "  --label_suffix              suffix to append to label of merged sequences\n"
-              "  --reverse FILENAME          specify FASTQ file with reverse reads\n"
-              "\n"
-              "FASTQ quality statistics\n"
-              "  --fastq_stats FILENAME      report FASTQ file statistics\n"
-              "  --fastq_eestats FILENAME    quality score and expected error statistics\n"
-              "Options\n"
-              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
-              "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
-              "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
-              "\n"
-              "Masking (new)\n"
-              "  --fastx_mask FILENAME       mask sequences in the given FASTA or FASTQ file\n"
-              "Options\n"
-              "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
-              "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
-              "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
-              "  --fastaout FILENAME         output to specified FASTA file\n"
-              "  --fastqout FILENAME         output to specified FASTQ file\n"
-              "  --hardmask                  mask by replacing with N instead of lower case\n"
-              "  --max_unmasked_pct          max unmasked %% of sequences to keep (100.0)\n"
-              "  --min_unmasked_pct          min unmasked %% of sequences to keep (0.0)\n"
-              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
-              "\n"
-              "Masking (old)\n"
-              "  --maskfasta FILENAME        mask sequences in the given FASTA file\n"
-              "Options\n"
-              "  --hardmask                  mask by replacing with N instead of lower case\n"
-              "  --output FILENAME           output to specified FASTA file\n"
-              "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
               "\n"
               "Pairwise alignment\n"
               "  --allpairs_global FILENAME  perform global alignment of all sequence pairs\n"
-              "Options (most searching options also apply)\n"
+              " Output (most searching options also apply)\n"
               "  --alnout FILENAME           filename for human-readable alignment output\n"
               "  --acceptall                 output all pairwise alignments\n"
               "\n"
               "Reverse complementation\n"
               "  --fastx_revcomp FILENAME    Reverse-complement seqs in FASTA or FASTQ file\n"
-              "Options\n"
-              "  --fastaout FILENAME         FASTA output filename\n"
+              " Parameters\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
               "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
               "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
+              " Output\n"
+              "  --fastaout FILENAME         FASTA output filename\n"
               "  --fastqout FILENAME         FASTQ output filename\n"
               "  --label_suffix STRING       Label to append to identifier in the output\n"
               "\n"
               "Searching\n"
               "  --search_exact FILENAME     filename of queries for exact match search\n"
               "  --usearch_global FILENAME   filename of queries for global alignment search\n"
-              "Options\n"
-              "  --alnout FILENAME           filename for human-readable alignment output\n"
-              "  --blast6out FILENAME        filename for blast-like tab-separated output\n"
+              " Data\n"
               "  --db FILENAME               filename for FASTA formatted database for search\n"
+              " Parameters\n"
               "  --dbmask none|dust|soft     mask db with dust, soft or no method (dust)\n"
-              "  --dbmatched FILENAME        FASTA file for matching database sequences\n"
-              "  --dbnotmatched FILENAME     FASTA file for non-matching database sequences\n"
-              "  --fastapairs FILENAME       FASTA file with pairs of query and target\n"
               "  --fulldp                    full dynamic programming alignment (always on)\n"
               "  --gapext STRING             penalties for gap extension (2I/1E)\n"
               "  --gapopen STRING            penalties for gap opening (20I/2E)\n"
@@ -2150,7 +2197,6 @@ void cmd_help()
               "  --idsuffix INT              reject if last n nucleotides do not match\n"
               "  --leftjust                  reject if terminal gaps at alignment left end\n"
               "  --match INT                 score for match (2)\n"
-              "  --matched FILENAME          FASTA file for matching query sequences\n"
               "  --maxaccepts INT            number of hits to accept and show per strand (1)\n"
               "  --maxdiffs INT              reject if more substitutions or indels\n"
               "  --maxgaps INT               reject if more indels\n"
@@ -2168,40 +2214,51 @@ void cmd_help()
               "  --minsizeratio REAL         reject if query/target abundance ratio lower\n"
               "  --minsl REAL                reject if shorter/longer length ratio lower\n"
               "  --mintsize INT              reject if target abundance lower\n"
-              "  --minwordmatches INT        minimum number of word matches required (10)\n"
+              "  --minwordmatches INT        minimum number of word matches required (12)\n"
               "  --mismatch INT              score for mismatch (-4)\n"
-              "  --notmatched FILENAME       FASTA file for non-matching query sequences\n"
-              "  --output_no_hits            output non-matching queries to output files\n"
               "  --pattern STRING            option is ignored\n"
               "  --qmask none|dust|soft      mask query with dust, soft or no method (dust)\n"
               "  --query_cov REAL            reject if fraction of query seq. aligned lower\n"
               "  --rightjust                 reject if terminal gaps at alignment right end\n"
-              "  --rowlen INT                width of alignment lines in alnout output (64)\n"
-              "  --samheader                 include a header in the SAM output file\n"
-              "  --samout FILENAME           filename for SAM format output\n"
+              "  --sizein                    propagate abundance annotation from input\n"
               "  --self                      reject if labels identical\n"
               "  --selfid                    reject if sequences identical\n"
-              "  --sizeout                   write abundance annotation to dbmatched file\n"
               "  --slots INT                 option is ignored\n"
               "  --strand plus|both          search plus or both strands (plus)\n"
               "  --target_cov REAL           reject if fraction of target seq. aligned lower\n"
+              "  --weak_id REAL              include aligned hits with >= id; continue search\n"
+              "  --wordlength INT            length of words for database index 3-15 (8)\n"
+              " Output\n"
+              "  --alnout FILENAME           filename for human-readable alignment output\n"
+              "  --blast6out FILENAME        filename for blast-like tab-separated output\n"
+              "  --dbmatched FILENAME        FASTA file for matching database sequences\n"
+              "  --dbnotmatched FILENAME     FASTA file for non-matching database sequences\n"
+              "  --fastapairs FILENAME       FASTA file with pairs of query and target\n"
+              "  --matched FILENAME          FASTA file for matching query sequences\n"
+              "  --notmatched FILENAME       FASTA file for non-matching query sequences\n"
+              "  --output_no_hits            output non-matching queries to output files\n"
+              "  --rowlen INT                width of alignment lines in alnout output (64)\n"
+              "  --samheader                 include a header in the SAM output file\n"
+              "  --samout FILENAME           filename for SAM format output\n"
+              "  --sizeout                   write abundance annotation to dbmatched file\n"
               "  --top_hits_only             output only hits with identity equal to the best\n"
               "  --uc FILENAME               filename for UCLUST-like output\n"
               "  --uc_allhits                show all, not just top hit with uc output\n"
               "  --userfields STRING         fields to output in userout file\n"
               "  --userout FILENAME          filename for user-defined tab-separated output\n"
-              "  --weak_id REAL              include aligned hits with >= id; continue search\n"
               "  --wordlength INT            length of words for database index 3-15 (8)\n"
               "\n"
               "Shuffling and sorting\n"
               "  --shuffle FILENAME          shuffle order of sequences in FASTA file randomly\n"
               "  --sortbylength FILENAME     sort sequences by length in given FASTA file\n"
               "  --sortbysize FILENAME       abundance sort sequences in given FASTA file\n"
-              "Options\n"
+              " Parameters\n"
               "  --maxsize INT               maximum abundance for sortbysize\n"
               "  --minsize INT               minimum abundance for sortbysize\n"
-              "  --output FILENAME           output to specified FASTA file\n"
               "  --randseed INT              seed for PRNG, zero to use random data source (0)\n"
+              "  --sizein                    propagate abundance annotation from input\n"
+              " Output\n"
+              "  --output FILENAME           output to specified FASTA file\n"
               "  --relabel STRING            relabel sequences with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
@@ -2212,20 +2269,23 @@ void cmd_help()
               "\n"
               "Subsampling\n"
               "  --fastx_subsample FILENAME  subsample sequences from given FASTA/FASTQ file\n"
-              "Options\n"
-              "  --fastaout FILENAME         output FASTA file for subsamples\n"
+              " Parameters\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
               "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
               "  --fastq_qmin INT            minimum base quality value for FASTQ input (0)\n"
-              "  --fastqout FILENAME         output FASTQ file for subsamples\n"
               "  --randseed INT              seed for PRNG, zero to use random data source (0)\n"
+              "  --sample_pct REAL           sampling percentage between 0.0 and 100.0\n"
+              "  --sample_size INT           sampling size\n"
+              "  --sizein                    consider abundance info from input, do not ignore\n"
+              " Output\n"
+              "  --fastaout FILENAME         output subsampled sequences to FASTA file\n"
+              "  --fastaout_discarded FILE   output non-subsampled sequences to FASTA file\n"
+              "  --fastqout FILENAME         output subsampled sequences to FASTQ file\n"
+              "  --fastqout_discarded        output non-subsampled sequences to FASTQ file\n"
               "  --relabel STRING            relabel sequences with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
-              "  --sample_pct REAL           sampling percentage between 0.0 and 100.0\n"
-              "  --sample_size INT           sampling size\n"
-              "  --sizein                    consider abundance info from input, do not ignore\n"
               "  --sizeout                   update abundance information in output\n"
               "  --xsize                     strip abundance information in output\n"
           );
@@ -2387,9 +2447,9 @@ void cmd_none()
             "vsearch --fastq_chars FILENAME\n"
             "vsearch --fastq_convert FILENAME --fastqout FILENAME --fastq_ascii 64\n"
             "vsearch --fastq_eestats FILENAME --output FILENAME\n"
-            "vsearch --fastq_filter FILENAME --fastqout FILENAME --fastq_truncqual 20\n"
             "vsearch --fastq_mergepairs FILENAME --reverse FILENAME --fastqout FILENAME\n"
             "vsearch --fastq_stats FILENAME --log FILENAME\n"
+            "vsearch --fastx_filter FILENAME --fastaout FILENAME --fastq_trunclen 100\n"
             "vsearch --fastx_mask FILENAME --fastaout FILENAME\n"
             "vsearch --fastx_revcomp FILENAME --fastqout FILENAME\n"
             "vsearch --fastx_subsample FILENAME --fastaout FILENAME --sample_pct 1\n"
@@ -2480,6 +2540,14 @@ void cmd_fastq_filter()
       (!opt_fastqout_discarded) && (!opt_fastaout_discarded))
     fatal("No output files specified");
   fastq_filter();
+}
+
+void cmd_fastx_filter()
+{
+  if ((!opt_fastqout) && (!opt_fastaout) &&
+      (!opt_fastqout_discarded) && (!opt_fastaout_discarded))
+    fatal("No output files specified");
+  fastx_filter();
 }
 
 void cmd_fastq_mergepairs()
@@ -2594,6 +2662,8 @@ int main(int argc, char** argv)
     fastq_stats();
   else if (opt_fastq_filter)
     cmd_fastq_filter();
+  else if (opt_fastx_filter)
+    cmd_fastx_filter();
   else if (opt_fastx_revcomp)
     cmd_fastx_revcomp();
   else if (opt_search_exact)
