@@ -87,13 +87,17 @@ static FILE * fp_matched = 0;
 static FILE * fp_notmatched = 0;
 static FILE * fp_dbmatched = 0;
 static FILE * fp_dbnotmatched = 0;
+static FILE * fp_otutabout = 0;
+static FILE * fp_mothur_shared_out = 0;
+static FILE * fp_biomout = 0;
 
 void search_output_results(int hit_count,
                            struct hit * hits,
                            char * query_head,
                            int qseqlen,
                            char * qsequence,
-                           char * qsequence_rc)
+                           char * qsequence_rc,
+                           int qsize)
 {
   pthread_mutex_lock(&mutex_output);
 
@@ -121,7 +125,12 @@ void search_output_results(int hit_count,
   if (toreport)
     {
       double top_hit_id = hits[0].id;
-      
+
+      if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
+        otutable_add(query_head,
+                     db_getheader(hits[0].target),
+                     qsize);
+
       for(int t = 0; t < toreport; t++)
         {
           struct hit * hp = hits + t;
@@ -250,7 +259,8 @@ int search_query(long t)
                         si_plus[t].query_head,
                         si_plus[t].qseqlen,
                         si_plus[t].qsequence,
-                        opt_strand > 1 ? si_minus[t].qsequence : 0);
+                        opt_strand > 1 ? si_minus[t].qsequence : 0,
+                        si_plus[t].qsize);
 
   /* free memory for alignment strings */
   for(int i=0; i<hit_count; i++)
@@ -505,6 +515,27 @@ void search_prep(char * cmdline, char * progheader)
         fatal("Unable to open notmatched output file for writing");
     }
 
+  if (opt_otutabout)
+    {
+      fp_otutabout = fopen(opt_otutabout, "w");
+      if (! fp_otutabout)
+        fatal("Unable to open OTU table (text format) output file for writing");
+    }
+
+  if (opt_mothur_shared_out)
+    {
+      fp_mothur_shared_out = fopen(opt_mothur_shared_out, "w");
+      if (! fp_mothur_shared_out)
+        fatal("Unable to open OTU table (mothur format) output file for writing");
+    }
+
+  if (opt_biomout)
+    {
+      fp_biomout = fopen(opt_biomout, "w");
+      if (! fp_biomout)
+        fatal("Unable to open OTU table (biom 1.0 format) output file for writing");
+    }
+
   db_read(opt_db, 0);
 
   results_show_samheader(fp_samout, cmdline, opt_db);
@@ -538,8 +569,10 @@ void search_prep(char * cmdline, char * progheader)
 void search_done()
 {
   /* clean up, global */
+
   dbindex_free();
   db_free();
+
   if (opt_matched)
     fclose(fp_matched);
   if (opt_notmatched)
@@ -579,6 +612,8 @@ void usearch_global(char * cmdline, char * progheader)
 
   dbmatched = (int*) xmalloc(seqcount * sizeof(int*));
   memset(dbmatched, 0, seqcount * sizeof(int*));
+
+  otutable_init();
 
   /* prepare reading of queries */
   qmatches = 0;
@@ -621,6 +656,26 @@ void usearch_global(char * cmdline, char * progheader)
   if (opt_log)
     fprintf(fp_log, "Matching query sequences: %d of %d (%.2f%%)\n", 
             qmatches, queries, 100.0 * qmatches / queries);
+
+  if (opt_biomout)
+    {
+      otutable_print_biomout(fp_biomout);
+      fclose(fp_biomout);
+    }
+
+  if (opt_otutabout)
+    {
+      otutable_print_otutabout(fp_otutabout);
+      fclose(fp_otutabout);
+    }
+
+  if (opt_mothur_shared_out)
+    {
+      otutable_print_mothur_shared_out(fp_mothur_shared_out);
+      fclose(fp_mothur_shared_out);
+    }
+
+  otutable_done();
 
   if (opt_dbmatched || opt_dbnotmatched)
     {

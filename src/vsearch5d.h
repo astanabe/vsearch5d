@@ -148,6 +148,7 @@
 #include "mergepairs.h"
 #include "eestats.h"
 #include "rerep.h"
+#include "otutable.h"
 
 #define PROG_NAME PACKAGE
 #define PROG_VERSION PACKAGE_VERSION
@@ -179,6 +180,7 @@ extern bool opt_xsize;
 extern char * opt_allpairs_global;
 extern char * opt_alnout;
 extern char * opt_blast6out;
+extern char * opt_biomout;
 extern char * opt_borderline;
 extern char * opt_centroids;
 extern char * opt_chimeras;
@@ -216,9 +218,11 @@ extern char * opt_label_suffix;
 extern char * opt_log;
 extern char * opt_maskfasta;
 extern char * opt_matched;
+extern char * opt_mothur_shared_out;
 extern char * opt_msaout;
 extern char * opt_nonchimeras;
 extern char * opt_notmatched;
+extern char * opt_otutabout;
 extern char * opt_output;
 extern char * opt_pattern;
 extern char * opt_profile;
@@ -299,6 +303,7 @@ extern long opt_fastq_qminout;
 extern long opt_fastq_stripleft;
 extern long opt_fastq_tail;
 extern long opt_fastq_trunclen;
+extern long opt_fastq_trunclen_keep;
 extern long opt_fastq_truncqual;
 extern long opt_fulldp;
 extern long opt_hardmask;
