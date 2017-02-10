@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -115,7 +115,7 @@ void sortbysize()
 
   for(int i=0; i<dbsequencecount; i++)
     {
-      long size = db_getabundance(i);
+      int64_t size = db_getabundance(i);
       
       if((size >= opt_minsize) && (size <= opt_maxsize))
         {
@@ -163,7 +163,7 @@ void sortbysize()
   progress_done();
   show_rusage();
   
-  free(sortinfo);
+  xfree(sortinfo);
   db_free();
   fclose(fp_output);
 }

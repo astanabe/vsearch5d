@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -60,13 +60,13 @@
 */
 
 extern unsigned int * kmercount; /* number of matching seqnos for each kmer */
-extern unsigned long * kmerhash;  /* index into the list below for each kmer */
+extern uint64_t * kmerhash;  /* index into the list below for each kmer */
 extern unsigned int * kmerindex; /* the list of matching seqnos for kmers */
 extern bitmap_t * * kmerbitmap;
 extern unsigned int * dbindex_map;
 extern unsigned int dbindex_count;
 
-void fprint_kmer(FILE * f, unsigned int k, unsigned long kmer);
+void fprint_kmer(FILE * f, unsigned int k, uint64_t kmer);
 
 void dbindex_prepare(int use_bitmap, int seqmask);
 void dbindex_addallsequences(int seqmask);

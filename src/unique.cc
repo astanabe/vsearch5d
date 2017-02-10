@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -84,8 +84,8 @@ struct uhandle_s
   int size;
   int alloc;
 
-  unsigned long bitmap_size;
-  unsigned long * bitmap;
+  uint64_t bitmap_size;
+  uint64_t * bitmap;
 };
 
 struct uhandle_s * unique_init()
@@ -107,12 +107,12 @@ struct uhandle_s * unique_init()
 void unique_exit(struct uhandle_s * uh)
 {
   if (uh->bitmap)
-    free(uh->bitmap);
+    xfree(uh->bitmap);
   if (uh->hash)
-    free(uh->hash);
+    xfree(uh->hash);
   if (uh->list)
-    free(uh->list);
-  free(uh);
+    xfree(uh->list);
+  xfree(uh);
 }
 
 int unique_compare(const void * a, const void * b)
@@ -148,21 +148,21 @@ void unique_count_bitmap(struct uhandle_s * uh,
         xrealloc(uh->list, sizeof(unsigned int) * uh->alloc);
     }
   
-  unsigned long size = 1UL << (k << 1UL);
+  uint64_t size = 1UL << (k << 1UL);
   
   /* reallocate bitmap arrays if necessary */
   
   if (uh->bitmap_size < size)
     {
-      uh->bitmap = (unsigned long *) xrealloc(uh->bitmap, size >> 3UL);
+      uh->bitmap = (uint64_t *) xrealloc(uh->bitmap, size >> 3UL);
       uh->bitmap_size = size;
     }
   
   memset(uh->bitmap, 0, size >> 3UL);
 
-  unsigned long bad = 0;
-  unsigned long kmer = 0;
-  unsigned long mask = size - 1UL;
+  uint64_t bad = 0;
+  uint64_t kmer = 0;
+  uint64_t mask = size - 1UL;
   char * s = seq;
   char * e1 = s + k-1;
   char * e2 = s + seqlen;
@@ -195,8 +195,8 @@ void unique_count_bitmap(struct uhandle_s * uh,
 
       if (!bad)
         {
-          unsigned long x = kmer >> 6UL;
-          unsigned long y = 1UL << (kmer & 63UL);
+          uint64_t x = kmer >> 6UL;
+          uint64_t y = 1UL << (kmer & 63UL);
           if (!(uh->bitmap[x] & y))
             {
               /* not seen before */
@@ -239,8 +239,8 @@ void unique_count_hash(struct uhandle_s * uh,
       
   memset(uh->hash, 0, sizeof(struct bucket_s) * uh->size);
       
-  unsigned long bad = 0;
-  unsigned long j;
+  uint64_t bad = 0;
+  uint64_t j;
   unsigned int kmer = 0;
   unsigned int mask = (1<<(2*k)) - 1;
   char * s = seq;
@@ -261,7 +261,7 @@ void unique_count_hash(struct uhandle_s * uh,
       kmer |= chrmap_2bit[(int)(*s++)];
     }
 
-  unsigned long unique = 0;
+  uint64_t unique = 0;
 
   while (s < e2)
     {
@@ -322,8 +322,8 @@ int unique_count_shared(struct uhandle_s * uh,
       for(int i = 0; i<listlen; i++)
         {
           unsigned int kmer = list[i];
-          unsigned long x = kmer >> 6UL;
-          unsigned long y = 1UL << (kmer & 63UL);
+          uint64_t x = kmer >> 6UL;
+          uint64_t y = 1UL << (kmer & 63UL);
           if (uh->bitmap[x] & y)
             count++;
         }
@@ -333,7 +333,7 @@ int unique_count_shared(struct uhandle_s * uh,
       for(int i = 0; i<listlen; i++)
         {
           unsigned int kmer = list[i];
-          unsigned long j = HASH((char*)&kmer, (k+3)/4) & uh->hash_mask;
+          uint64_t j = HASH((char*)&kmer, (k+3)/4) & uh->hash_mask;
           while((uh->hash[j].count) && (uh->hash[j].kmer != kmer))
             j = (j + 1) & uh->hash_mask;
           if (uh->hash[j].count)

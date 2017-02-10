@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -62,12 +62,12 @@
 #include "vsearch5d.h"
 
 static bitmap_t * dbhash_bitmap;
-static unsigned long dbhash_size;
+static uint64_t dbhash_size;
 static unsigned int dbhash_shift;
-static unsigned long dbhash_mask;
+static uint64_t dbhash_mask;
 static struct dbhash_bucket_s * dbhash_table;
 
-int dbhash_seqcmp(char * a, char * b, unsigned long n)
+int dbhash_seqcmp(char * a, char * b, uint64_t n)
 {
   char * p = a;
   char * q = b;
@@ -86,7 +86,7 @@ int dbhash_seqcmp(char * a, char * b, unsigned long n)
   return chrmap_4bit[(int)(*p)] - chrmap_4bit[(int)(*q)];
 }
 
-void dbhash_open(unsigned long maxelements)
+void dbhash_open(uint64_t maxelements)
 {
   /* adjust size of hash table for 2/3 fill rate */
   /* and use a multiple of 2 */
@@ -112,20 +112,20 @@ void dbhash_close()
 {
   bitmap_free(dbhash_bitmap);
   dbhash_bitmap = 0;
-  free(dbhash_table);
+  xfree(dbhash_table);
   dbhash_table = 0;
 }
 
-long dbhash_search_first(char * seq,
-                        unsigned long seqlen,
+int64_t dbhash_search_first(char * seq,
+                        uint64_t seqlen,
                         struct dbhash_search_info_s * info)
 {
   
-  unsigned long hash = hash_cityhash64(seq, seqlen);
+  uint64_t hash = hash_cityhash64(seq, seqlen);
   info->hash = hash;
   info->seq = seq;
   info->seqlen = seqlen;
-  unsigned long index = hash & dbhash_mask;
+  uint64_t index = hash & dbhash_mask;
   struct dbhash_bucket_s * bp = dbhash_table + index;
 
   while (bitmap_get(dbhash_bitmap, index)
@@ -146,12 +146,12 @@ long dbhash_search_first(char * seq,
     return -1;
 }
 
-long dbhash_search_next(struct dbhash_search_info_s * info)
+int64_t dbhash_search_next(struct dbhash_search_info_s * info)
 {
-  unsigned long hash = info->hash;
+  uint64_t hash = info->hash;
   char * seq = info->seq;
-  unsigned long seqlen = info->seqlen;
-  unsigned long index = (info->index + 1) & dbhash_mask;
+  uint64_t seqlen = info->seqlen;
+  uint64_t index = (info->index + 1) & dbhash_mask;
   struct dbhash_bucket_s * bp = dbhash_table + index;
 
   while (bitmap_get(dbhash_bitmap, index)
@@ -172,11 +172,11 @@ long dbhash_search_next(struct dbhash_search_info_s * info)
     return -1;
 }
 
-void dbhash_add(char * seq, unsigned long seqlen, unsigned long seqno)
+void dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno)
 {
   struct dbhash_search_info_s info;
   
-  long ret = dbhash_search_first(seq, seqlen, & info);
+  int64_t ret = dbhash_search_first(seq, seqlen, & info);
   while (ret >= 0)
     ret = dbhash_search_next(&info);
   
@@ -186,10 +186,10 @@ void dbhash_add(char * seq, unsigned long seqlen, unsigned long seqno)
   bp->seqno = seqno;
 }
 
-void dbhash_add_one(unsigned long seqno)
+void dbhash_add_one(uint64_t seqno)
 {
   char * seq = db_getsequence(seqno);
-  unsigned long seqlen = db_getsequencelen(seqno);
+  uint64_t seqlen = db_getsequencelen(seqno);
   char * normalized = (char*) xmalloc(seqlen+1);
   string_normalize(normalized, seq, seqlen);
   dbhash_add(normalized, seqlen, seqno);
@@ -199,14 +199,14 @@ void dbhash_add_all()
 {
   progress_init("Hashing database sequences", db_getsequencecount());
   char * normalized = (char*) xmalloc(db_getlongestsequence()+1);
-  for(unsigned long seqno=0; seqno < db_getsequencecount(); seqno++)
+  for(uint64_t seqno=0; seqno < db_getsequencecount(); seqno++)
     {
       char * seq = db_getsequence(seqno);
-      unsigned long seqlen = db_getsequencelen(seqno);
+      uint64_t seqlen = db_getsequencelen(seqno);
       string_normalize(normalized, seq, seqlen);
       dbhash_add(normalized, seqlen, seqno);
       progress_update(seqno+1);
     }
-  free(normalized);
+  xfree(normalized);
   progress_done();
 }

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -124,13 +124,13 @@ void fasta_filter_sequence(fastx_handle h,
           if ((c>=32) && (c<127))
             snprintf(msg,
                      200,
-                     "illegal character '%c' on line %lu in fasta file",
+                     "illegal character '%c' on line %" PRIu64 " in fasta file",
                      c,
                      h->lineno);
           else
             snprintf(msg,
                      200,
-                     "illegal unprintable character %#.2x (hexadecimal) on line %lu in fasta file",
+                     "illegal unprintable character %#.2x (hexadecimal) on line %" PRIu64 " in fasta file",
                      c,
                      h->lineno);
           fatal(msg);
@@ -163,7 +163,7 @@ bool fasta_next(fastx_handle h,
   h->sequence_buffer.length = 0;
   h->sequence_buffer.data[0] = 0;
 
-  unsigned long rest = fastx_file_fill_buffer(h);
+  uint64_t rest = fastx_file_fill_buffer(h);
 
   if (rest == 0)
     return 0;
@@ -194,7 +194,7 @@ bool fasta_next(fastx_handle h,
                            rest);
 
       /* copy to header buffer */
-      unsigned long len = rest;
+      uint64_t len = rest;
       if (lf)
         {
           /* LF found, copy up to and including LF */
@@ -227,7 +227,7 @@ bool fasta_next(fastx_handle h,
       lf = (char *) memchr(h->file_buffer.data + h->file_buffer.position,
                            '\n', rest);
 
-      unsigned long len = rest;
+      uint64_t len = rest;
       if (lf)
         {
           /* LF found, copy up to and including LF */
@@ -248,37 +248,37 @@ bool fasta_next(fastx_handle h,
   return 1;
 }
 
-long fasta_get_abundance(fastx_handle h)
+int64_t fasta_get_abundance(fastx_handle h)
 {
   return abundance_get(global_abundance, h->header_buffer.data);
 }
 
-unsigned long fasta_get_position(fastx_handle h)
+uint64_t fasta_get_position(fastx_handle h)
 {
   return h->file_position;
 }
 
-unsigned long fasta_get_size(fastx_handle h)
+uint64_t fasta_get_size(fastx_handle h)
 {
   return h->file_size;
 }
 
-unsigned long fasta_get_lineno(fastx_handle h)
+uint64_t fasta_get_lineno(fastx_handle h)
 {
   return h->lineno_start;
 }
 
-unsigned long fasta_get_seqno(fastx_handle h)
+uint64_t fasta_get_seqno(fastx_handle h)
 {
   return h->seqno;
 }
 
-unsigned long fasta_get_header_length(fastx_handle h)
+uint64_t fasta_get_header_length(fastx_handle h)
 {
   return h->header_buffer.length;
 }
 
-unsigned long fasta_get_sequence_length(fastx_handle h)
+uint64_t fasta_get_sequence_length(fastx_handle h)
 {
   return h->sequence_buffer.length;
 }
@@ -301,7 +301,7 @@ void fasta_print_header(FILE * fp, const char * hdr)
   fprintf(fp, ">%s\n", hdr);
 }
 
-void fasta_print_sequence(FILE * fp, char * seq, unsigned long len, int width)
+void fasta_print_sequence(FILE * fp, char * seq, uint64_t len, int width)
 {
   /*
      The actual length of the sequence may be longer than "len", but only
@@ -314,8 +314,8 @@ void fasta_print_sequence(FILE * fp, char * seq, unsigned long len, int width)
     fprintf(fp, "%.*s\n", (int)(len), seq);
   else
     {
-      long rest = len;
-      for(unsigned long i=0; i<len; i += width)
+      int64_t rest = len;
+      for(uint64_t i=0; i<len; i += width)
         {
           fprintf(fp, "%.*s\n", (int)(MIN(rest,width)), seq+i);
           rest -= width;
@@ -324,14 +324,14 @@ void fasta_print_sequence(FILE * fp, char * seq, unsigned long len, int width)
 }
 
 void fasta_print(FILE * fp, const char * hdr,
-                 char * seq, unsigned long len)
+                 char * seq, uint64_t len)
 {
   fasta_print_header(fp, hdr);
   fasta_print_sequence(fp, seq, len, opt_fasta_width);
 }
 
 void fasta_print_ee(FILE * fp, const char * hdr,
-                    char * seq, unsigned long len,
+                    char * seq, uint64_t len,
                     double ee)
 {
   fprintf(fp, ">%s;%6.4lf;\n", hdr, ee);
@@ -448,7 +448,7 @@ void fasta_print_relabel(FILE * fp,
 }
 
 void fasta_print_db_relabel(FILE * fp,
-                            unsigned long seqno,
+                            uint64_t seqno,
                             int ordinal)
 {
   fasta_print_relabel(fp,
@@ -460,24 +460,24 @@ void fasta_print_db_relabel(FILE * fp,
                       ordinal);
 }
 
-void fasta_print_db_sequence(FILE * fp, unsigned long seqno)
+void fasta_print_db_sequence(FILE * fp, uint64_t seqno)
 {
   char * seq = db_getsequence(seqno);
-  long seqlen = db_getsequencelen(seqno);
+  int64_t seqlen = db_getsequencelen(seqno);
   fasta_print_sequence(fp, seq, seqlen, opt_fasta_width);
 }
 
-void fasta_print_db(FILE * fp, unsigned long seqno)
+void fasta_print_db(FILE * fp, uint64_t seqno)
 {
   char * hdr = db_getheader(seqno);
   char * seq = db_getsequence(seqno);
-  long seqlen = db_getsequencelen(seqno);
+  int64_t seqlen = db_getsequencelen(seqno);
 
   fasta_print_header(fp, hdr);
   fasta_print_sequence(fp, seq, seqlen, opt_fasta_width);
 }
 
-void fasta_print_db_size(FILE * fp, unsigned long seqno, unsigned long size)
+void fasta_print_db_size(FILE * fp, uint64_t seqno, uint64_t size)
 {
   char * hdr = db_getheader(seqno);
   int hdrlen = db_getheaderlen(seqno);
@@ -491,12 +491,12 @@ void fasta_print_db_size(FILE * fp, unsigned long seqno, unsigned long size)
   fprintf(fp, "\n");
 
   char * seq = db_getsequence(seqno);
-  long seqlen = db_getsequencelen(seqno);
+  int64_t seqlen = db_getsequencelen(seqno);
 
   fasta_print_sequence(fp, seq, seqlen, opt_fasta_width);
 }
 
-void fasta_print_db_strip_size(FILE * fp, unsigned long seqno)
+void fasta_print_db_strip_size(FILE * fp, uint64_t seqno)
 {
   /* write FASTA but remove abundance information, as with --xsize option */
 
@@ -511,7 +511,7 @@ void fasta_print_db_strip_size(FILE * fp, unsigned long seqno)
   fprintf(fp, "\n");
 
   char * seq = db_getsequence(seqno);
-  long seqlen = db_getsequencelen(seqno);
+  int64_t seqlen = db_getsequencelen(seqno);
 
   fasta_print_sequence(fp, seq, seqlen, opt_fasta_width);
 }

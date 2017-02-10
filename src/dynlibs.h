@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -60,7 +60,11 @@
 */
 
 #ifdef HAVE_ZLIB_H
+#ifdef _WIN32
+extern HMODULE gz_lib;
+#else
 extern void * gz_lib;
+#endif
 extern gzFile (*gzdopen_p)(int, const char *);
 extern int (*gzclose_p)(gzFile);
 extern int (*gzread_p)(gzFile, void*, unsigned);
@@ -71,7 +75,11 @@ extern const char * (*gzerror_p)(gzFile, int*);
 #endif
 
 #ifdef HAVE_BZLIB_H
+#ifdef _WIN32
+extern HMODULE bz2_lib;
+#else
 extern void * bz2_lib;
+#endif
 extern BZFILE* (*BZ2_bzReadOpen_p)(int*, FILE*, int, int, void*, int);
 extern void (*BZ2_bzReadClose_p)(int*, BZFILE*);
 extern int (*BZ2_bzRead_p)(int*, BZFILE*, void*, int);

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -65,11 +65,11 @@
 
 static fastx_handle h;
 static bool is_fastq = 0;
-static unsigned long sequences = 0;
-static unsigned long nucleotides = 0;
-static unsigned long longest;
-static unsigned long shortest;
-static unsigned long longestheader;
+static uint64_t sequences = 0;
+static uint64_t nucleotides = 0;
+static uint64_t longest;
+static uint64_t shortest;
+static uint64_t longestheader;
 
 seqinfo_t * seqindex;
 char * datap;
@@ -79,7 +79,7 @@ bool db_is_fastq()
   return is_fastq;
 }
 
-char * db_getquality(unsigned long seqno)
+char * db_getquality(uint64_t seqno)
 {
   if (is_fastq)
     return datap + seqindex[seqno].qual_p;
@@ -98,10 +98,10 @@ void db_read(const char * filename, int upcase)
 
   is_fastq = fastx_is_fastq(h);
 
-  long filesize = fastx_get_size(h);
+  int64_t filesize = fastx_get_size(h);
   
-  char * prompt;
-  if (asprintf(& prompt, "Reading file %s", filename) == -1)
+  char * prompt = 0;
+  if (xsprintf(& prompt, "Reading file %s", filename) == -1)
     fatal("Out of memory");
 
   progress_init(prompt, filesize);
@@ -112,13 +112,13 @@ void db_read(const char * filename, int upcase)
   sequences = 0;
   nucleotides = 0;
 
-  long discarded_short = 0;
-  long discarded_long = 0;
+  int64_t discarded_short = 0;
+  int64_t discarded_long = 0;
 
   /* allocate space for data */
-  unsigned long dataalloc = 0;
+  uint64_t dataalloc = 0;
   datap = 0;
-  unsigned long datalen = 0;
+  uint64_t datalen = 0;
 
   /* allocate space for index */
   size_t seqindex_alloc = 0;
@@ -208,14 +208,14 @@ void db_read(const char * filename, int upcase)
     }
 
   progress_done();
-  free(prompt);
+  xfree(prompt);
   fastx_close(h);
 
   if (!opt_quiet)
     {
       if (sequences > 0)
         fprintf(stderr,
-                "%'lu nt in %'lu seqs, min %'lu, max %'lu, avg %'.0f\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n", 
                 db_getnucleotidecount(),
                 db_getsequencecount(),
                 db_getshortestsequence(),
@@ -223,7 +223,7 @@ void db_read(const char * filename, int upcase)
                 db_getnucleotidecount() * 1.0 / db_getsequencecount());
       else
         fprintf(stderr,
-                "%'lu nt in %'lu seqs\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n", 
                 db_getnucleotidecount(),
                 db_getsequencecount());
     }
@@ -232,7 +232,7 @@ void db_read(const char * filename, int upcase)
     {
       if (sequences > 0)
         fprintf(fp_log,
-                "%'lu nt in %'lu seqs, min %'lu, max %'lu, avg %'.0f\n\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n\n", 
                 db_getnucleotidecount(),
                 db_getsequencecount(),
                 db_getshortestsequence(),
@@ -240,7 +240,7 @@ void db_read(const char * filename, int upcase)
                 db_getnucleotidecount() * 1.0 / db_getsequencecount());
       else
         fprintf(fp_log,
-                "%'lu nt in %'lu seqs\n\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n\n", 
                 db_getnucleotidecount(),
                 db_getsequencecount());
     }
@@ -250,51 +250,51 @@ void db_read(const char * filename, int upcase)
   if (discarded_short)
     {
       fprintf(stderr,
-              "WARNING: %ld sequences shorter than %ld nucleotides discarded.\n",
+              "WARNING: %" PRId64 " sequences shorter than %" PRId64 " nucleotides discarded.\n",
               discarded_short, opt_minseqlength);
 
       if (opt_log)
         fprintf(fp_log,
-                "WARNING: %ld sequences shorter than %ld nucleotides discarded.\n\n",
+                "WARNING: %" PRId64 " sequences shorter than %" PRId64 " nucleotides discarded.\n\n",
                 discarded_short, opt_minseqlength);
     }
   
   if (discarded_long)
     {
       fprintf(stderr,
-              "WARNING: %ld sequences longer than %ld nucleotides discarded.\n",
+              "WARNING: %" PRId64 " sequences longer than %" PRId64 " nucleotides discarded.\n",
               discarded_long, opt_maxseqlength);
 
       if (opt_log)
         fprintf(fp_log,
-                "WARNING: %ld sequences longer than %ld nucleotides discarded.\n\n",
+                "WARNING: %" PRId64 " sequences longer than %" PRId64 " nucleotides discarded.\n\n",
                 discarded_long, opt_maxseqlength);
     }
 
   show_rusage();
 }
 
-unsigned long db_getsequencecount()
+uint64_t db_getsequencecount()
 {
   return sequences;
 }
 
-unsigned long db_getnucleotidecount()
+uint64_t db_getnucleotidecount()
 {
   return nucleotides;
 }
 
-unsigned long db_getlongestheader()
+uint64_t db_getlongestheader()
 {
   return longestheader;
 }
 
-unsigned long db_getlongestsequence()
+uint64_t db_getlongestsequence()
 {
   return longest;
 }
 
-unsigned long db_getshortestsequence()
+uint64_t db_getshortestsequence()
 {
   return shortest;
 }
@@ -302,9 +302,9 @@ unsigned long db_getshortestsequence()
 void db_free()
 {
   if (datap)
-    free(datap);
+    xfree(datap);
   if (seqindex)
-    free(seqindex);
+    xfree(seqindex);
 }
 
 int compare_bylength(const void * a, const void * b)

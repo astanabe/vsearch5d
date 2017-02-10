@@ -1,13 +1,14 @@
 /*
 
-  VSEARCH: a versatile open source tool for metagenomics
+  VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2014-2016, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
-  All rights reserved.
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
-  Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
-  Department of Informatics, University of Oslo,
-  PO Box 1080 Blindern, NO-0316 Oslo, Norway
+  Contact: Akifumi S. Tanabe
+  https://github.com/astanabe/vsearch5d
+
+  Original version of VSEARCH
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -60,7 +61,7 @@
 
 void otutable_init();
 void otutable_done();
-void otutable_add(char * query_header, char * target_header, long abundance);
+void otutable_add(char * query_header, char * target_header, int64_t abundance);
 void otutable_print_otutabout(FILE * fp);
 void otutable_print_mothur_shared_out(FILE * fp);
 void otutable_print_biomout(FILE * fp);

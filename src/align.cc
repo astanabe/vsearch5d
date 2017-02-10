@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -63,10 +63,10 @@
 
 struct nwinfo_s
 {
-  long dir_alloc;
-  long hearray_alloc;
+  int64_t dir_alloc;
+  int64_t hearray_alloc;
   char * dir;
-  long * hearray;
+  int64_t * hearray;
 };
 
 static const char maskup      =  1;
@@ -164,10 +164,10 @@ struct nwinfo_s * nw_init()
 void nw_exit(struct nwinfo_s * nw)
 {
   if (nw->dir)
-    free(nw->dir);
+    xfree(nw->dir);
   if (nw->hearray)
-    free(nw->hearray);
-  free(nw);
+    xfree(nw->hearray);
+  xfree(nw);
 }
 
 inline int nt_identical(char a, char b)
@@ -178,7 +178,7 @@ inline int nt_identical(char a, char b)
     return 0;
 }
 
-inline long getscore(long * score_matrix, char a, char b)
+inline int64_t getscore(int64_t * score_matrix, char a, char b)
 {
   return score_matrix[(chrmap_4bit[(int)a]<<4) + chrmap_4bit[(int)b]];
 }
@@ -187,35 +187,35 @@ void nw_align(char * dseq,
               char * dend,
               char * qseq,
               char * qend,
-              long * score_matrix,
-              long gapopen_q_left,
-              long gapopen_q_interior,
-              long gapopen_q_right,
-              long gapopen_t_left,
-              long gapopen_t_interior,
-              long gapopen_t_right,
-              long gapextend_q_left,
-              long gapextend_q_interior,
-              long gapextend_q_right,
-              long gapextend_t_left,
-              long gapextend_t_interior,
-              long gapextend_t_right,
-              long * nwscore,
-              long * nwdiff,
-              long * nwgaps,
-              long * nwindels,
-              long * nwalignmentlength,
+              int64_t * score_matrix,
+              int64_t gapopen_q_left,
+              int64_t gapopen_q_interior,
+              int64_t gapopen_q_right,
+              int64_t gapopen_t_left,
+              int64_t gapopen_t_interior,
+              int64_t gapopen_t_right,
+              int64_t gapextend_q_left,
+              int64_t gapextend_q_interior,
+              int64_t gapextend_q_right,
+              int64_t gapextend_t_left,
+              int64_t gapextend_t_interior,
+              int64_t gapextend_t_right,
+              int64_t * nwscore,
+              int64_t * nwdiff,
+              int64_t * nwgaps,
+              int64_t * nwindels,
+              int64_t * nwalignmentlength,
               char ** nwalignment,
-              long queryno,
-              long dbseqno,
+              int64_t queryno,
+              int64_t dbseqno,
               struct nwinfo_s * nw)
 {
 
-  long h, n, e, f, h_e, h_f;
-  long *hep;
+  int64_t h, n, e, f, h_e, h_f;
+  int64_t *hep;
   
-  long qlen = qend - qseq;
-  long dlen = dend - dseq;
+  int64_t qlen = qend - qseq;
+  int64_t dlen = dend - dseq;
 
   if (qlen * dlen > nw->dir_alloc)
     {
@@ -223,16 +223,16 @@ void nw_align(char * dseq,
       nw->dir = (char *) xrealloc(nw->dir, (size_t)nw->dir_alloc);
     }
 
-  long need = 2 * qlen * (long) sizeof(long);
+  int64_t need = 2 * qlen * (int64_t) sizeof(int64_t);
   if (need > nw->hearray_alloc)
     {
       nw->hearray_alloc = need;
-      nw->hearray = (long *) xrealloc(nw->hearray, (size_t)nw->hearray_alloc);
+      nw->hearray = (int64_t *) xrealloc(nw->hearray, (size_t)nw->hearray_alloc);
     }
 
   memset(nw->dir, 0, (size_t)(qlen*dlen));
 
-  long i, j;
+  int64_t i, j;
 
   for(i=0; i<qlen; i++)
   {
@@ -323,15 +323,15 @@ void nw_align(char * dseq,
     }
   }
   
-  long dist = nw->hearray[2*qlen-2];
+  int64_t dist = nw->hearray[2*qlen-2];
   
   /* backtrack: count differences and save alignment in cigar string */
 
-  long score = 0;
-  long alength = 0;
-  long matches = 0;
-  long gaps = 0;
-  long indels = 0;
+  int64_t score = 0;
+  int64_t alength = 0;
+  int64_t matches = 0;
+  int64_t gaps = 0;
+  int64_t indels = 0;
 
   char * cigar = (char *) xmalloc((size_t)(qlen + dlen + 1));
   char * cigarend = cigar+qlen+dlen+1;
@@ -345,10 +345,10 @@ void nw_align(char * dseq,
 
   while ((i>0) && (j>0))
   {
-    long gapopen_q   = (i < qlen) ? gapopen_q_interior   : gapopen_q_right;
-    long gapextend_q = (i < qlen) ? gapextend_q_interior : gapextend_q_right;
-    long gapopen_t   = (j < dlen) ? gapopen_t_interior   : gapopen_t_right;
-    long gapextend_t = (j < dlen) ? gapextend_t_interior : gapextend_t_right;
+    int64_t gapopen_q   = (i < qlen) ? gapopen_q_interior   : gapopen_q_right;
+    int64_t gapextend_q = (i < qlen) ? gapextend_q_interior : gapextend_q_right;
+    int64_t gapopen_t   = (j < dlen) ? gapopen_t_interior   : gapopen_t_right;
+    int64_t gapextend_t = (j < dlen) ? gapextend_t_interior : gapextend_t_right;
   
     int d = nw->dir[qlen*(j-1)+(i-1)];
 
@@ -435,7 +435,7 @@ void nw_align(char * dseq,
 
   /* move and reallocate cigar */
 
-  long cigarlength = cigar+qlen+dlen-cigarend;
+  int64_t cigarlength = cigar+qlen+dlen-cigarend;
   memmove(cigar, cigarend, (size_t)(cigarlength+1));
   cigar = (char*) xrealloc(cigar, (size_t)(cigarlength+1));
 
@@ -449,14 +449,14 @@ void nw_align(char * dseq,
 #if 1
   if (score != dist)
   {
-    fprintf(stderr, "WARNING: Error with query no %ld and db sequence no %ld:\n", queryno, dbseqno);
-    fprintf(stderr, "Initial and recomputed alignment score disagreement: %ld %ld\n", dist, score);
+    fprintf(stderr, "WARNING: Error with query no %" PRId64 " and db sequence no %" PRId64 ":\n", queryno, dbseqno);
+    fprintf(stderr, "Initial and recomputed alignment score disagreement: %" PRId64 " %" PRId64 "\n", dist, score);
     fprintf(stderr, "Alignment: %s\n", cigar);
 
     if (opt_log)
       {
-        fprintf(fp_log, "WARNING: Error with query no %ld and db sequence no %ld:\n", queryno, dbseqno);
-        fprintf(fp_log, "Initial and recomputed alignment score disagreement: %ld %ld\n", dist, score);
+        fprintf(fp_log, "WARNING: Error with query no %" PRId64 " and db sequence no %" PRId64 ":\n", queryno, dbseqno);
+        fprintf(fp_log, "Initial and recomputed alignment score disagreement: %" PRId64 " %" PRId64 "\n", dist, score);
         fprintf(fp_log, "Alignment: %s\n", cigar);
         fprintf(fp_log, "\n");
       }

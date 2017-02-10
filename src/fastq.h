@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -65,17 +65,17 @@ void fastq_close(fastx_handle h);
 bool fastq_next(fastx_handle h,
                 bool truncateatspace,
                 const unsigned char * char_mapping);
-unsigned long fastq_get_position(fastx_handle h);
-unsigned long fastq_get_size(fastx_handle h);
-unsigned long fastq_get_lineno(fastx_handle h);
-unsigned long fastq_get_seqno(fastx_handle h);
+uint64_t fastq_get_position(fastx_handle h);
+uint64_t fastq_get_size(fastx_handle h);
+uint64_t fastq_get_lineno(fastx_handle h);
+uint64_t fastq_get_seqno(fastx_handle h);
 char * fastq_get_header(fastx_handle h);
 char * fastq_get_sequence(fastx_handle h);
 char * fastq_get_quality(fastx_handle h);
-long fastq_get_abundance(fastx_handle h);
-unsigned long fastq_get_header_length(fastx_handle h);
-unsigned long fastq_get_sequence_length(fastx_handle h);
-unsigned long fastq_get_quality_length(fastx_handle h);
+int64_t fastq_get_abundance(fastx_handle h);
+uint64_t fastq_get_header_length(fastx_handle h);
+uint64_t fastq_get_sequence_length(fastx_handle h);
+uint64_t fastq_get_quality_length(fastx_handle h);
 
 void fastq_print(FILE * fp, char * header, char * sequence, char * quality);
 
@@ -92,4 +92,4 @@ void fastq_print_relabel(FILE * fp,
                          int ordinal);
 
 
-void fastq_print_db(FILE * fp, unsigned long seqno);
+void fastq_print_db(FILE * fp, uint64_t seqno);

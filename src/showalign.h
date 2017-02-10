@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -65,15 +65,15 @@ void align_fprint_uncompressed_alignment(FILE * f, char * cigar);
 
 void align_show(FILE * f,
                 char * seq1,
-                long seq1len,
-                long seq1off,
+                int64_t seq1len,
+                int64_t seq1off,
                 const char * seq1name,
                 char * seq2,
-                long seq2len,
-                long seq2off,
+                int64_t seq2len,
+                int64_t seq2off,
                 const char * seq2name,
                 char * cigar,
-                long cigarlen,
+                int64_t cigarlen,
                 int numwidth,
                 int namewidth,
                 int alignwidth,

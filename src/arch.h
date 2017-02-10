@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -59,5 +59,12 @@
 
 */
 
-unsigned long arch_get_memused();
-unsigned long arch_get_memtotal();
+uint64_t arch_get_memused();
+uint64_t arch_get_memtotal();
+long arch_get_cores();
+void arch_get_user_system_time(double * user_time, double * system_time);
+void arch_srandom();
+uint64_t arch_random();
+void * xmalloc(size_t size);
+void * xrealloc(void * ptr, size_t size);
+void xfree(void * ptr);

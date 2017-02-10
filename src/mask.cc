@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -155,7 +155,7 @@ void dust(char * m, int len)
         }
     }
 
-  free(s);
+  xfree(s);
 }
 
 static pthread_t * pthread;
@@ -200,14 +200,14 @@ void dust_all()
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
   for(int t=0; t<opt_threads; t++)
-    if (pthread_create(pthread+t, &attr, dust_all_worker, (void*)(long)t))
+    if (pthread_create(pthread+t, &attr, dust_all_worker, (void*)(int64_t)t))
       fatal("Cannot create thread");
 
   for(int t=0; t<opt_threads; t++)
     if (pthread_join(pthread[t], NULL))
       fatal("Cannot join thread");
 
-  free(pthread);
+  xfree(pthread);
 
   pthread_attr_destroy(&attr);
 
@@ -227,7 +227,7 @@ void hardmask(char * seq, int len)
 
 void hardmask_all()
 {
-  for(unsigned long i=0; i<db_getsequencecount(); i++)
+  for(uint64_t i=0; i<db_getsequencecount(); i++)
     hardmask(db_getsequence(i), db_getsequencelen(i));
 }
 

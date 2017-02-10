@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -62,13 +62,13 @@
 #include "vsearch5d.h"
 
 unsigned int * kmercount;
-unsigned long * kmerhash;
+uint64_t * kmerhash;
 unsigned int * kmerindex;
 bitmap_t * * kmerbitmap;
 unsigned int * dbindex_map;
 
 static unsigned int kmerhashsize;
-static unsigned long kmerindexsize;
+static uint64_t kmerindexsize;
 unsigned int dbindex_count;
 
 static uhandle_s * dbindex_uh;
@@ -77,9 +77,9 @@ static uhandle_s * dbindex_uh;
 
 static unsigned int bitmap_mincount;
 
-void fprint_kmer(FILE * f, unsigned int kk, unsigned long kmer)
+void fprint_kmer(FILE * f, unsigned int kk, uint64_t kmer)
 {
-  unsigned long x = kmer;
+  uint64_t x = kmer;
   for(unsigned int i=0; i<kk; i++)
     fprintf(f, "%c", sym_nt_2bit[(x >> (2*(kk-i-1))) & 3]);
 }
@@ -168,8 +168,8 @@ void dbindex_prepare(int use_bitmap, int seqmask)
 
   /* hash / bitmap setup */
   /* convert hash counts to position in index */
-  kmerhash = (unsigned long *) xmalloc((kmerhashsize+1) * sizeof(unsigned long));
-  unsigned long sum = 0;
+  kmerhash = (uint64_t *) xmalloc((kmerhashsize+1) * sizeof(uint64_t));
+  uint64_t sum = 0;
   for(unsigned int i = 0; i < kmerhashsize; i++)
     {
       kmerhash[i] = sum;
@@ -205,14 +205,14 @@ void dbindex_prepare(int use_bitmap, int seqmask)
 
 void dbindex_free()
 {
-  free(kmerhash);
-  free(kmerindex);
-  free(kmercount);
-  free(dbindex_map);
+  xfree(kmerhash);
+  xfree(kmerindex);
+  xfree(kmercount);
+  xfree(dbindex_map);
 
   for(unsigned int kmer=0; kmer<kmerhashsize; kmer++)
     if (kmerbitmap[kmer])
       bitmap_free(kmerbitmap[kmer]);
-  free(kmerbitmap);
+  xfree(kmerbitmap);
   unique_exit(dbindex_uh);
 }

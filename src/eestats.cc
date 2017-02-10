@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -66,7 +66,7 @@ double q2p(int q)
   return exp10(- q / 10.0);
 }
 
-long ee_start(int pos, int resolution)
+int64_t ee_start(int pos, int resolution)
 {
   return pos * (resolution * (pos + 1) + 2) / 2;
 }
@@ -75,7 +75,7 @@ void fastq_eestats()
 {
   fastx_handle h = fastq_open(opt_fastq_eestats);
 
-  unsigned long filesize = fastq_get_size(h);
+  uint64_t filesize = fastq_get_size(h);
 
   FILE * fp_output = 0;
 
@@ -88,15 +88,15 @@ void fastq_eestats()
 
   progress_init("Reading fastq file", filesize);
 
-  unsigned long seq_count = 0;
-  unsigned long symbols = 0;
+  uint64_t seq_count = 0;
+  uint64_t symbols = 0;
   
-  long len_alloc = 10;
+  int64_t len_alloc = 10;
 
   const int resolution = 1000;
   int max_quality = opt_fastq_qmax - opt_fastq_qmin + 1;
   
-  long ee_size = ee_start(len_alloc, resolution);
+  int64_t ee_size = ee_start(len_alloc, resolution);
   
   int * read_length_table = (int*) xmalloc(sizeof(int) * len_alloc);
   memset(read_length_table, 0, sizeof(int) * len_alloc);
@@ -114,23 +114,23 @@ void fastq_eestats()
   double * sum_pe_length_table = (double*) xmalloc(sizeof(double) * len_alloc);
   memset(sum_pe_length_table, 0, sizeof(double) * len_alloc);
   
-  long len_min = LONG_MAX;
-  long len_max = 0;
+  int64_t len_min = LONG_MAX;
+  int64_t len_max = 0;
 
   while(fastq_next(h, 0, chrmap_upcase))
     {
       seq_count++;
 
-      long len = fastq_get_sequence_length(h);
+      int64_t len = fastq_get_sequence_length(h);
       char * q = fastq_get_quality(h);
 
       /* update length statistics */
 
-      long new_alloc = len + 1;
+      int64_t new_alloc = len + 1;
 
       if (new_alloc > len_alloc)
         {
-          long new_ee_size = ee_start(new_alloc, resolution);
+          int64_t new_ee_size = ee_start(new_alloc, resolution);
 
           read_length_table = (int*) xrealloc(read_length_table,
                                               sizeof(int) * new_alloc);
@@ -172,7 +172,7 @@ void fastq_eestats()
 
       double ee = 0.0;
 
-      for(long i=0; i < len; i++)
+      for(int64_t i=0; i < len; i++)
         {
           read_length_table[i]++;
 
@@ -184,13 +184,13 @@ void fastq_eestats()
 
           if (qual < opt_fastq_qmin)
             {
-              snprintf(msg, 200, "FASTQ quality value (%d) below qmin (%ld)",
+              snprintf(msg, 200, "FASTQ quality value (%d) below qmin (%" PRId64 ")",
                        qual, opt_fastq_qmin);
               fatal(msg);
             }
           else if (qual > opt_fastq_qmax)
             {
-              snprintf(msg, 200, "FASTQ quality value (%d) above qmax (%ld)",
+              snprintf(msg, 200, "FASTQ quality value (%d) above qmax (%" PRId64 ")",
                        qual, opt_fastq_qmax);
               fatal(msg);
             }
@@ -226,9 +226,9 @@ void fastq_eestats()
           "Min_Pe\tLow_Pe\tMed_Pe\tMean_Pe\tHi_Pe\tMax_Pe\t"
           "Min_EE\tLow_EE\tMed_EE\tMean_EE\tHi_EE\tMax_EE\n");
 
-  for(long i=0; i<len_max; i++)
+  for(int64_t i=0; i<len_max; i++)
     {
-      long reads = read_length_table[i];
+      int64_t reads = read_length_table[i];
       double pctrecs = 100.0 * reads / seq_count;
       
       double min_q = -1.0;
@@ -282,8 +282,8 @@ void fastq_eestats()
       double hi_ee  = -1.0;
       double max_ee = -1.0;
 
-      long ee_offset = ee_start(i, resolution);
-      long max_errors = resolution * (i+1);
+      int64_t ee_offset = ee_start(i, resolution);
+      int64_t max_errors = resolution * (i+1);
 
       n = 0;
       for(int e=0; e<=max_errors; e++)
@@ -316,7 +316,7 @@ void fastq_eestats()
       max_ee  = (max_ee  + 0.5) / resolution;
 
       fprintf(fp_output,
-              "%ld\t%ld\t%.1lf"
+              "%" PRId64 "\t%" PRId64 "\t%.1lf"
               "\t%.1lf\t%.1lf\t%.1lf\t%.1lf\t%.1lf\t%.1lf"
               "\t%.2lg\t%.2lg\t%.2lg\t%.2lg\t%.2lg\t%.2lg"
               "\t%.2lf\t%.2lf\t%.2lf\t%.2lf\t%.2lf\t%.2lf\n",
@@ -326,11 +326,11 @@ void fastq_eestats()
               min_ee, low_ee, med_ee, mean_ee, hi_ee, max_ee);
     }
   
-  free(read_length_table);
-  free(qual_length_table);
-  free(ee_length_table);
-  free(sum_ee_length_table);
-  free(sum_pe_length_table);
+  xfree(read_length_table);
+  xfree(qual_length_table);
+  xfree(ee_length_table);
+  xfree(sum_ee_length_table);
+  xfree(sum_pe_length_table);
 
   fclose(fp_output);
 

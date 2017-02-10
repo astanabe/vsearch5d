@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -104,7 +104,7 @@ void subsample()
 
   int dbsequencecount = db_getsequencecount();
 
-  unsigned long mass_total = 0;
+  uint64_t mass_total = 0;
 
   if (!opt_sizein)
     mass_total = dbsequencecount;
@@ -112,7 +112,7 @@ void subsample()
     for(int i=0; i<dbsequencecount; i++)
       mass_total += db_getabundance(i);
   
-  fprintf(stderr, "Got %lu reads from %d amplicons\n",
+  fprintf(stderr, "Got %" PRIu64 " reads from %d amplicons\n",
           mass_total, dbsequencecount);
 
 
@@ -123,7 +123,7 @@ void subsample()
 
   random_init();
 
-  unsigned long n;                              /* number of reads to sample */
+  uint64_t n;                              /* number of reads to sample */
   if (opt_sample_size)
     n = opt_sample_size;
   else
@@ -132,18 +132,18 @@ void subsample()
   if (n > mass_total)
     fatal("Cannot subsample more reads than in the original sample");
 
-  unsigned long x = n;                          /* number of reads left */
+  uint64_t x = n;                          /* number of reads left */
   int a = 0;                                    /* amplicon number */
-  unsigned long r = 0;                          /* read being checked */
-  unsigned long m = 0;                          /* accumulated mass */
+  uint64_t r = 0;                          /* read being checked */
+  uint64_t m = 0;                          /* accumulated mass */
 
-  unsigned long mass =                          /* mass of current amplicon */
+  uint64_t mass =                          /* mass of current amplicon */
     opt_sizein ? db_getabundance(0) : 1;
   
   progress_init("Subsampling", mass_total);
   while (x > 0)
     {
-      unsigned long random = random_ulong(mass_total - r);
+      uint64_t random = random_ulong(mass_total - r);
 
       if (random < x)
         {
@@ -170,8 +170,8 @@ void subsample()
   progress_init("Writing output", dbsequencecount);
   for(int i=0; i<dbsequencecount; i++)
     {
-      long ab_sub = abundance[i];
-      long ab_discarded = (opt_sizein ? db_getabundance(i) : 1) - ab_sub;
+      int64_t ab_sub = abundance[i];
+      int64_t ab_discarded = (opt_sizein ? db_getabundance(i) : 1) - ab_sub;
 
       if (ab_sub > 0)
         {
@@ -224,9 +224,9 @@ void subsample()
     }
   progress_done();
 
-  free(abundance);
+  xfree(abundance);
 
-  fprintf(stderr, "Subsampled %lu reads from %d amplicons\n", n, samples);
+  fprintf(stderr, "Subsampled %" PRIu64 " reads from %d amplicons\n", n, samples);
 
   db_free();
 

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -74,27 +74,27 @@ typedef struct seqinfo_s seqinfo_t;
 extern char * datap;
 extern seqinfo_t * seqindex;
 
-inline char * db_getheader(unsigned long seqno)
+inline char * db_getheader(uint64_t seqno)
 {
   return datap + seqindex[seqno].header_p;
 }
 
-inline char * db_getsequence(unsigned long seqno)
+inline char * db_getsequence(uint64_t seqno)
 {
   return datap + seqindex[seqno].seq_p;
 }
 
-inline unsigned long db_getabundance(unsigned long seqno)
+inline uint64_t db_getabundance(uint64_t seqno)
 {
   return seqindex[seqno].size;
 }
 
-inline unsigned long db_getsequencelen(unsigned long seqno)
+inline uint64_t db_getsequencelen(uint64_t seqno)
 {
   return seqindex[seqno].seqlen;
 }
 
-inline unsigned long db_getheaderlen(unsigned long seqno)
+inline uint64_t db_getheaderlen(uint64_t seqno)
 {
   return seqindex[seqno].headerlen;
 }
@@ -102,11 +102,11 @@ inline unsigned long db_getheaderlen(unsigned long seqno)
 void db_read(const char * filename, int upcase);
 void db_free();
 
-unsigned long db_getsequencecount();
-unsigned long db_getnucleotidecount();
-unsigned long db_getlongestheader();
-unsigned long db_getlongestsequence();
-unsigned long db_getshortestsequence();
+uint64_t db_getsequencecount();
+uint64_t db_getnucleotidecount();
+uint64_t db_getlongestheader();
+uint64_t db_getlongestsequence();
+uint64_t db_getshortestsequence();
 
 /* Note: the sorting functions below must be called after db_read,
    but before dbindex_prepare */
@@ -117,4 +117,4 @@ void db_sortbylength_shortest_first();
 void db_sortbyabundance();
 
 bool db_is_fastq();
-char * db_getquality(unsigned long seqno);
+char * db_getquality(uint64_t seqno);

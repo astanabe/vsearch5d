@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016, Akifumi S. Tanabe
+  Copyright (C) 2016-2017, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2015, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -61,27 +61,27 @@
 
 struct dbhash_bucket_s
 {
-  unsigned long hash;
-  unsigned long seqno;
+  uint64_t hash;
+  uint64_t seqno;
 };
 
 struct dbhash_search_info_s
 {
   char * seq;
-  unsigned long seqlen;
-  unsigned long hash;
-  unsigned long index;
+  uint64_t seqlen;
+  uint64_t hash;
+  uint64_t index;
 };
 
-void dbhash_open(unsigned long maxelements);
+void dbhash_open(uint64_t maxelements);
 void dbhash_close();
 
-void dbhash_add(char * seq, unsigned long seqlen, unsigned long seqno);
-void dbhash_add_one(unsigned long seqno);
+void dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno);
+void dbhash_add_one(uint64_t seqno);
 void dbhash_add_all();
 
-long dbhash_search_first(char * seq,
-                         unsigned long seqlen,
+int64_t dbhash_search_first(char * seq,
+                         uint64_t seqlen,
                          struct dbhash_search_info_s * info);
-long dbhash_search_next(struct dbhash_search_info_s * info);
+int64_t dbhash_search_next(struct dbhash_search_info_s * info);
 void dbhash_search_finish(struct dbhash_search_info_s * info);
