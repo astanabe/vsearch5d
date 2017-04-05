@@ -62,12 +62,11 @@
 #include "vsearch5d.h"
 
 #define INPUTCHUNKSIZE 10000
-#define SCOREMETHOD 2
 
 /* scores */
 
 const double alpha = 4.0;
-const double beta = -5.0;
+const double beta = -22.0;
 
 /* static variables */
 
@@ -208,11 +207,7 @@ void precompute_qual()
 
           p = 1.0 - px - py + px * py * 4.0 / 3.0;
 
-#if SCOREMETHOD == 2
-          match_score[x][y] = alpha * p + beta * (1.0 - p);
-#else
           match_score[x][y] = alpha * p;
-#endif
 
           /* Mismatch */
 
@@ -222,11 +217,7 @@ void precompute_qual()
 
           p = 1.0 - (px + py) / 3.0 + px * py * 4.0 / 9.0;
 
-#if SCOREMETHOD == 2
-          mism_score[x][y] = alpha * (1.0 - p) + beta * p;
-#else
           mism_score[x][y] = beta * p;
-#endif
 
         }
     }
@@ -463,7 +454,6 @@ double overlap_score(merge_data_t * ip,
 
 int64_t optimize(merge_data_t * ip)
 {
-  //  int64_t i1 = opt_fastq_minovlen;
   int64_t i1 = 1;
 
   i1 = MAX(i1, ip->fwd_trunc + ip->rev_trunc - opt_fastq_maxmergelen);
@@ -583,7 +573,6 @@ void process(merge_data_t * ip)
   if (!skip)
     ip->offset = optimize(ip);
 
-  //  if (ip->offset)
   if (ip->offset >= opt_fastq_minovlen)
     merge(ip);
 }
