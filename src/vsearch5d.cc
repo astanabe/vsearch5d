@@ -248,6 +248,7 @@ int64_t opt_top_hits_only;
 int64_t opt_topn;
 int64_t opt_uc_allhits;
 int64_t opt_wordlength;
+int64_t opt_idoffset;
 
 /* Other variables */
 

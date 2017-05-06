@@ -381,6 +381,7 @@ extern int64_t opt_top_hits_only;
 extern int64_t opt_topn;
 extern int64_t opt_uc_allhits;
 extern int64_t opt_wordlength;
+extern int64_t opt_idoffset;
 
 extern int64_t altivec_present;
 extern int64_t mmx_present;
