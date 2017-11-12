@@ -32,6 +32,7 @@ fasta.h \
 fastq.h \
 fastqops.h \
 fastx.h \
+kmerhash.h \
 linmemalign.h \
 maps.h \
 mask.h \
@@ -51,6 +52,7 @@ shuffle.h \
 sortbylength.h \
 sortbysize.h \
 subsample.h \
+udb.h \
 unique.h \
 userfields.h \
 util.h \
@@ -107,6 +109,7 @@ fasta.cc \
 fastq.cc \
 fastqops.cc \
 fastx.cc \
+kmerhash.cc \
 linmemalign.cc \
 maps.cc \
 mask.cc \
@@ -126,6 +129,7 @@ shuffle.cc \
 sortbylength.cc \
 sortbysize.cc \
 subsample.cc \
+udb.cc \
 unique.cc \
 userfields.cc \
 util.cc \

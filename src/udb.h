@@ -1,15 +1,13 @@
-
 /*
 
-  VSEARCH5D: a modified version of VSEARCH
+  VSEARCH: a versatile open source tool for metagenomics
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
-
-  Contact: Akifumi S. Tanabe
-  https://github.com/astanabe/vsearch5d
-
-  Original version of VSEARCH
   Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
+
+  Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
+  Department of Informatics, University of Oslo,
+  PO Box 1080 Blindern, NO-0316 Oslo, Norway
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -60,53 +58,11 @@
 
 */
 
-#include "vsearch5d.h"
-
-void rereplicate()
-{
-  opt_xsize = 1;
-
-  FILE * fp_output = 0;
-
-  if (opt_output)
-    {
-      fp_output = fopen(opt_output, "w");
-      if (!fp_output)
-        fatal("Unable to open FASTA output file for writing");
-    }
-
-  fastx_handle fh = fasta_open(opt_rereplicate);
-  int64_t filesize = fasta_get_size(fh);
-
-  progress_init("Rereplicating", filesize);
-
-  int64_t i = 0;
-  int64_t n = 0;
-  while (fasta_next(fh, ! opt_notrunclabels, chrmap_no_change))
-    {
-      n++;
-      int64_t abundance = fasta_get_abundance(fh);
-      
-      for(int64_t j=0; j<abundance; j++)
-        {
-          i++;
-          if (opt_output)
-            fasta_print_relabel(fp_output,
-                                fasta_get_sequence(fh),
-                                fasta_get_sequence_length(fh),
-                                fasta_get_header(fh),
-                                fasta_get_header_length(fh),
-                                1,
-                                i);
-        }
-
-      progress_update(fasta_get_position(fh));
-    }
-  progress_done();
-  
-  fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
-
-  fasta_close(fh);
-
-  fclose(fp_output);
-}
+bool udb_detect_isudb(const char * filename);
+void udb_read(const char * filename,
+              bool create_bitmaps,
+              bool parse_abundances);
+void udb_fasta();
+void udb_info();
+void udb_make();
+void udb_stats();
