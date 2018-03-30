@@ -25,3 +25,4 @@ depcomp
 install-sh
 missing
 Makefile.in
+.vscode

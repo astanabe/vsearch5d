@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -233,7 +233,7 @@ void hardmask_all()
 
 void maskfasta()
 {
-  FILE * fp_output = fopen(opt_output, "w");
+  FILE * fp_output = fopen_output(opt_output);
   if (!fp_output)
     fatal("Unable to open mask output file for writing");
 
@@ -251,7 +251,7 @@ void maskfasta()
   progress_init("Writing output", seqcount);
   for(int i=0; i<seqcount; i++)
     {
-      fasta_print_db(fp_output, i);
+      fasta_print_db_relabel(fp_output, i, i+1);
       progress_update(i);
     }
   progress_done();
@@ -268,14 +268,14 @@ void fastx_mask()
 
   if (opt_fastaout)
     {
-      fp_fastaout = fopen(opt_fastaout, "w");
+      fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
         fatal("Unable to open mask output FASTA file for writing");
     }
 
   if (opt_fastqout)
     {
-      fp_fastqout = fopen(opt_fastqout, "w");
+      fp_fastqout = fopen_output(opt_fastqout);
       if (!fp_fastqout)
         fatal("Unable to open mask output FASTQ file for writing");
     }
@@ -330,10 +330,26 @@ void fastx_mask()
           kept++;
 
           if (opt_fastaout)
-            fasta_print_db(fp_fastaout, i);
+            fasta_print_general(fp_fastaout,
+                                0,
+                                seq,
+                                len,
+                                db_getheader(i),
+                                db_getheaderlen(i),
+                                db_getabundance(i),
+                                kept,
+                                -1, -1, 0, 0.0);
 
           if (opt_fastqout)
-            fastq_print_db(fp_fastqout, i);
+            fastq_print_general(fp_fastqout,
+                                seq,
+                                len,
+                                db_getheader(i),
+                                db_getheaderlen(i),
+                                db_getquality(i),
+                                db_getabundance(i),
+                                kept,
+                                0, 0.0);
         }
 
       progress_update(i);

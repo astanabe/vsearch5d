@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -242,4 +242,60 @@ void xfree(void * ptr)
     fatal("Trying to free a null pointer");
 }
 
+int xfstat(int fd, xstat_t * buf)
+{
+#ifdef _WIN32
+  return _fstat64(fd, buf);
+#else
+  return fstat(fd, buf);
+#endif
+}
 
+int xstat(const char * path, xstat_t  * buf)
+{
+#ifdef _WIN32
+  return _stat64(path, buf);
+#else
+  return stat(path, buf);
+#endif
+}
+
+uint64_t xlseek(int fd, uint64_t offset, int whence)
+{
+#ifdef _WIN32
+  return _lseeki64(fd, offset, whence);
+#else
+  return lseek(fd, offset, whence);
+#endif
+}
+
+uint64_t xftello(FILE * stream)
+{
+#ifdef _WIN32
+  return _ftelli64(stream);
+#else
+  return ftello(stream);
+#endif
+}
+
+int xopen_read(const char * path)
+{
+#ifdef _WIN32
+  return _open(path, _O_RDONLY | _O_BINARY);
+#else
+  return open(path, O_RDONLY);
+#endif
+}
+
+int xopen_write(const char * path)
+{
+#ifdef _WIN32
+  return _open(path,
+               _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY,
+               _S_IREAD | _S_IWRITE);
+#else
+  return open(path,
+              O_WRONLY | O_CREAT | O_TRUNC,
+              S_IRUSR | S_IWUSR);
+#endif
+}

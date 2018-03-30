@@ -2,7 +2,7 @@
 
   VSEARCH: a versatile open source tool for metagenomics
 
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
@@ -89,14 +89,14 @@ int wc_compare(const void * a, const void * b)
     }
 }
 
-off_t largeread(int fd, void * buf, off_t nbyte, off_t offset)
+uint64_t largeread(int fd, void * buf, uint64_t nbyte, uint64_t offset)
 {
   /* call pread multiple times and update progress */
 
   uint64_t progress = offset;
-  for(off_t i = 0; i < nbyte; i += BLOCKSIZE)
+  for(uint64_t i = 0; i < nbyte; i += BLOCKSIZE)
     {
-      off_t res = lseek(fd, offset + i, SEEK_SET);
+      uint64_t res = xlseek(fd, offset + i, SEEK_SET);
       if (res != offset + i)
         fatal("Unable to seek in UDB file or invalid UDB file");
 
@@ -111,14 +111,14 @@ off_t largeread(int fd, void * buf, off_t nbyte, off_t offset)
   return nbyte;
 }
 
-off_t largewrite(int fd, void * buf, off_t nbyte, off_t offset)
+uint64_t largewrite(int fd, void * buf, uint64_t nbyte, uint64_t offset)
 {
   /* call write multiple times and update progress */
 
   uint64_t progress = offset;
-  for(off_t i = 0; i < nbyte; i += BLOCKSIZE)
+  for(uint64_t i = 0; i < nbyte; i += BLOCKSIZE)
     {
-      off_t res = lseek(fd, offset + i, SEEK_SET);
+      uint64_t res = xlseek(fd, offset + i, SEEK_SET);
       if (res != offset + i)
         fatal("Unable to seek in UDB file or invalid UDB file");
 
@@ -140,9 +140,9 @@ bool udb_detect_isudb(const char * filename)
     It must be an uncompressed regular file, not a pipe.
   */
 
-  struct stat fs;
+  xstat_t fs;
 
-  if (stat(filename, & fs))
+  if (xstat(filename, & fs))
     fatal("Unable to get status for input file (%s)", filename);
 
   bool is_pipe = S_ISFIFO(fs.st_mode);
@@ -150,7 +150,7 @@ bool udb_detect_isudb(const char * filename)
     return 0;
 
   int fd = 0;
-  fd = open(filename, O_RDONLY);
+  fd = xopen_read(filename);
   if (!fd)
     fatal("Unable to open input file for reading (%s)", filename);
 
@@ -172,7 +172,7 @@ void udb_info()
 
   int fd_udbinfo = 0;
 
-  fd_udbinfo = open(opt_udbinfo, O_RDONLY);
+  fd_udbinfo = xopen_read(opt_udbinfo);
   if (! fd_udbinfo)
     fatal("Unable to open UDB file for reading");
 
@@ -230,19 +230,25 @@ void udb_read(const char * filename,
   unsigned int udb_wordlength = 0;
   uint64 nucleotides = 0;
 
+  xstat_t fs;
+  if (xstat(filename, & fs))
+    fatal("Unable to get status for input file (%s)", filename);
+
+  bool is_pipe = S_ISFIFO(fs.st_mode);
+  if (is_pipe)
+    fatal("Cannot read UDB file from a pipe");
+
+  /* get file size */
+
+  uint64_t filesize = fs.st_size;
+
   /* open UDB file */
 
   int fd_udb = 0;
 
-  fd_udb = open(filename, O_RDONLY);
+  fd_udb = xopen_read(filename);
   if (! fd_udb)
     fatal("Unable to open UDB file for reading");
-
-  /* get file size */
-
-  off_t filesize = lseek(fd_udb, 0, SEEK_END);
-  if (filesize < 0)
-    fatal("Unable to seek in UDB file");
 
   char * prompt = 0;
   if (xsprintf(& prompt, "Reading UDB file %s", filename) == -1)
@@ -253,7 +259,7 @@ void udb_read(const char * filename,
   /* header */
 
   unsigned int buffer[50];
-  off_t pos = 0;
+  uint64_t pos = 0;
 
   pos += largeread(fd_udb, buffer, 4 * 50, pos);
 
@@ -449,8 +455,8 @@ void udb_read(const char * filename,
       progress_init("Parsing abundances", seqcount);
       for(unsigned int i = 0; i < seqcount; i++)
         {
-          seqindex[i].size = abundance_get(global_abundance,
-                                           datap + seqindex[i].header_p);
+          seqindex[i].size = abundance_get(datap + seqindex[i].header_p,
+                                           seqindex[i].headerlen);
           progress_update(i+1);
         }
       progress_done();
@@ -518,7 +524,7 @@ void udb_fasta()
 {
   /* open FASTA file for writing */
 
-  FILE * fp_output = fopen(opt_output, "w");
+  FILE * fp_output = fopen_output(opt_output);
   if (!fp_output)
     fatal("Unable to open FASTA output file for writing");
 
@@ -532,7 +538,7 @@ void udb_fasta()
   progress_init("Writing FASTA file", seqcount);
   for(unsigned int i = 0; i < seqcount; i++)
     {
-      fasta_print_db(fp_output, i);
+      fasta_print_db_relabel(fp_output, i, i+1);
       progress_update(i+1);
     }
   progress_done();
@@ -742,9 +748,7 @@ void udb_make()
 {
   int fd_output = 0;
 
-  fd_output = open(opt_output,
-                   O_WRONLY | O_CREAT | O_TRUNC,
-                   S_IRUSR | S_IWUSR);
+  fd_output = xopen_write(opt_output);
   if (!fd_output)
     fatal("Unable to open output file for writing");
 

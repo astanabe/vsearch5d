@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -70,28 +70,28 @@ void subsample()
 
   if (opt_fastaout)
     {
-      fp_fastaout = fopen(opt_fastaout, "w");
+      fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
         fatal("Unable to open FASTA output file for writing");
     }
 
   if (opt_fastaout_discarded)
     {
-      fp_fastaout_discarded = fopen(opt_fastaout_discarded, "w");
+      fp_fastaout_discarded = fopen_output(opt_fastaout_discarded);
       if (!fp_fastaout_discarded)
         fatal("Unable to open FASTA output file for writing");
     }
 
   if (opt_fastqout)
     {
-      fp_fastqout = fopen(opt_fastqout, "w");
+      fp_fastqout = fopen_output(opt_fastqout);
       if (!fp_fastqout)
         fatal("Unable to open FASTQ output file for writing");
     }
 
   if (opt_fastqout_discarded)
     {
-      fp_fastqout_discarded = fopen(opt_fastqout_discarded, "w");
+      fp_fastqout_discarded = fopen_output(opt_fastqout_discarded);
       if (!fp_fastqout_discarded)
         fatal("Unable to open FASTQ output file for writing");
     }
@@ -120,8 +120,6 @@ void subsample()
 
   for(int i=0; i<dbsequencecount; i++)
     abundance[i] = 0;
-
-  random_init();
 
   uint64_t n;                              /* number of reads to sample */
   if (opt_sample_size)
@@ -178,23 +176,26 @@ void subsample()
           samples++;
 
           if (opt_fastaout)
-            fasta_print_relabel(fp_fastaout,
+            fasta_print_general(fp_fastaout,
+                                0,
                                 db_getsequence(i),
                                 db_getsequencelen(i),
                                 db_getheader(i),
                                 db_getheaderlen(i),
                                 ab_sub,
-                                samples);
+                                samples,
+                                -1, -1, 0, 0.0);
 
           if (opt_fastqout)
-            fastq_print_relabel(fp_fastqout,
+            fastq_print_general(fp_fastqout,
                                 db_getsequence(i),
                                 db_getsequencelen(i),
                                 db_getheader(i),
                                 db_getheaderlen(i),
                                 db_getquality(i),
                                 ab_sub,
-                                samples);
+                                samples,
+                                0, 0.0);
         }
 
       if (ab_discarded > 0)
@@ -202,23 +203,26 @@ void subsample()
           discarded++;
 
           if (opt_fastaout_discarded)
-            fasta_print_relabel(fp_fastaout_discarded,
+            fasta_print_general(fp_fastaout_discarded,
+                                0,
                                 db_getsequence(i),
                                 db_getsequencelen(i),
                                 db_getheader(i),
                                 db_getheaderlen(i),
                                 ab_discarded,
-                                discarded);
-
+                                discarded,
+                                -1, -1, 0, 0.0);
+          
           if (opt_fastqout_discarded)
-            fastq_print_relabel(fp_fastqout_discarded,
+            fastq_print_general(fp_fastqout_discarded,
                                 db_getsequence(i),
                                 db_getsequencelen(i),
                                 db_getheader(i),
                                 db_getheaderlen(i),
                                 db_getquality(i),
                                 ab_discarded,
-                                discarded);
+                                discarded,
+                                0, 0.0);
         }
       progress_update(i);
     }

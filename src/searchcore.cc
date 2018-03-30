@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -453,19 +453,43 @@ int search_acceptable_aligned(struct searchinfo_s * si,
       /* maxdiffs */
       (hit->mismatches + hit->internal_indels <= opt_maxdiffs))
     {
-      if (hit->id >= 100.0 * opt_id)
+      if (opt_cluster_unoise)
         {
-          /* accepted */
-          hit->accepted = 1;
-          hit->weak = 0;
-          return 1;
+          int d = hit->mismatches;
+          double skew = 1.0 * si->qsize / db_getabundance(hit->target);
+          double beta = 1.0 / pow(2, 1.0 * opt_unoise_alpha * d + 1);
+
+          if (skew <= beta || d == 0)
+            {
+              /* accepted */
+              hit->accepted = 1;
+              hit->weak = 0;
+              return 1;
+            }
+          else
+            {
+              /* rejected, but weak hit */
+              hit->rejected = 1;
+              hit->weak = 1;
+              return 0;
+            }
         }
       else
         {
-          /* rejected, but weak hit */
-          hit->rejected = 1;
-          hit->weak = 1;
-          return 0;
+          if (hit->id >= 100.0 * opt_id)
+            {
+              /* accepted */
+              hit->accepted = 1;
+              hit->weak = 0;
+              return 1;
+            }
+          else
+            {
+              /* rejected, but weak hit */
+              hit->rejected = 1;
+              hit->weak = 1;
+              return 0;
+            }
         }
     }
   else

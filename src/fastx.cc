@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -159,29 +159,22 @@ fastx_handle fastx_open(const char * filename)
   int bzError = 0;
 #endif
  
-  h->fp = fopen(filename, "rb");
+  h->fp = fopen_input(filename);
   if (!h->fp)
     fatal("Unable to open file for reading (%s)", filename);
 
   /* Get mode and size of original (uncompressed) file */
 
-  struct stat fs;
-  h->file_size = 0;
-
-  if (fstat(fileno(h->fp), & fs))
-    fatal("Unable to fstat on input file (%s)", filename);
+  xstat_t fs;
+  if (xfstat(fileno(h->fp), & fs))
+    fatal("Unable to get status for input file (%s)", filename);
 
   h->is_pipe = S_ISFIFO(fs.st_mode);
 
-  h->file_size = 0;
-
-  if (! h->is_pipe)
-    {
-      if (fseek(h->fp, 0, SEEK_END))
-        fatal("Unable to seek in input file (%s)", filename);
-      h->file_size = ftell(h->fp);
-      rewind(h->fp);
-    }
+  if (h->is_pipe)
+    h->file_size = 0;
+  else
+    h->file_size = fs.st_size;
 
   if (opt_gzip_decompress)
     {
@@ -216,7 +209,7 @@ fastx_handle fastx_open(const char * filename)
       /* rewind was not enough */
 
       fclose(h->fp);
-      h->fp = fopen(filename, "rb");
+      h->fp = fopen_input(filename);
       if (!h->fp)
         fatal("Unable to open file for reading (%s)", filename);
     }
@@ -484,12 +477,12 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
             {
               /* Circumvent the missing gzoffset function in zlib 1.2.3 and earlier */
               int fd = dup(fileno(h->fp));
-              h->file_position = lseek(fd, 0, SEEK_CUR);
+              h->file_position = xlseek(fd, 0, SEEK_CUR);
               close(fd);
             }
           else
 #endif
-            h->file_position = ftell(h->fp);
+            h->file_position = xftello(h->fp);
         }
 
       h->file_buffer.length += bytes_read;

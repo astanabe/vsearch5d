@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -76,22 +76,38 @@ void results_show_fastapairs_one(FILE * fp,
                                  hp->nwalignment,
                                  hp->nwalignmentlength,
                                  0);
-      fasta_print_header(fp, query_head);
-      fasta_print_sequence(fp,
-                           qrow + hp->trim_q_left + hp->trim_t_left,
-                           hp->internal_alignmentlength, 0);
+      fasta_print_general(fp,
+                          0,
+                          qrow + hp->trim_q_left + hp->trim_t_left,
+                          hp->internal_alignmentlength,
+                          query_head,
+                          strlen(query_head),
+                          0,
+                          0,
+                          -1,
+                          -1,
+                          0,
+                          0.0);
       xfree(qrow);
-      
+
       char * trow = align_getrow(db_getsequence(hp->target),
                                  hp->nwalignment,
                                  hp->nwalignmentlength,
                                  1);
-      fasta_print_header(fp, db_getheader(hp->target));
-      fasta_print_sequence(fp,
-                           trow + hp->trim_q_left + hp->trim_t_left,
-                           hp->internal_alignmentlength, 0);
+      fasta_print_general(fp,
+                          0,
+                          trow + hp->trim_q_left + hp->trim_t_left,
+                          hp->internal_alignmentlength,
+                          db_getheader(hp->target),
+                          db_getheaderlen(hp->target),
+                          0,
+                          0,
+                          -1,
+                          -1,
+                          0,
+                          0.0);
       xfree(trow);
-      
+
       fprintf(fp, "\n");
     }
 }

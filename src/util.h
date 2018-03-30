@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -108,3 +108,6 @@ void get_hex_seq_digest_md5(char * hex, char * seq, int seqlen);
 
 void fprint_seq_digest_sha1(FILE * fp, char * seq, int seqlen);
 void fprint_seq_digest_md5(FILE * fp, char * seq, int seqlen);
+
+FILE * fopen_input(const char * filename);
+FILE * fopen_output(const char * filename);

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -90,6 +90,7 @@ char * opt_chimeras;
 char * opt_cluster_fast;
 char * opt_cluster_size;
 char * opt_cluster_smallmem;
+char * opt_cluster_unoise;
 char * opt_clusters;
 char * opt_consout;
 char * opt_db;
@@ -137,13 +138,17 @@ char * opt_reverse;
 char * opt_samout;
 char * opt_search_exact;
 char * opt_shuffle;
+char * opt_sintax;
 char * opt_sortbylength;
 char * opt_sortbysize;
+char * opt_tabbedout;
 char * opt_udb2fasta;
 char * opt_udbinfo;
 char * opt_udbstats;
 char * opt_uc;
 char * opt_uchime_denovo;
+char * opt_uchime2_denovo;
+char * opt_uchime3_denovo;
 char * opt_uchime_ref;
 char * opt_uchimealns;
 char * opt_uchimeout;
@@ -170,7 +175,9 @@ double opt_minsizeratio;
 double opt_minsl;
 double opt_query_cov;
 double opt_sample_pct;
+double opt_sintax_cutoff;
 double opt_target_cov;
+double opt_unoise_alpha;
 double opt_weak_id;
 double opt_xn;
 int opt_acceptall;
@@ -285,8 +292,6 @@ static time_t time_start;
 static time_t time_finish;
 
 FILE * fp_log = 0;
-
-abundance_t * global_abundance;
 
 char * STDIN_NAME = (char*) "/dev/stdin";
 char * STDOUT_NAME = (char*) "/dev/stdout";
@@ -607,7 +612,7 @@ void args_init(int argc, char **argv)
 
   progname = argv[0];
 
-  opt_abskew = 2.0;
+  opt_abskew = -1.0;
   opt_acceptall = 0;
   opt_alignwidth = 80;
   opt_allpairs_global = 0;
@@ -621,6 +626,7 @@ void args_init(int argc, char **argv)
   opt_cluster_fast = 0;
   opt_cluster_size = 0;
   opt_cluster_smallmem = 0;
+  opt_cluster_unoise = 0;
   opt_clusterout_id = 0;
   opt_clusterout_sort = 0;
   opt_clusters = 0;
@@ -741,7 +747,7 @@ void args_init(int argc, char **argv)
   opt_minh = 0.28;
   opt_minqt = 0.0;
   opt_minseqlength = -1;
-  opt_minsize = 0;
+  opt_minsize = -1;
   opt_minsizeratio = 0.0;
   opt_minsl = 0.0;
   opt_mintsize = 0;
@@ -779,6 +785,8 @@ void args_init(int argc, char **argv)
   opt_self = 0;
   opt_selfid = 0;
   opt_shuffle = 0;
+  opt_sintax = 0;
+  opt_sintax_cutoff = 0.0;
   opt_sizein = 0;
   opt_sizeorder = 0;
   opt_sizeout = 0;
@@ -786,6 +794,7 @@ void args_init(int argc, char **argv)
   opt_sortbylength = 0;
   opt_sortbysize = 0;
   opt_strand = 1;
+  opt_tabbedout = 0;
   opt_target_cov = 0.0;
   opt_threads = 0;
   opt_top_hits_only = 0;
@@ -796,10 +805,13 @@ void args_init(int argc, char **argv)
   opt_uc = 0;
   opt_uc_allhits = 0;
   opt_uchime_denovo = 0;
+  opt_uchime2_denovo = 0;
+  opt_uchime3_denovo = 0;
   opt_uchime_ref = 0;
   opt_uchimealns = 0;
   opt_uchimeout = 0;
   opt_uchimeout5 = 0;
+  opt_unoise_alpha = 2.0;
   opt_usearch_global = 0;
   opt_userout = 0;
   opt_usersort = 0;
@@ -1005,6 +1017,13 @@ void args_init(int argc, char **argv)
     {"udb2fasta",             required_argument, 0, 0 },
     {"udbinfo",               required_argument, 0, 0 },
     {"udbstats",              required_argument, 0, 0 },
+    {"cluster_unoise",        required_argument, 0, 0 },
+    {"unoise_alpha",          required_argument, 0, 0 },
+    {"uchime2_denovo",        required_argument, 0, 0 },
+    {"uchime3_denovo",        required_argument, 0, 0 },
+    {"sintax",                required_argument, 0, 0 },
+    {"sintax_cutoff",         required_argument, 0, 0 },
+    {"tabbedout",             required_argument, 0, 0 },
     {"idoffset",              required_argument, 0, 0 },
     { 0, 0, 0, 0 }
   };
@@ -1821,6 +1840,34 @@ void args_init(int argc, char **argv)
           break;
 
         case 191:
+          opt_cluster_unoise = optarg;
+          break;
+
+        case 192:
+          opt_unoise_alpha = args_getdouble(optarg);
+          break;
+        
+        case 193:
+          opt_uchime2_denovo = optarg;
+          break;
+
+        case 194:
+          opt_uchime3_denovo = optarg;
+          break;
+
+        case 195:
+          opt_sintax = optarg;
+          break;
+
+        case 196:
+          opt_sintax_cutoff = args_getdouble(optarg);
+          break;
+
+        case 197:
+          opt_tabbedout = optarg;
+          break;
+
+        case 198:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
           break;
@@ -1904,6 +1951,15 @@ void args_init(int argc, char **argv)
     commands++;
   if (opt_udbstats)
     commands++;
+  if (opt_cluster_unoise)
+    commands++;
+  if (opt_uchime2_denovo)
+    commands++;
+  if (opt_uchime3_denovo)
+    commands++;
+  if (opt_sintax)
+    commands++;
+
 
   if (commands > 1)
     fatal("More than one command specified");
@@ -1992,6 +2048,10 @@ void args_init(int argc, char **argv)
   if (opt_gzip_decompress && opt_bzip2_decompress)
     fatal("Specify either --gzip_decompress or --bzip2_decompress, not both");
 
+  if ((opt_sintax_cutoff < 0.0) || (opt_sintax_cutoff > 1.0))
+    fatal("The argument to sintax_cutoff must be in the range 0.0 to 1.0");
+
+
   /* TODO: check valid range of gap penalties */
 
   /* adapt/adjust parameters */
@@ -2027,107 +2087,35 @@ void args_init(int argc, char **argv)
   if (opt_threads == 0)
     opt_threads = arch_get_cores();
 
+  /* set default opt_minsize depending on command */
+  if (opt_minsize < 0)
+    {
+      if (opt_cluster_unoise)
+        opt_minsize = 8;
+      else
+        opt_minsize = 0;
+    }
+      
+  /* set default opt_abskew depending on command */
+  if (opt_abskew < 0.0)
+    {
+      if (opt_uchime3_denovo)
+        opt_abskew = 16.0;
+      else
+        opt_abskew = 2.0;
+    }
+
   /* set default opt_minseqlength depending on command */
 
   if (opt_minseqlength < 0)
     {
       if (opt_cluster_smallmem || opt_cluster_fast || opt_cluster_size ||
           opt_usearch_global || opt_derep_fulllength || opt_derep_prefix ||
-          opt_makeudb_usearch)
+          opt_makeudb_usearch || opt_cluster_unoise || opt_sintax)
         opt_minseqlength = 32;
       else
         opt_minseqlength = 1;
     }
-
-  /* replace filename "-" by "/dev/stdin" for input file options */
-
-  char * * stdin_options[] =
-    {
-      & opt_allpairs_global,
-      & opt_cluster_fast,
-      & opt_cluster_size,
-      & opt_cluster_smallmem,
-      & opt_db,
-      & opt_derep_fulllength,
-      & opt_derep_prefix,
-      & opt_fastq_chars,
-      & opt_fastq_convert,
-      & opt_fastq_eestats,
-      & opt_fastq_eestats2,
-      & opt_fastq_filter,
-      & opt_fastq_mergepairs,
-      & opt_fastq_stats,
-      & opt_fastx_filter,
-      & opt_fastx_mask,
-      & opt_fastx_revcomp,
-      & opt_fastx_subsample,
-      & opt_makeudb_usearch,
-      & opt_maskfasta,
-      & opt_rereplicate,
-      & opt_reverse,
-      & opt_search_exact,
-      & opt_shuffle,
-      & opt_sortbylength,
-      & opt_sortbysize,
-      & opt_uchime_denovo,
-      & opt_uchime_ref,
-      & opt_udb2fasta,
-      & opt_udbinfo,
-      & opt_udbstats,
-      & opt_usearch_global,
-      0
-    };
-
-  int i = 0;
-  while(char * * stdin_opt = stdin_options[i++])
-    if ((*stdin_opt) && (!strcmp(*stdin_opt, "-")))
-      *stdin_opt = STDIN_NAME;
-
-
-  /* replace filename "-" by "/dev/stdout" for output file options */
-
-  char * * stdout_options[] =
-    {
-      & opt_alnout,
-      & opt_biomout,
-      & opt_blast6out,
-      & opt_borderline,
-      & opt_centroids,
-      & opt_chimeras,
-      & opt_consout,
-      & opt_dbmatched,
-      & opt_dbnotmatched,
-      & opt_eetabbedout,
-      & opt_fastaout,
-      & opt_fastaout_discarded,
-      & opt_fastaout_notmerged_fwd,
-      & opt_fastaout_notmerged_rev,
-      & opt_fastapairs,
-      & opt_fastqout,
-      & opt_fastqout_discarded,
-      & opt_fastqout_notmerged_fwd,
-      & opt_fastqout_notmerged_rev,
-      & opt_log,
-      & opt_matched,
-      & opt_mothur_shared_out,
-      & opt_msaout,
-      & opt_otutabout,
-      & opt_nonchimeras,
-      & opt_notmatched,
-      & opt_output,
-      & opt_profile,
-      & opt_samout,
-      & opt_uc,
-      & opt_uchimealns,
-      & opt_uchimeout,
-      & opt_userout,
-      0
-    };
-
-  int o = 0;
-  while(char * * stdout_opt = stdout_options[o++])
-    if ((*stdout_opt) && (!strcmp(*stdout_opt, "-")))
-      *stdout_opt = STDOUT_NAME;
 
   if (opt_idoffset >= opt_minseqlength)
     fatal("The argument to --idoffset must be smaller than to --minseqlength");
@@ -2179,15 +2167,17 @@ void cmd_help()
               "\n"
               "Chimera detection\n"
               "  --uchime_denovo FILENAME    detect chimeras de novo\n"
+              "  --uchime2_denovo FILENAME   detect chimeras de novo in denoised amplicons\n"
+              "  --uchime3_denovo FILENAME   detect chimeras de novo in denoised amplicons\n"
               "  --uchime_ref FILENAME       detect chimeras using a reference database\n"
               " Data\n"
               "  --db FILENAME               reference database for --uchime_ref\n"
               " Parameters\n"
-              "  --abskew REAL               min abundance ratio of parent vs chimera (2.0)\n"
+              "  --abskew REAL               minimum abundance ratio (2.0, 16.0 for uchime3)\n"
               "  --dn REAL                   'no' vote pseudo-count (1.4)\n"
-              "  --mindiffs INT              minimum number of differences in segment (3)\n"
-              "  --mindiv REAL               minimum divergence from closest parent (0.8)\n"
-              "  --minh REAL                 minimum score (0.28)\n"
+              "  --mindiffs INT              minimum number of differences in segment (3) *\n"
+              "  --mindiv REAL               minimum divergence from closest parent (0.8) *\n"
+              "  --minh REAL                 minimum score (0.28) * ignored in uchime2/3\n"
               "  --sizein                    propagate abundance annotation from input\n"
               "  --self                      exclude identical labels for --uchime_ref\n"
               "  --selfid                    exclude identical sequences for --uchime_ref\n"
@@ -2212,6 +2202,7 @@ void cmd_help()
               "  --cluster_fast FILENAME     cluster sequences after sorting by length\n"
               "  --cluster_size FILENAME     cluster sequences after sorting by abundance\n"
               "  --cluster_smallmem FILENAME cluster already sorted sequences (see -usersort)\n"
+              "  --cluster_unoise FILENAME   denoise Illumina amplicon reads\n"
               " Parameters (most searching options also apply)\n"
               "  --cons_truncate             do not ignore terminal gaps in MSA for consensus\n"
               "  --id REAL                   reject if identity lower, accepted values: 0-1.0\n"
@@ -2220,6 +2211,8 @@ void cmd_help()
               "  --sizein                    propagate abundance annotation from input\n"
               "  --strand plus|both          cluster using plus or both strands (plus)\n"
               "  --usersort                  indicate sequences not pre-sorted by length\n"
+              "  --minsize INT               minimum abundance (unoise only) (8)\n"
+              "  --unoise_alpha REAL         alpha parameter (unoise only) (2.0)\n"
               " Output\n"
               "  --biomout FILENAME          filename for OTU table output in biom 1.0 format\n"
               "  --centroids FILENAME        output centroid sequences to FASTA file\n"
@@ -2510,6 +2503,14 @@ void cmd_help()
               "  --sizeout                   update abundance information in output\n"
               "  --xsize                     strip abundance information in output\n"
               "\n"
+              "Taxonomic classification\n"
+              "  --sintax FILENAME           classify sequences in given FASTA/FASTQ file\n"
+              " Parameters\n"
+              "  --db FILENAME               taxonomic reference db in given FASTA or UDB file\n"
+              "  --sintax_cutoff REAL        confidence value cutoff level (0.0)\n"
+              " Output\n"
+              "  --tabbedout FILENAME        write results to given tab-delimited file\n"
+              "\n"
               "UDB files\n"
               "  --makeudb_usearch FILENAME  make UDB file from given FASTA file\n"
               "  --udb2fasta FILENAME        output FASTA file from given UDB file\n"
@@ -2753,8 +2754,9 @@ void cmd_cluster()
       (!opt_mothur_shared_out))
     fatal("No output files specified");
 
-  if ((opt_id < 0.0) || (opt_id > 1.0))
-    fatal("Identity between 0.0 and 1.0 must be specified with --id");
+  if (!opt_cluster_unoise)
+    if ((opt_id < 0.0) || (opt_id > 1.0))
+      fatal("Identity between 0.0 and 1.0 must be specified with --id");
 
   if (opt_cluster_fast)
     cluster_fast(cmdline, progheader);
@@ -2762,6 +2764,8 @@ void cmd_cluster()
     cluster_smallmem(cmdline, progheader);
   else if (opt_cluster_size)
     cluster_size(cmdline, progheader);
+  else if (opt_cluster_unoise)
+    cluster_unoise(cmdline, progheader);
 }
 
 void cmd_uchime()
@@ -2779,14 +2783,17 @@ void cmd_uchime()
   if (opt_dn <= 0.0)
     fatal("Argument to --dn must be > 0");
 
-  if (opt_mindiffs <= 0)
-    fatal("Argument to --mindiffs must be > 0");
+  if ((!opt_uchime2_denovo) && (!opt_uchime3_denovo))
+  {
+    if (opt_mindiffs <= 0)
+      fatal("Argument to --mindiffs must be > 0");
 
-  if (opt_mindiv <= 0.0)
-    fatal("Argument to --mindiv must be > 0");
+    if (opt_mindiv <= 0.0)
+      fatal("Argument to --mindiv must be > 0");
 
-  if (opt_minh <= 0.0)
-    fatal("Argument to --minh must be > 0");
+    if (opt_minh <= 0.0)
+      fatal("Argument to --minh must be > 0");
+  }
 
 #if 0
   if (opt_abskew <= 1.0)
@@ -2875,7 +2882,7 @@ int main(int argc, char** argv)
 
   if (opt_log)
     {
-      fp_log = fopen(opt_log, "w");
+      fp_log = fopen_output(opt_log);
       if (!fp_log)
         fatal("Unable to open log file for writing");
       fprintf(fp_log, "%s\n", progheader);
@@ -2889,6 +2896,8 @@ int main(int argc, char** argv)
       fprintf(fp_log, "Started  %s\n", time_string);
     }
 
+  random_init();
+
   show_header();
 
   dynlibs_open();
@@ -2897,8 +2906,6 @@ int main(int argc, char** argv)
   if (!sse2_present)
     fatal("Sorry, this program requires a cpu with SSE2.");
 #endif
-
-  global_abundance = abundance_init();
 
   if (opt_help)
     cmd_help();
@@ -2918,9 +2925,9 @@ int main(int argc, char** argv)
     cmd_subsample();
   else if (opt_maskfasta)
     cmd_maskfasta();
-  else if (opt_cluster_smallmem || opt_cluster_fast || opt_cluster_size)
+  else if (opt_cluster_smallmem || opt_cluster_fast || opt_cluster_size || opt_cluster_unoise)
     cmd_cluster();
-  else if (opt_uchime_denovo || opt_uchime_ref)
+  else if (opt_uchime_denovo || opt_uchime_ref || opt_uchime2_denovo || opt_uchime3_denovo)
     cmd_uchime();
   else if (opt_fastq_chars)
     fastq_chars();
@@ -2956,6 +2963,8 @@ int main(int argc, char** argv)
     udb_info();
   else if (opt_udbstats)
     udb_stats();
+  else if (opt_sintax)
+    sintax();
   else
     cmd_none();
 
@@ -2982,7 +2991,10 @@ int main(int argc, char** argv)
       fclose(fp_log);
     }
 
+  if (opt_ee_cutoffs_values)
+    xfree(opt_ee_cutoffs_values);
+  opt_ee_cutoffs_values = 0;
+
   xfree(cmdline);
-  abundance_exit(global_abundance);
   dynlibs_close();
 }

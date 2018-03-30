@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -90,6 +90,9 @@ static FILE * fp_dbnotmatched = 0;
 static FILE * fp_otutabout = 0;
 static FILE * fp_mothur_shared_out = 0;
 static FILE * fp_biomout = 0;
+
+static int count_matched = 0;
+static int count_notmatched = 0;
 
 void add_hit(struct searchinfo_s * si, uint64_t seqno)
 {
@@ -280,19 +283,31 @@ void search_exact_output_results(int hit_count,
 
   if (hit_count)
     {
+      count_matched++;
       if (opt_matched)
-        fasta_print(fp_matched,
-                    query_head,
-                    qsequence,
-                    qseqlen);
+        fasta_print_general(fp_matched,
+                            0,
+                            qsequence,
+                            qseqlen,
+                            query_head,
+                            strlen(query_head),
+                            qsize,
+                            count_matched,
+                            -1, -1, 0, 0.0);
     }
   else
     {
+      count_notmatched++;
       if (opt_notmatched)
-        fasta_print(fp_notmatched,
-                    query_head,
-                    qsequence,
-                    qseqlen);
+        fasta_print_general(fp_notmatched,
+                            0,
+                            qsequence,
+                            qseqlen,
+                            query_head,
+                            strlen(query_head),
+                            qsize,
+                            count_notmatched,
+                            -1, -1, 0, 0.0);
     }
 
   /* update matching db sequences */
@@ -505,7 +520,7 @@ void search_exact_prep(char * cmdline, char * progheader)
 
   if (opt_alnout)
     {
-      fp_alnout = fopen(opt_alnout, "w");
+      fp_alnout = fopen_output(opt_alnout);
       if (! fp_alnout)
         fatal("Unable to open alignment output file for writing");
 
@@ -515,84 +530,84 @@ void search_exact_prep(char * cmdline, char * progheader)
 
   if (opt_samout)
     {
-      fp_samout = fopen(opt_samout, "w");
+      fp_samout = fopen_output(opt_samout);
       if (! fp_samout)
         fatal("Unable to open SAM output file for writing");
     }
 
   if (opt_userout)
     {
-      fp_userout = fopen(opt_userout, "w");
+      fp_userout = fopen_output(opt_userout);
       if (! fp_userout)
         fatal("Unable to open user-defined output file for writing");
     }
 
   if (opt_blast6out)
     {
-      fp_blast6out = fopen(opt_blast6out, "w");
+      fp_blast6out = fopen_output(opt_blast6out);
       if (! fp_blast6out)
         fatal("Unable to open blast6-like output file for writing");
     }
 
   if (opt_uc)
     {
-      fp_uc = fopen(opt_uc, "w");
+      fp_uc = fopen_output(opt_uc);
       if (! fp_uc)
         fatal("Unable to open uc output file for writing");
     }
 
   if (opt_fastapairs)
     {
-      fp_fastapairs = fopen(opt_fastapairs, "w");
+      fp_fastapairs = fopen_output(opt_fastapairs);
       if (! fp_fastapairs)
         fatal("Unable to open fastapairs output file for writing");
     }
 
   if (opt_matched)
     {
-      fp_matched = fopen(opt_matched, "w");
+      fp_matched = fopen_output(opt_matched);
       if (! fp_matched)
         fatal("Unable to open matched output file for writing");
     }
 
   if (opt_notmatched)
     {
-      fp_notmatched = fopen(opt_notmatched, "w");
+      fp_notmatched = fopen_output(opt_notmatched);
       if (! fp_notmatched)
         fatal("Unable to open notmatched output file for writing");
     }
 
   if (opt_dbmatched)
     {
-      fp_dbmatched = fopen(opt_dbmatched, "w");
+      fp_dbmatched = fopen_output(opt_dbmatched);
       if (! fp_dbmatched)
         fatal("Unable to open dbmatched output file for writing");
     }
 
   if (opt_dbnotmatched)
     {
-      fp_dbnotmatched = fopen(opt_dbnotmatched, "w");
+      fp_dbnotmatched = fopen_output(opt_dbnotmatched);
       if (! fp_dbnotmatched)
         fatal("Unable to open dbnotmatched output file for writing");
     }
 
   if (opt_otutabout)
     {
-      fp_otutabout = fopen(opt_otutabout, "w");
+      fp_otutabout = fopen_output(opt_otutabout);
       if (! fp_otutabout)
         fatal("Unable to open OTU table (text format) output file for writing");
     }
 
   if (opt_mothur_shared_out)
     {
-      fp_mothur_shared_out = fopen(opt_mothur_shared_out, "w");
+      fp_mothur_shared_out = fopen_output(opt_mothur_shared_out);
       if (! fp_mothur_shared_out)
         fatal("Unable to open OTU table (mothur format) output file for writing");
     }
 
   if (opt_biomout)
     {
-      fp_biomout = fopen(opt_biomout, "w");
+      fp_biomout = fopen_output(opt_biomout);
       if (! fp_biomout)
         fatal("Unable to open OTU table (biom 1.0 format) output file for writing");
     }
@@ -722,26 +737,41 @@ void search_exact(char * cmdline, char * progheader)
 
   otutable_done();
 
+  int count_dbmatched = 0;
+  int count_dbnotmatched = 0;
+
   if (opt_dbmatched || opt_dbnotmatched)
     {
       for(int64_t i=0; i<seqcount; i++)
         if (dbmatched[i])
           {
+            count_dbmatched++;
             if (opt_dbmatched)
-              {
-                if (opt_sizeout)
-                  fasta_print_db_size(fp_dbmatched, i, dbmatched[i]);
-                else
-                  fasta_print_db(fp_dbmatched, i);
-              }
+              fasta_print_general(fp_dbmatched,
+                                  0,
+                                  db_getsequence(i),
+                                  db_getsequencelen(i),
+                                  db_getheader(i),
+                                  db_getheaderlen(i),
+                                  dbmatched[i],
+                                  count_dbmatched,
+                                  -1, -1, 0, 0.0);
           }
         else
           {
+            count_dbnotmatched++;
             if (opt_dbnotmatched)
-              fasta_print_db(fp_dbnotmatched, i);
+              fasta_print_general(fp_dbnotmatched,
+                                  0,
+                                  db_getsequence(i),
+                                  db_getsequencelen(i),
+                                  db_getheader(i),
+                                  db_getheaderlen(i),
+                                  0,
+                                  count_dbnotmatched,
+                                  -1, -1, 0, 0.0);
           }
     }
-
 
   search_exact_done();
 }

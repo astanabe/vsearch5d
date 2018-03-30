@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -79,17 +79,13 @@ uint64_t fastq_get_quality_length(fastx_handle h);
 
 void fastq_print(FILE * fp, char * header, char * sequence, char * quality);
 
-void fastq_print_with_ee(FILE * fp, char * header, char * sequence,
-                         char * quality, double ee);
-
-void fastq_print_relabel(FILE * fp,
+void fastq_print_general(FILE * fp,
                          char * seq,
                          int len,
                          char * header,
                          int header_len,
                          char * quality,
                          int abundance,
-                         int ordinal);
-
-
-void fastq_print_db(FILE * fp, uint64_t seqno);
+                         int ordinal,
+                         const char * score_name,
+                         double score);

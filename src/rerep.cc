@@ -3,13 +3,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -70,7 +70,7 @@ void rereplicate()
 
   if (opt_output)
     {
-      fp_output = fopen(opt_output, "w");
+      fp_output = fopen_output(opt_output);
       if (!fp_output)
         fatal("Unable to open FASTA output file for writing");
     }
@@ -91,13 +91,15 @@ void rereplicate()
         {
           i++;
           if (opt_output)
-            fasta_print_relabel(fp_output,
+            fasta_print_general(fp_output,
+                                0,
                                 fasta_get_sequence(fh),
                                 fasta_get_sequence_length(fh),
                                 fasta_get_header(fh),
                                 fasta_get_header_length(fh),
                                 1,
-                                i);
+                                i,
+                                -1, -1, 0, 0.0);
         }
 
       progress_update(fasta_get_position(fh));

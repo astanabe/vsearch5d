@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -103,28 +103,28 @@ void filter(bool fastq_only, char * filename)
 
   if (opt_fastaout)
     {
-      fp_fastaout = fopen(opt_fastaout, "w");
+      fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
         fatal("Unable to open FASTA output file for writing");
     }
 
   if (opt_fastqout)
     {
-      fp_fastqout = fopen(opt_fastqout, "w");
+      fp_fastqout = fopen_output(opt_fastqout);
       if (!fp_fastqout)
         fatal("Unable to open FASTQ output file for writing");
     }
 
   if (opt_fastaout_discarded)
     {
-      fp_fastaout_discarded = fopen(opt_fastaout_discarded, "w");
+      fp_fastaout_discarded = fopen_output(opt_fastaout_discarded);
       if (!fp_fastaout_discarded)
         fatal("Unable to open FASTA output file for writing");
     }
 
   if (opt_fastqout_discarded)
     {
-      fp_fastqout_discarded = fopen(opt_fastqout_discarded, "w");
+      fp_fastqout_discarded = fopen_output(opt_fastqout_discarded);
       if (!fp_fastqout_discarded)
         fatal("Unable to open FASTQ output file for writing");
     }
@@ -142,9 +142,6 @@ void filter(bool fastq_only, char * filename)
   int64_t kept = 0;
   int64_t discarded = 0;
   int64_t truncated = 0;
-
-  char hex_md5[LEN_HEX_DIG_MD5];
-  char hex_sha1[LEN_HEX_DIG_SHA1];
 
   while(fastx_next(h, 0, chrmap_no_change))
     {
@@ -243,43 +240,30 @@ void filter(bool fastq_only, char * filename)
             }
 
           if (opt_fastaout)
-            {
-              if (opt_eeout || opt_fastq_eeout)
-                fasta_print_relabel_ee(fp_fastaout,
-                                       p, length,
-                                       d, fastx_get_header_length(h),
-                                       abundance, kept,
-                                       ee);
-              else
-                fasta_print_relabel(fp_fastaout,
-                                    p, length,
-                                    d, fastx_get_header_length(h),
-                                    abundance, kept);
-            }
+            fasta_print_general(fp_fastaout,
+                                0,
+                                p,
+                                length,
+                                d,
+                                fastx_get_header_length(h),
+                                abundance,
+                                kept,
+                                -1,
+                                -1,
+                                (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
+                                ee);
+
           if (opt_fastqout)
-            {
-              if (opt_relabel)
-                {
-                  (void) snprintf(header, header_alloc,
-                                  "%s%" PRId64, opt_relabel, kept);
-                  d = header;
-                }
-              else if (opt_relabel_md5)
-                {
-                  get_hex_seq_digest_md5(hex_md5, p, length);
-                  d = hex_md5;
-                }
-              else if (opt_relabel_sha1)
-                {
-                  get_hex_seq_digest_sha1(hex_sha1, p, length);
-                  d = hex_sha1;
-                }
-              
-              if (opt_eeout || opt_fastq_eeout)
-                fastq_print_with_ee(fp_fastqout, d, p, q, ee);
-              else
-                fastq_print(fp_fastqout, d, p, q);
-            }
+            fastq_print_general(fp_fastqout,
+                                p,
+                                length,
+                                d,
+                                fastx_get_header_length(h),
+                                q,
+                                abundance,
+                                kept,
+                                (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
+                                ee);
         }
       else
         {
@@ -287,58 +271,50 @@ void filter(bool fastq_only, char * filename)
 
           discarded++;
 
-          p = fastx_get_sequence(h);
-          q = fastx_get_quality(h);
-
           if (opt_fastaout_discarded)
-            {
-              if (opt_eeout || opt_fastq_eeout)
-                fasta_print_relabel_ee(fp_fastaout_discarded,
-                                       p, length,
-                                       d, fastx_get_header_length(h),
-                                       abundance, discarded,
-                                       ee);
-              else
-                fasta_print_relabel(fp_fastaout_discarded,
-                                    p, length,
-                                    d, fastx_get_header_length(h),
-                                    abundance, discarded);
-            }
+            fasta_print_general(fp_fastaout_discarded,
+                                0,
+                                p,
+                                length,
+                                d,
+                                fastx_get_header_length(h),
+                                abundance,
+                                discarded,
+                                -1,
+                                -1,
+                                (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
+                                ee);
 
           if (opt_fastqout_discarded)
-            {
-              if (opt_relabel)
-                {
-                  (void) snprintf(header, header_alloc, "%s%" PRId64, opt_relabel, discarded);
-                  d = header;
-                }
-              else if (opt_relabel_md5)
-                {
-                  get_hex_seq_digest_md5(hex_md5, p, length);
-                  d = hex_md5;
-                }
-              else if (opt_relabel_sha1)
-                {
-                  get_hex_seq_digest_sha1(hex_sha1, p, length);
-                  d = hex_sha1;
-                }
-
-              if (opt_eeout || opt_fastq_eeout)
-                fastq_print_with_ee(fp_fastqout_discarded, d, p, q, ee);
-              else
-                fastq_print(fp_fastqout_discarded, d, p, q);
-            }
+            fastq_print_general(fp_fastqout_discarded,
+                                p,
+                                length,
+                                d,
+                                fastx_get_header_length(h),
+                                q,
+                                abundance,
+                                discarded,
+                                (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
+                                ee);
         }
 
       progress_update(fastx_get_position(h));
     }
   progress_done();
 
-  fprintf(stderr,
-          "%" PRId64 " sequences kept (of which %" PRId64 " truncated), %" PRId64 " sequences discarded.\n",
-          kept,
-          truncated,
-          discarded);
+  if (! opt_quiet)
+    fprintf(stderr,
+            "%" PRId64 " sequences kept (of which %" PRId64 " truncated), %" PRId64 " sequences discarded.\n",
+            kept,
+            truncated,
+            discarded);
+
+  if (opt_log)
+    fprintf(fp_log,
+            "%" PRId64 " sequences kept (of which %" PRId64 " truncated), %" PRId64 " sequences discarded.\n",
+            kept,
+            truncated,
+            discarded);
 
   if (header)
     xfree(header);
@@ -978,14 +954,14 @@ void fastx_revcomp()
 
   if (opt_fastaout)
     {
-      fp_fastaout = fopen(opt_fastaout, "w");
+      fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
         fatal("Unable to open FASTA output file for writing");
     }
 
   if (opt_fastqout)
     {
-      fp_fastqout = fopen(opt_fastqout, "w");
+      fp_fastqout = fopen_output(opt_fastqout);
       if (!fp_fastqout)
         fatal("Unable to open FASTQ output file for writing");
     }
@@ -995,8 +971,12 @@ void fastx_revcomp()
   else
     progress_init("Reading FASTA file", filesize);
 
+  int count = 0;
+
   while(fastx_next(h, 0, chrmap_no_change))
     {
+      count++;
+      
       /* header */
       
       uint64_t hlen = fastx_get_header_length(h);
@@ -1043,11 +1023,27 @@ void fastx_revcomp()
         }
 
       if (opt_fastaout)
-        fasta_print(fp_fastaout, header, seq_buffer, length);
+        fasta_print_general(fp_fastaout,
+                            0,
+                            seq_buffer,
+                            length,
+                            header,
+                            hlen,
+                            0,
+                            count,
+                            -1, -1, 0, 0.0);
 
       if (opt_fastqout)
-        fastq_print(fp_fastqout, header, seq_buffer, qual_buffer);
-                    
+        fastq_print_general(fp_fastqout,
+                            seq_buffer,
+                            length,
+                            header,
+                            hlen,
+                            qual_buffer,
+                            0,
+                            count,
+                            0, 0.0);
+      
       progress_update(fastx_get_position(h));
     }
   progress_done();
@@ -1076,7 +1072,7 @@ void fastq_convert()
 
   FILE * fp_fastqout = 0;
 
-  fp_fastqout = fopen(opt_fastqout, "w");
+  fp_fastqout = fopen_output(opt_fastqout);
   if (!fp_fastqout)
     fatal("Unable to open FASTQ output file for writing");
 

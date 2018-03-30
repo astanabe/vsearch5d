@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -892,10 +892,10 @@ void backtrack16(s16info_s * s,
   uint64_t qlen = s->qlen;
   char * qseq = s->qseq;
 
-  uint64_t maskup      = 3UL << (2*channel+ 0);
-  uint64_t maskleft    = 3UL << (2*channel+16);
-  uint64_t maskextup   = 3UL << (2*channel+32);
-  uint64_t maskextleft = 3UL << (2*channel+48);
+  uint64_t maskup      = 3ULL << (2*channel+ 0);
+  uint64_t maskleft    = 3ULL << (2*channel+16);
+  uint64_t maskextup   = 3ULL << (2*channel+32);
+  uint64_t maskextleft = 3ULL << (2*channel+48);
 
 #if 0
 

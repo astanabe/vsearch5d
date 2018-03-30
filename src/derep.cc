@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -150,14 +150,14 @@ void derep_fulllength()
 
   if (opt_output)
     {
-      fp_output = fopen(opt_output, "w");
+      fp_output = fopen_output(opt_output);
       if (!fp_output)
         fatal("Unable to open output file for writing");
     }
 
   if (opt_uc)
     {
-      fp_uc = fopen(opt_uc, "w");
+      fp_uc = fopen_output(opt_uc);
       if (!fp_uc)
         fatal("Unable to open output (uc) file for writing");
     }
@@ -400,13 +400,15 @@ void derep_fulllength()
           if ((size >= opt_minuniquesize) && (size <= opt_maxuniquesize))
             {
               relabel_count++;
-              fasta_print_relabel(fp_output,
+              fasta_print_general(fp_output,
+                                  0,
                                   db_getsequence(bp->seqno_first),
                                   db_getsequencelen(bp->seqno_first),
                                   db_getheader(bp->seqno_first),
                                   db_getheaderlen(bp->seqno_first),
                                   size,
-                                  relabel_count);
+                                  relabel_count,
+                                  -1, -1, 0, 0.0);
               if (relabel_count == opt_topn)
                 break;
             }
@@ -487,14 +489,14 @@ void derep_prefix()
 
   if (opt_output)
     {
-      fp_output = fopen(opt_output, "w");
+      fp_output = fopen_output(opt_output);
       if (!fp_output)
         fatal("Unable to open output file for writing");
     }
 
   if (opt_uc)
     {
-      fp_uc = fopen(opt_uc, "w");
+      fp_uc = fopen_output(opt_uc);
       if (!fp_uc)
         fatal("Unable to open output (uc) file for writing");
     }
@@ -578,12 +580,12 @@ void derep_prefix()
 
       /* compute hashes of all prefixes */
 
-      uint64_t fnv1a_hash = 14695981039346656037UL;
+      uint64_t fnv1a_hash = 14695981039346656037ULL;
       prefix_hashes[0] = fnv1a_hash;
       for(unsigned int j = 0; j < seqlen; j++)
         {
           fnv1a_hash ^= seq_up[j];
-          fnv1a_hash *= 1099511628211UL;
+          fnv1a_hash *= 1099511628211ULL;
           prefix_hashes[j+1] = fnv1a_hash;
         }
 
@@ -759,13 +761,15 @@ void derep_prefix()
           if ((size >= opt_minuniquesize) && (size <= opt_maxuniquesize))
             {
               relabel_count++;
-              fasta_print_relabel(fp_output,
+              fasta_print_general(fp_output,
+                                  0,
                                   db_getsequence(bp->seqno_first),
                                   db_getsequencelen(bp->seqno_first),
                                   db_getheader(bp->seqno_first),
                                   db_getheaderlen(bp->seqno_first),
                                   size,
-                                  relabel_count);
+                                  relabel_count,
+                                  -1, -1, 0, 0.0);
               if (relabel_count == opt_topn)
                 break;
             }

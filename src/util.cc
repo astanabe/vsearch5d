@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2017, Akifumi S. Tanabe
+  Copyright (C) 2016-2018, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2017, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -355,4 +355,32 @@ void fprint_seq_digest_md5(FILE * fp, char * seq, int seqlen)
   fprintf(fp, "%s", digest);
 }
 
+FILE * fopen_input(const char * filename)
+{
+  /* open the input stream given by filename, but use stdin if name is - */
+  if (strcmp(filename, "-") == 0)
+    {
+      int fd = dup(STDIN_FILENO);
+      if (fd < 0)
+        return NULL;
+      else
+        return fdopen(fd, "rb");
+    }
+  else
+    return fopen(filename, "rb");
+}
 
+FILE * fopen_output(const char * filename)
+{
+  /* open the output stream given by filename, but use stdout if name is - */
+  if (strcmp(filename, "-") == 0)
+    {
+      int fd = dup(STDOUT_FILENO);
+      if (fd < 0)
+        return NULL;
+      else
+        return fdopen(fd, "w");
+    }
+  else
+    return fopen(filename, "w");
+}
