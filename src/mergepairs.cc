@@ -72,7 +72,7 @@ static const int k                        = 5;
 static const double merge_minscore        = 16.0;
 static const double merge_dropmax         = 16.0;
 static const int merge_mindiagcount       = 4;
-static const int merge_minrepeatdiagcount = 12;
+static const int merge_minrepeatdiagcount = INT_MAX;
 static const double merge_mismatchmax     = -4.0;
 
 /* static variables */
