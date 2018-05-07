@@ -123,10 +123,10 @@ int parse_userfields_arg(char * arg)
   userfields_requested_count = 1;
   while(p<e)
     if (*p++ == '+')
-      userfields_requested_count++;     
+      userfields_requested_count++;
 
   userfields_requested = (int*) xmalloc(sizeof(int) * (uint64_t)userfields_requested_count);
-  
+
   p = arg;
 
   char * q;
@@ -138,7 +138,7 @@ int parse_userfields_arg(char * arg)
       q = strchr(p, '+');
       if (!q)
         q = e;
-      
+
       uint64_t n = (uint64_t)(q - p);
 
       char ** u = (char**) userfields_names;
@@ -157,7 +157,7 @@ int parse_userfields_arg(char * arg)
       userfields_requested[fields++] = i;
 
       p = q;
-      
+
       if (p == e)  // reached end of argument
         return 1;
 

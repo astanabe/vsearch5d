@@ -117,6 +117,7 @@ static uint64_t failed_maxlen = 0;
 static uint64_t failed_maxns = 0;
 static uint64_t failed_minovlen = 0;
 static uint64_t failed_maxdiffs = 0;
+static uint64_t failed_maxdiffpct = 0;
 static uint64_t failed_staggered = 0;
 static uint64_t failed_indel = 0;
 static uint64_t failed_repeat = 0;
@@ -133,7 +134,8 @@ static uint64_t failed_nokmers = 0;
    - input seq too long
    - too many Ns in input
    - overlap too short
-   - too many differences (maxdiff)
+   - too many differences (maxdiffs)
+   - too high percentage of differences (maxdiffpct)
    - staggered
    - indels in overlap region
    - potential repeats in overlap region / multiple overlaps
@@ -153,6 +155,7 @@ enum reason_enum
     maxns,
     minovlen,
     maxdiffs,
+    maxdiffpct,
     staggered,
     indel,
     repeat,
@@ -426,6 +429,10 @@ void discard(merge_data_t * ip)
       failed_maxdiffs++;
       break;
 
+    case maxdiffpct:
+      failed_maxdiffpct++;
+      break;
+
     case staggered:
       failed_staggered++;
       break;
@@ -471,7 +478,7 @@ void discard(merge_data_t * ip)
                         0,
                         notmerged,
                         0, 0.0);
-                        
+
   if (opt_fastqout_notmerged_rev)
     fastq_print_general(fp_fastqout_notmerged_rev,
                         ip->rev_sequence,
@@ -494,7 +501,7 @@ void discard(merge_data_t * ip)
                         notmerged,
                         -1, -1,
                         0, 0.0);
-                        
+
   if (opt_fastaout_notmerged_rev)
     fasta_print_general(fp_fastaout_notmerged_rev,
                         0,
@@ -743,6 +750,12 @@ int64_t optimize(merge_data_t * ip,
   if (best_diffs > opt_fastq_maxdiffs)
     {
       ip->reason = maxdiffs;
+      return 0;
+    }
+
+  if ((100.0 * best_diffs / best_i) > opt_fastq_maxdiffpct)
+    {
+      ip->reason = maxdiffpct;
       return 0;
     }
 
@@ -1361,6 +1374,11 @@ void fastq_mergepairs()
     fprintf(stderr,
             "%10" PRIu64 "  too many differences\n",
             failed_maxdiffs);
+
+  if (failed_maxdiffpct)
+    fprintf(stderr,
+            "%10" PRIu64 "  too high percentage of differences\n",
+            failed_maxdiffpct);
 
   if (failed_minscore)
     fprintf(stderr,

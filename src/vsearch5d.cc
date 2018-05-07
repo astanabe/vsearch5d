@@ -157,6 +157,7 @@ char * opt_userout;
 double * opt_ee_cutoffs_values;
 double opt_abskew;
 double opt_dn;
+double opt_fastq_maxdiffpct;
 double opt_fastq_maxee;
 double opt_fastq_maxee_rate;
 double opt_fastq_truncee;
@@ -662,6 +663,7 @@ void args_init(int argc, char **argv)
   opt_fastq_eestats = 0;
   opt_fastq_eestats2 = 0;
   opt_fastq_filter = 0;
+  opt_fastq_maxdiffpct = 100.0;
   opt_fastq_maxdiffs = 10;
   opt_fastq_maxee = DBL_MAX;
   opt_fastq_maxee_rate = DBL_MAX;
@@ -1024,6 +1026,7 @@ void args_init(int argc, char **argv)
     {"sintax",                required_argument, 0, 0 },
     {"sintax_cutoff",         required_argument, 0, 0 },
     {"tabbedout",             required_argument, 0, 0 },
+    {"fastq_maxdiffpct",      required_argument, 0, 0 },
     {"idoffset",              required_argument, 0, 0 },
     { 0, 0, 0, 0 }
   };
@@ -1846,7 +1849,7 @@ void args_init(int argc, char **argv)
         case 192:
           opt_unoise_alpha = args_getdouble(optarg);
           break;
-        
+
         case 193:
           opt_uchime2_denovo = optarg;
           break;
@@ -1868,6 +1871,10 @@ void args_init(int argc, char **argv)
           break;
 
         case 198:
+          opt_fastq_maxdiffpct = args_getdouble(optarg);
+          break;
+
+        case 199:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
           break;
@@ -2095,7 +2102,7 @@ void args_init(int argc, char **argv)
       else
         opt_minsize = 0;
     }
-      
+
   /* set default opt_abskew depending on command */
   if (opt_abskew < 0.0)
     {
@@ -2350,6 +2357,7 @@ void cmd_help()
               " Parameters\n"
               "  --fastq_allowmergestagger   Allow merging of staggered reads\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
+              "  --fastq_maxdiffpct REAL     maximum percentage diff. bases in overlap (100.0)\n"
               "  --fastq_maxdiffs INT        maximum number of different bases in overlap (10)\n"
               "  --fastq_maxee REAL          maximum expected error value for merged sequence\n"
               "  --fastq_maxmergelen         maximum length of entire merged sequence\n"

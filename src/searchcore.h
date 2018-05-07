@@ -92,7 +92,7 @@ struct hit
   char * nwalignment;    /* alignment string (cigar) of global alignment */
   int matches;
   int mismatches;
-  
+
   /* info about alignment excluding terminal gaps */
 
   int internal_alignmentlength;

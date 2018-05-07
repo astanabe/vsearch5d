@@ -153,14 +153,14 @@ minheap_replaceroot(minheap_t * m, elem_t tmp)
   /* start with root */
   int p = 0;
   int c = 2*p+1;
-  
+
   /* while at least one child */
   while (c < m->count)
     {
       /* if two children: swap with the one with smallest value */
       if ((c + 1 < m->count) && (elem_smaller(m->array + c + 1, m->array + c)))
         c++;
-      
+
       /* swap parent and child if child has lower value */
       if (elem_smaller(m->array + c, &tmp))
         {
@@ -169,12 +169,12 @@ minheap_replaceroot(minheap_t * m, elem_t tmp)
         }
       else
         break;
-      
+
       /* step down */
       p = c;
       c = 2*p+1;
     }
-  
+
   m->array[p] = tmp;
 }
 
@@ -273,7 +273,7 @@ minheap_test()
 
   int samples = 10000000;
   swaps = 0;
-  
+
   for(int i=samples; i>=0; i--)
     {
       elem_t x = {(unsigned int)(rand()),0,1};

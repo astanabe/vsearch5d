@@ -112,7 +112,7 @@ void db_read(const char * filename, int upcase)
   is_fastq = fastx_is_fastq(h);
 
   int64_t filesize = fastx_get_size(h);
-  
+
   char * prompt = 0;
   if (xsprintf(& prompt, "Reading file %s", filename) == -1)
     fatal("Out of memory");
@@ -145,7 +145,7 @@ void db_read(const char * filename, int upcase)
       size_t headerlength = fastx_get_header_length(h);
       size_t sequencelength = fastx_get_sequence_length(h);
       int64_t abundance = fastx_get_abundance(h);
-      
+
       if (sequencelength < (size_t)opt_minseqlength)
         {
           discarded_short++;
@@ -176,14 +176,14 @@ void db_read(const char * filename, int upcase)
                  fastx_get_header(h),
                  headerlength + 1);
           datalen += headerlength + 1;
-          
+
           /* store sequence */
           size_t sequence_p = datalen;
           memcpy(datap + sequence_p,
                  fastx_get_sequence(h),
                  sequencelength + 1);
           datalen += sequencelength + 1;
-          
+
           size_t quality_p = datalen;
           if (is_fastq)
             {
@@ -200,7 +200,7 @@ void db_read(const char * filename, int upcase)
             seqindex_alloc += MEMCHUNK;
           if (seqindex_alloc > seqindex_alloc_old)
             seqindex = (seqinfo_t *) xrealloc(seqindex, seqindex_alloc);
-          
+
           /* update index */
           seqinfo_t * seqindex_p = seqindex + sequences;
           seqindex_p->headerlen = headerlength;
@@ -231,7 +231,7 @@ void db_read(const char * filename, int upcase)
     {
       if (sequences > 0)
         fprintf(stderr,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n",
                 db_getnucleotidecount(),
                 db_getsequencecount(),
                 db_getshortestsequence(),
@@ -239,7 +239,7 @@ void db_read(const char * filename, int upcase)
                 db_getnucleotidecount() * 1.0 / db_getsequencecount());
       else
         fprintf(stderr,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n",
                 db_getnucleotidecount(),
                 db_getsequencecount());
     }
@@ -248,7 +248,7 @@ void db_read(const char * filename, int upcase)
     {
       if (sequences > 0)
         fprintf(fp_log,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64 ", max %'" PRIu64 ", avg %'.0f\n\n",
                 db_getnucleotidecount(),
                 db_getsequencecount(),
                 db_getshortestsequence(),
@@ -256,7 +256,7 @@ void db_read(const char * filename, int upcase)
                 db_getnucleotidecount() * 1.0 / db_getsequencecount());
       else
         fprintf(fp_log,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n\n", 
+                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n\n",
                 db_getnucleotidecount(),
                 db_getsequencecount());
     }
@@ -274,7 +274,7 @@ void db_read(const char * filename, int upcase)
               "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
               opt_minseqlength, discarded_short, (discarded_short == 1 ? "sequence" : "sequences"));
     }
-  
+
   if (discarded_long)
     {
       fprintf(stderr,
@@ -298,7 +298,7 @@ void db_read(const char * filename, int upcase)
               "minsize %" PRId64 ": %" PRId64 " %s discarded.\n",
               opt_minsize, discarded_unoise, (discarded_unoise == 1 ? "sequence" : "sequences"));
     }
-            
+
   show_rusage();
 }
 

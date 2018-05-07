@@ -201,14 +201,14 @@ void align_show(FILE * f,
   q_len = seq1len;
   q_name = seq1name;
   q_strand = strand;
-  
+
   d_seq = seq2;
   d_len = seq2len;
   d_name = seq2name;
-  
+
   char * p = cigar;
   char * e = p + cigarlen;
-  
+
   poswidth = numwidth;
   headwidth = namewidth;
   alignlen = alignwidth;
@@ -219,7 +219,7 @@ void align_show(FILE * f,
 
   q_pos = strand ? seq1len - 1 - seq1off : seq1off;
   d_pos = seq2off;
-  
+
   line_pos = 0;
 
   while(p < e)
@@ -235,14 +235,14 @@ void align_show(FILE * f,
       char op = *p++;
       putop(op, len);
     }
-  
+
   putop(0, 1);
 
   xfree(q_line);
   xfree(a_line);
   xfree(d_line);
 }
-               
+
 char * align_getrow(char * seq, char * cigar, int alen, int origin)
 {
   char * row = (char*) xmalloc(alen+1);
@@ -261,8 +261,8 @@ char * align_getrow(char * seq, char * cigar, int alen, int origin)
         }
       p += n;
       char op = *p++;
-      
-      if ((op == 'M') || 
+
+      if ((op == 'M') ||
           ((op == 'D') && (origin == 0)) ||
           ((op == 'I') && (origin == 1)))
         {
