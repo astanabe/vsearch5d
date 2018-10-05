@@ -110,8 +110,8 @@ fasta.cc \
 fastq.cc \
 fastqops.cc \
 fastx.cc \
-kmerhash.cc \
 linmemalign.cc \
+kmerhash.cc \
 maps.cc \
 mask.cc \
 md5.c \
