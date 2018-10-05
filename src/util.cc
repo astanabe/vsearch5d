@@ -61,6 +61,8 @@
 
 #include "vsearch5d.h"
 
+//#define SHOW_RUSAGE
+
 static const char * progress_prompt;
 static uint64_t progress_next;
 static uint64_t progress_size;
@@ -187,7 +189,7 @@ int64_t getusec(void)
 
 void show_rusage()
 {
-#if 0
+#ifdef SHOW_RUSAGE
   double user_time = 0.0;
   double system_time = 0.0;
 
