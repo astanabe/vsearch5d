@@ -58,7 +58,7 @@
 
 */
 
-#include "vsearch.h"
+#include "vsearch5d.h"
 
 uint32_t sff_magic = 0x2e736666;
 
