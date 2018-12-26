@@ -87,7 +87,7 @@ static pthread_attr_t attr;
 static fastx_handle query_fastx_h;
 
 const int tax_levels = 8;
-const char * tax_letters = "kdpcofgs";
+const char * tax_letters = "dkpcofgs";
 const int subset_size = 32;
 const int bootstrap_count = 100;
 
@@ -151,8 +151,8 @@ bool sintax_parse_tax(const char * header,
 void sintax_split(int seqno, int * level_start, int * level_len)
 {
   /* Parse taxonomy string into the following parts
-     k kingdom
      d domain
+     k kingdom
      p phylum
      c class
      o order

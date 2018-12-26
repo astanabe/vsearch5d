@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.9.1], [akifumi.tanabe@gmail.com])
+AC_INIT([vsearch5d], [2.10.3], [akifumi.tanabe@gmail.com])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])
@@ -75,6 +75,7 @@ if test "x${have_zlib}" = "xyes"; then
 fi
 
 case $target in
+     aarch64*) target_aarch64="yes" ;;
      powerpc64*) target_ppc="yes" ;;
 esac
 
@@ -85,6 +86,7 @@ AM_CONDITIONAL(HAVE_ZLIB, test "x${have_zlib}" = "xyes")
 AM_CONDITIONAL(HAVE_PTHREADS, test "x${have_pthreads}" = "xyes")
 AM_CONDITIONAL(HAVE_PS2PDF, test "x${have_ps2pdf}" = "xyes")
 AM_CONDITIONAL(TARGET_PPC, test "x${target_ppc}" = "xyes")
+AM_CONDITIONAL(TARGET_AARCH64, test "x${target_aarch64}" = "xyes")
 AM_PROG_CC_C_O
 
 AC_CONFIG_FILES([Makefile

@@ -97,7 +97,17 @@
 #define PROG_NAME PACKAGE
 #define PROG_VERSION PACKAGE_VERSION
 
-#ifdef __PPC__
+#ifdef __x86_64__
+
+#define PROG_CPU "x86_64"
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+#ifdef __SSSE3__
+#include <tmmintrin.h>
+#endif
+
+#elif __PPC__
 
 #ifdef __LITTLE_ENDIAN__
 #define PROG_CPU "ppc64le"
@@ -106,17 +116,14 @@
 #error Big endian ppc64 CPUs not supported
 #endif
 
+#elif __aarch64__
+
+#define PROG_CPU "aarch64"
+#include <arm_neon.h>
+
 #else
 
-#define PROG_CPU "x86_64"
-
-#ifdef __SSE2__
-#include <emmintrin.h>
-#endif
-
-#ifdef __SSSE3__
-#include <tmmintrin.h>
-#endif
+#error Unknown architecture (not ppc64le, aarch64 or x86_64)
 
 #endif
 
@@ -126,6 +133,9 @@
 #define PROG_OS "win"
 #include <windows.h>
 #include <psapi.h>
+#define bswap_16(x) _byteswap_ushort(x)
+#define bswap_32(x) _byteswap_ulong(x)
+#define bswap_64(x) _byteswap_uint64(x)
 
 #else
 
@@ -133,6 +143,10 @@
 
 #define PROG_OS "macos"
 #include <sys/sysctl.h>
+#include <libkern/OSByteOrder.h>
+#define bswap_16(x) OSSwapInt16(x)
+#define bswap_32(x) OSSwapInt32(x)
+#define bswap_64(x) OSSwapInt64(x)
 
 #else
 
@@ -143,6 +157,7 @@
 #endif
 
 #include <sys/sysinfo.h>
+#include <byteswap.h>
 
 #endif
 
@@ -213,6 +228,7 @@
 #include "kmerhash.h"
 #include "sintax.h"
 #include "fastqjoin.h"
+#include "sffconvert.h"
 
 /* options */
 
@@ -231,6 +247,7 @@ extern bool opt_relabel_keep;
 extern bool opt_relabel_md5;
 extern bool opt_relabel_sha1;
 extern bool opt_samheader;
+extern bool opt_sff_clip;
 extern bool opt_sizeorder;
 extern bool opt_xsize;
 extern char * opt_allpairs_global;
@@ -293,6 +310,7 @@ extern char * opt_rereplicate;
 extern char * opt_reverse;
 extern char * opt_samout;
 extern char * opt_search_exact;
+extern char * opt_sff_convert;
 extern char * opt_shuffle;
 extern char * opt_sintax;
 extern char * opt_sortbylength;

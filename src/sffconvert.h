@@ -1,14 +1,13 @@
 /*
 
-  VSEARCH5D: a modified version of VSEARCH
+  VSEARCH: a versatile open source tool for metagenomics
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
-
-  Contact: Akifumi S. Tanabe
-  https://github.com/astanabe/vsearch5d
-
-  Original version of VSEARCH
   Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
+
+  Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
+  Department of Informatics, University of Oslo,
+  PO Box 1080 Blindern, NO-0316 Oslo, Norway
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -59,15 +58,4 @@
 
 */
 
-#ifdef __x86_64__
-void increment_counters_from_bitmap_sse2(unsigned short * counters,
-                                         unsigned char * bitmap,
-                                         unsigned int totalbits);
-void increment_counters_from_bitmap_ssse3(unsigned short * counters,
-                                          unsigned char * bitmap,
-                                          unsigned int totalbits);
-#else
-void increment_counters_from_bitmap(unsigned short * counters,
-                                    unsigned char * bitmap,
-                                    unsigned int totalbits);
-#endif
+void sff_convert();
