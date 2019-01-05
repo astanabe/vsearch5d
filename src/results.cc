@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -198,15 +198,28 @@ void results_show_uc_one(FILE * fp,
     strand: + or -
     0
     0
-    compressed alignment, e.g. 9I92M14D, or "=" if prefect alignment
+    compressed alignment, e.g. 9I92M14D, or "=" if perfect alignment
     query label
     target label
   */
 
   if (hp)
     {
-      bool perfect = (hp->matches == qseqlen) &&
-        ((uint64_t)(qseqlen) == db_getsequencelen(hp->target));
+      bool perfect;
+
+      if (opt_cluster_fast)
+        {
+          /* cluster_fast */
+          /* use = for identical sequences ignoring terminal gaps */
+          perfect = (hp->matches == hp->internal_alignmentlength);
+        }
+      else
+        {
+          /* cluster_size, cluster_smallmem, cluster_unoise */
+          /* usearch_global, search_exact, allpairs_global */
+          /* use = for strictly identical sequences */
+          perfect = (hp->matches == hp->nwalignmentlength);
+        }
 
       fprintf(fp,
               "H\t%d\t%" PRId64 "\t%.1f\t%c\t0\t0\t%s\t%s\t%s\n",
