@@ -1,7 +1,13 @@
 /*
 
-  VSEARCH: a versatile open source tool for metagenomics
+  VSEARCH5D: a modified version of VSEARCH
 
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
+
+  Contact: Akifumi S. Tanabe
+  https://github.com/astanabe/vsearch5d
+
+  Original version of VSEARCH
   Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
@@ -58,7 +64,7 @@
 
 */
 
-#include "vsearch.h"
+#include "vsearch5d.h"
 
 inline int fastq_get_qual(char q)
 {
