@@ -1,13 +1,15 @@
 /*
 
-  VSEARCH: a versatile open source tool for metagenomics
+  VSEARCH5D: a modified version of VSEARCH
 
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
+
+  Contact: Akifumi S. Tanabe
+  https://github.com/astanabe/vsearch5d
+
+  Original version of VSEARCH
   Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
-
-  Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
-  Department of Informatics, University of Oslo,
-  PO Box 1080 Blindern, NO-0316 Oslo, Norway
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -61,7 +63,7 @@
 /* Implement fastx_getseq, fastx_getseqs and fastx_getsubseq as described here:
    https://drive5.com/usearch/manual/cmd_fastx_getseqs.html                  */
 
-#include "vsearch.h"
+#include "vsearch5d.h"
 
 int labels_alloc = 0;
 int labels_count = 0;
