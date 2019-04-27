@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -241,19 +242,44 @@ FILE * fileopenw(char * filename)
 inline int get_qual(char q)
 {
   int qual = q - opt_fastq_ascii;
-  char msg[200];
 
   if (qual < opt_fastq_qmin)
     {
-      snprintf(msg, 200, "FASTQ quality value (%d) below qmin (%" PRId64 ")",
-               qual, opt_fastq_qmin);
-      fatal(msg);
+      fprintf(stderr,
+              "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
+              PRId64 ")\n",
+              qual, opt_fastq_qmin);
+      if (fp_log)
+        {
+          fprintf(stderr,
+                  "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
+                  PRId64 ")\n",
+                  qual, opt_fastq_qmin);
+        }
+      exit(EXIT_FAILURE);
     }
   else if (qual > opt_fastq_qmax)
     {
-      snprintf(msg, 200, "FASTQ quality value (%d) above qmax (%" PRId64 ")",
-               qual, opt_fastq_qmax);
-      fatal(msg);
+      fprintf(stderr,
+              "\n\nFatal error: FASTQ quality value (%d) above qmax (%"
+              PRId64 ")\n",
+              qual, opt_fastq_qmax);
+      fprintf(stderr,
+              "By default, quality values range from 0 to 41.\n"
+              "To allow higher quality values, "
+              "please use the option --fastq_qmax %d\n", qual);
+      if (fp_log)
+        {
+          fprintf(fp_log,
+                  "\n\nFatal error: FASTQ quality value (%d) above qmax (%"
+                  PRId64 ")\n",
+                  qual, opt_fastq_qmax);
+          fprintf(fp_log,
+                  "By default, quality values range from 0 to 41.\n"
+                  "To allow higher quality values, "
+                  "please use the option --fastq_qmax %d\n", qual);
+        }
+      exit(EXIT_FAILURE);
     }
   return qual;
 }
@@ -373,7 +399,6 @@ void keep(merge_data_t * ip)
                           ip->merged_quality,
                           0,
                           merged,
-                          (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
                           ip->ee_merged);
     }
 
@@ -387,10 +412,11 @@ void keep(merge_data_t * ip)
                           strlen(ip->merged_header),
                           0,
                           merged,
+                          ip->ee_merged,
                           -1,
                           -1,
-                          (opt_eeout || opt_fastq_eeout) ? "ee" : 0,
-                          ip->ee_merged);
+                          0,
+                          0.0);
     }
 
   if (opt_eetabbedout)
@@ -477,7 +503,7 @@ void discard(merge_data_t * ip)
                         ip->fwd_quality,
                         0,
                         notmerged,
-                        0, 0.0);
+                        -1.0);
 
   if (opt_fastqout_notmerged_rev)
     fastq_print_general(fp_fastqout_notmerged_rev,
@@ -488,7 +514,7 @@ void discard(merge_data_t * ip)
                         ip->rev_quality,
                         0,
                         notmerged,
-                        0, 0.0);
+                        -1.0);
 
   if (opt_fastaout_notmerged_fwd)
     fasta_print_general(fp_fastaout_notmerged_fwd,
@@ -499,6 +525,7 @@ void discard(merge_data_t * ip)
                         strlen(ip->fwd_header),
                         0,
                         notmerged,
+                        -1.0,
                         -1, -1,
                         0, 0.0);
 
@@ -511,6 +538,7 @@ void discard(merge_data_t * ip)
                         strlen(ip->rev_header),
                         0,
                         notmerged,
+                        -1.0,
                         -1, -1,
                         0, 0.0);
 }

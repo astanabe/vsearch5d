@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -168,14 +169,6 @@ void nw_exit(struct nwinfo_s * nw)
   if (nw->hearray)
     xfree(nw->hearray);
   xfree(nw);
-}
-
-inline int nt_identical(char a, char b)
-{
-  if (chrmap_4bit[(int)a] == chrmap_4bit[(int)b])
-    return 1;
-  else
-    return 0;
 }
 
 inline int64_t getscore(int64_t * score_matrix, char a, char b)
@@ -395,7 +388,7 @@ void nw_align(char * dseq,
     else
     {
       score += getscore(score_matrix, dseq[j-1], qseq[i-1]);
-      if (nt_identical(dseq[j-1], qseq[i-1]))
+      if (chrmap_4bit[(int)(dseq[j-1])] & chrmap_4bit[(int)(qseq[i-1])])
         matches++;
       i--;
       j--;

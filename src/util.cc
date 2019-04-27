@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -66,8 +67,7 @@
 static const char * progress_prompt;
 static uint64_t progress_next;
 static uint64_t progress_size;
-static uint64_t progress_chunk;
-static const uint64_t progress_granularity = 200;
+static uint64_t progress_pct;
 static bool progress_show;
 
 void progress_init(const char * prompt, uint64_t size)
@@ -75,28 +75,32 @@ void progress_init(const char * prompt, uint64_t size)
   progress_show = isatty(fileno(stderr)) && (!opt_quiet) && (!opt_no_progress);
   progress_prompt = prompt;
   progress_size = size;
-  progress_chunk = size < progress_granularity ?
-    1 : size / progress_granularity;
-  progress_next = 0;
+  progress_pct = 0;
+  progress_next = ((progress_pct + 1) * progress_size + 99) / 100;
 
   if (! opt_quiet)
     {
       fprintf(stderr, "%s", prompt);
       if (progress_show)
-        fprintf(stderr, " %.0f%%", 0.0);
+        fprintf(stderr, " %d%%", 0);
     }
 }
 
 void progress_update(uint64_t progress)
 {
-  if (progress_show && (progress >= progress_next))
+  if ((progress >= progress_next) && progress_show)
     {
       if (progress_size > 0)
-        fprintf(stderr, "  \r%s %.0f%%", progress_prompt,
-                100.0 * progress / progress_size);
+        {
+          progress_pct = 100 * progress / progress_size;
+          fprintf(stderr,
+                  "  \r%s %" PRIu64 "%%",
+                  progress_prompt,
+                  progress_pct);
+          progress_next = ((progress_pct + 1) * progress_size + 99) / 100;
+        }
       else
         fprintf(stderr, "  \r%s 0%%", progress_prompt);
-      progress_next = progress + progress_chunk;
     }
 }
 
@@ -106,7 +110,7 @@ void progress_done()
     {
       if (progress_show)
         fprintf(stderr, "  \r%s", progress_prompt);
-      fprintf(stderr, " %.0f%%\n", 100.0);
+      fprintf(stderr, " %d%%\n", 100);
     }
 }
 
@@ -127,13 +131,13 @@ void  __attribute__((noreturn)) fatal(const char * msg)
 void  __attribute__((noreturn)) fatal(const char * format,
                                       const char * message)
 {
-  fprintf(stderr, "\n\n");
+  fprintf(stderr, "\n\nFatal error: ");
   fprintf(stderr, format, message);
   fprintf(stderr, "\n");
 
   if (opt_log)
     {
-      fprintf(fp_log, "\n\n");
+      fprintf(fp_log, "\n\nFatal error: ");
       fprintf(fp_log, format, message);
       fprintf(fp_log, "\n");
     }

@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -622,6 +623,7 @@ void derep_fulllength()
                                   strlen(bp->header),
                                   size,
                                   relabel_count,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
               if (relabel_count == opt_topn)
                 break;
@@ -1014,6 +1016,7 @@ void derep_prefix()
                                   db_getheaderlen(bp->seqno_first),
                                   size,
                                   relabel_count,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
               if (relabel_count == opt_topn)
                 break;

@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -419,6 +420,7 @@ void cluster_core_results_hit(struct hit * best,
                         strlen(query_head),
                         qsize,
                         count_matched,
+                        -1.0,
                         -1, -1, 0, 0.0);
 }
 
@@ -469,6 +471,7 @@ void cluster_core_results_nohit(int clusterno,
                         strlen(query_head),
                         qsize,
                         count_notmatched,
+                        -1.0,
                         -1, -1, 0, 0.0);
 }
 
@@ -1232,6 +1235,7 @@ void cluster(char * dbname,
                                 db_getheaderlen(seqno),
                                 cluster_abundance[clusterno],
                                 clusterno+1,
+                                -1.0,
                                 -1, -1, 0, 0.0);
 
           if (opt_uc)

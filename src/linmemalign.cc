@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -120,9 +121,9 @@ int64_t * LinearMemoryAligner::scorematrix_create(int64_t match, int64_t mismatc
     for(int j=0; j<16; j++)
       {
         int64_t value;
-        if ((i==0) || (j==0) || (i>4) || (j>4))
+        if (ambiguous_4bit[i] || ambiguous_4bit[j])
           value = 0;
-        else if (i==j)
+        else if (i == j)
           value = match;
         else
           value = mismatch;
@@ -672,7 +673,7 @@ void LinearMemoryAligner::alignstats(char * cigar,
             {
               nwscore += subst_score(a_pos, b_pos);
 
-              if (chrmap_4bit[(int)(a_seq[a_pos])] ==
+              if (chrmap_4bit[(int)(a_seq[a_pos])] &
                   chrmap_4bit[(int)(b_seq[b_pos])])
                 nwmatches++;
               else

@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -194,8 +195,7 @@ void fastq_join()
                               qual,
                               0,
                               total + 1,
-                              0,
-                              0);
+                              -1.0);
         }
 
       if (opt_fastaout)
@@ -208,6 +208,7 @@ void fastq_join()
                               fastq_get_header_length(fastq_fwd),
                               0,
                               total + 1,
+                              -1.0,
                               -1,
                               -1,
                               0,

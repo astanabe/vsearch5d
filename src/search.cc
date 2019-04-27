@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -75,7 +76,9 @@ static fastx_handle query_fasta_h;
 static pthread_mutex_t mutex_input;
 static pthread_mutex_t mutex_output;
 static int qmatches;
+static uint64 qmatches_abundance;
 static int queries;
+static uint64 queries_abundance;
 static int * dbmatched;
 static FILE * fp_samout = 0;
 static FILE * fp_alnout = 0;
@@ -219,6 +222,7 @@ void search_output_results(int hit_count,
                             strlen(query_head),
                             qsize,
                             count_matched,
+                            -1.0,
                             -1, -1, 0, 0.0);
     }
   else
@@ -233,6 +237,7 @@ void search_output_results(int hit_count,
                             strlen(query_head),
                             qsize,
                             count_notmatched,
+                            -1.0,
                             -1, -1, 0, 0.0);
     }
 
@@ -360,9 +365,13 @@ void search_thread_run(int64_t t)
 
           /* update stats */
           queries++;
+          queries_abundance += qsize;
 
           if (match)
-            qmatches++;
+            {
+              qmatches++;
+              qmatches_abundance += qsize;
+            }
 
           /* show progress */
           progress_update(progress);
@@ -648,7 +657,9 @@ void usearch_global(char * cmdline, char * progheader)
 
   /* prepare reading of queries */
   qmatches = 0;
+  qmatches_abundance = 0;
   queries = 0;
+  queries_abundance = 0;
   query_fasta_h = fasta_open(opt_usearch_global);
 
   /* allocate memory for thread info */
@@ -681,12 +692,26 @@ void usearch_global(char * cmdline, char * progheader)
   fasta_close(query_fasta_h);
 
   if (!opt_quiet)
-    fprintf(stderr, "Matching query sequences: %d of %d (%.2f%%)\n",
-            qmatches, queries, 100.0 * qmatches / queries);
+    {
+      fprintf(stderr, "Matching unique query sequences: %d of %d (%.2f%%)\n",
+              qmatches, queries, 100.0 * qmatches / queries);
+      if (opt_sizein)
+        fprintf(stderr, "Matching total query sequences: %" PRIu64 " of %"
+                PRIu64 " (%.2f%%)\n",
+                qmatches_abundance, queries_abundance,
+                100.0 * qmatches_abundance / queries_abundance);
+    }
 
   if (opt_log)
-    fprintf(fp_log, "Matching query sequences: %d of %d (%.2f%%)\n",
-            qmatches, queries, 100.0 * qmatches / queries);
+    {
+      fprintf(fp_log, "Matching unique query sequences: %d of %d (%.2f%%)\n",
+              qmatches, queries, 100.0 * qmatches / queries);
+      if (opt_sizein)
+        fprintf(fp_log, "Matching total query sequences: %" PRIu64 " of %"
+                PRIu64 " (%.2f%%)\n",
+                qmatches_abundance, queries_abundance,
+                100.0 * qmatches_abundance / queries_abundance);
+    }
 
   if (opt_biomout)
     {
@@ -726,6 +751,7 @@ void usearch_global(char * cmdline, char * progheader)
                                   db_getheaderlen(i),
                                   dbmatched[i],
                                   count_dbmatched,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
           }
         else
@@ -740,6 +766,7 @@ void usearch_global(char * cmdline, char * progheader)
                                   db_getheaderlen(i),
                                   db_getabundance(i),
                                   count_dbnotmatched,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
           }
     }

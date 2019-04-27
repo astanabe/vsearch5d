@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -77,6 +78,7 @@ char * fasta_get_sequence(fastx_handle h);
 uint64_t fasta_get_header_length(fastx_handle h);
 uint64_t fasta_get_sequence_length(fastx_handle h);
 int64_t fasta_get_abundance(fastx_handle h);
+int64_t fasta_get_abundance_and_presence(fastx_handle h);
 
 /* fasta output */
 
@@ -93,6 +95,7 @@ void fasta_print_general(FILE * fp,
                          int header_len,
                          int abundance,
                          int ordinal,
+                         double ee,
                          int clustersize,
                          int clusterid,
                          const char * score_name,

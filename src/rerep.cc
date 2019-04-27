@@ -3,13 +3,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -80,12 +81,18 @@ void rereplicate()
 
   progress_init("Rereplicating", filesize);
 
+  int64_t missing = 0;
   int64_t i = 0;
   int64_t n = 0;
   while (fasta_next(fh, ! opt_notrunclabels, chrmap_no_change))
     {
       n++;
-      int64_t abundance = fasta_get_abundance(fh);
+      int64_t abundance = fasta_get_abundance_and_presence(fh);
+      if (abundance == 0)
+        {
+          missing++;
+          abundance = 1;
+        }
 
       for(int64_t j=0; j<abundance; j++)
         {
@@ -99,6 +106,7 @@ void rereplicate()
                                 fasta_get_header_length(fh),
                                 1,
                                 i,
+                                -1.0,
                                 -1, -1, 0, 0.0);
         }
 
@@ -106,7 +114,19 @@ void rereplicate()
     }
   progress_done();
 
-  fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
+  if (! opt_quiet)
+    {
+      if (missing)
+        fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+      fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
+    }
+
+  if (opt_log)
+    {
+      if (missing)
+        fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+      fprintf(fp_log, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
+    }
 
   fasta_close(fh);
 

@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -59,6 +60,7 @@
 
 */
 
+#define _GNU_SOURCE 1
 #define __STDC_CONSTANT_MACROS 1
 #define __STDC_FORMAT_MACROS 1
 #define __STDC_LIMIT_MACROS 1
@@ -133,6 +135,7 @@
 #define PROG_OS "win"
 #include <windows.h>
 #include <psapi.h>
+#include <shlwapi.h>
 #define bswap_16(x) _byteswap_ushort(x)
 #define bswap_32(x) _byteswap_ulong(x)
 #define bswap_64(x) _byteswap_uint64(x)
@@ -190,7 +193,7 @@
 #include "xstring.h"
 #include "align_simd.h"
 #include "maps.h"
-#include "abundance.h"
+#include "attributes.h"
 #include "db.h"
 #include "align.h"
 #include "unique.h"
@@ -218,6 +221,7 @@
 #include "fasta.h"
 #include "fastq.h"
 #include "fastqops.h"
+#include "filter.h"
 #include "dbhash.h"
 #include "searchexact.h"
 #include "mergepairs.h"
@@ -229,6 +233,7 @@
 #include "sintax.h"
 #include "fastqjoin.h"
 #include "sffconvert.h"
+#include "getseq.h"
 
 /* options */
 
@@ -241,6 +246,7 @@ extern bool opt_fastq_allowmergestagger;
 extern bool opt_fastq_eeout;
 extern bool opt_fastq_nostagger;
 extern bool opt_gzip_decompress;
+extern bool opt_label_substr_match;
 extern bool opt_no_progress;
 extern bool opt_quiet;
 extern bool opt_relabel_keep;
@@ -249,6 +255,7 @@ extern bool opt_relabel_sha1;
 extern bool opt_samheader;
 extern bool opt_sff_clip;
 extern bool opt_sizeorder;
+extern bool opt_xee;
 extern bool opt_xsize;
 extern char * opt_allpairs_global;
 extern char * opt_alnout;
@@ -271,8 +278,10 @@ extern char * opt_derep_prefix;
 extern char * opt_eetabbedout;
 extern char * opt_fastaout;
 extern char * opt_fastaout_discarded;
+extern char * opt_fastaout_discarded_rev;
 extern char * opt_fastaout_notmerged_fwd;
 extern char * opt_fastaout_notmerged_rev;
+extern char * opt_fastaout_rev;
 extern char * opt_fastapairs;
 extern char * opt_fastq_chars;
 extern char * opt_fastq_convert;
@@ -284,15 +293,25 @@ extern char * opt_fastq_mergepairs;
 extern char * opt_fastq_stats;
 extern char * opt_fastqout;
 extern char * opt_fastqout_discarded;
+extern char * opt_fastqout_discarded_rev;
+extern char * opt_fastqout_rev;
 extern char * opt_fastqout_notmerged_fwd;
 extern char * opt_fastqout_notmerged_rev;
 extern char * opt_fastx_filter;
+extern char * opt_fastx_getseq;
+extern char * opt_fastx_getseqs;
+extern char * opt_fastx_getsubseq;
 extern char * opt_fastx_mask;
 extern char * opt_fastx_revcomp;
 extern char * opt_fastx_subsample;
 extern char * opt_join_padgap;
 extern char * opt_join_padgapq;
+extern char * opt_label;
 extern char * opt_label_suffix;
+extern char * opt_labels;
+extern char * opt_label_word;
+extern char * opt_label_words;
+extern char * opt_label_field;
 extern char * opt_log;
 extern char * opt_makeudb_usearch;
 extern char * opt_maskfasta;
@@ -301,6 +320,7 @@ extern char * opt_mothur_shared_out;
 extern char * opt_msaout;
 extern char * opt_nonchimeras;
 extern char * opt_notmatched;
+extern char * opt_notmatchedfq;
 extern char * opt_otutabout;
 extern char * opt_output;
 extern char * opt_pattern;
@@ -437,6 +457,8 @@ extern int64_t opt_selfid;
 extern int64_t opt_sizein;
 extern int64_t opt_sizeout;
 extern int64_t opt_strand;
+extern int64_t opt_subseq_start;
+extern int64_t opt_subseq_end;
 extern int64_t opt_threads;
 extern int64_t opt_top_hits_only;
 extern int64_t opt_topn;

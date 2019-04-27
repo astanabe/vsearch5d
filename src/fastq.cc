@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -432,29 +433,19 @@ char * fastq_get_sequence(fastx_handle h)
 
 int64_t fastq_get_abundance(fastx_handle h)
 {
-  return abundance_get(h->header_buffer.data, h->header_buffer.length);
+  // return 1 if not present
+  int64_t size = header_get_size(h->header_buffer.data,
+                                 h->header_buffer.length);
+  if (size > 0)
+    return size;
+  else
+    return 1;
 }
 
-void fastq_print_header(FILE * fp, char * header)
+int64_t fastq_get_abundance_and_presence(fastx_handle h)
 {
-  fprintf(fp, "@%s\n", header);
-}
-
-void fastq_print_sequence(FILE * fp, char * sequence)
-{
-  fprintf(fp, "%s\n", sequence);
-}
-
-void fastq_print_quality(FILE * fp, char * quality)
-{
-  fprintf(fp, "+\n%s\n", quality);
-}
-
-void fastq_print(FILE * fp, char * header, char * sequence, char * quality)
-{
-  fastq_print_header(fp, header);
-  fastq_print_sequence(fp, sequence);
-  fastq_print_quality(fp, quality);
+  // return 0 if not present
+  return header_get_size(h->header_buffer.data, h->header_buffer.length);
 }
 
 void fastq_print_general(FILE * fp,
@@ -465,8 +456,7 @@ void fastq_print_general(FILE * fp,
                          char * quality,
                          int abundance,
                          int ordinal,
-                         const char * score_name,
-                         double score)
+                         double ee)
 {
   fprintf(fp, "@");
 
@@ -476,25 +466,33 @@ void fastq_print_general(FILE * fp,
     fprint_seq_digest_md5(fp, seq, len);
   else if (opt_relabel && (ordinal > 0))
     fprintf(fp, "%s%d", opt_relabel, ordinal);
-  else if (opt_xsize || (opt_sizeout && (abundance > 0)))
-    abundance_fprint_header_strip_size(fp,
-                                       header,
-                                       header_len);
   else
-    fprintf(fp, "%s", header);
+    {
+      bool xsize = opt_xsize || (opt_sizeout && (abundance > 0));
+      bool xee = opt_xee || ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0));
+      header_fprint_strip_size_ee(fp,
+                                  header,
+                                  header_len,
+                                  xsize,
+                                  xee);
+    }
 
-  if ((abundance > 0) && opt_sizeout)
+  if (opt_sizeout && (abundance > 0))
     fprintf(fp, ";size=%u", abundance);
 
-  if (score_name)
-    fprintf(fp, ";%s=%.4lf", score_name, score);
+  if ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0))
+    fprintf(fp, ";ee=%.4lf", ee);
 
   if (opt_relabel_keep &&
-      ((opt_relabel && (ordinal > 0))|| opt_relabel_sha1 || opt_relabel_md5))
-    fprintf(fp, " %s", header);
+      ((opt_relabel && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5))
+    fprintf(fp, " %.*s", header_len, header);
 
-  fprintf(fp, "\n");
+  fprintf(fp, "\n%.*s\n+\n%.*s\n", len, seq, len, quality);
+}
 
-  fastq_print_sequence(fp, seq);
-  fastq_print_quality(fp, quality);
+void fastq_print(FILE * fp, char * header, char * sequence, char * quality)
+{
+  int slen = strlen(sequence);
+  int hlen = strlen(header);
+  fastq_print_general(fp, sequence, slen, header, hlen, quality, 0, 0, -1.0);
 }

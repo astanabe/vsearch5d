@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -71,7 +72,7 @@
 */
 
 char sym_nt_2bit[] = "ACGT";
-char sym_nt_4bit[] = "-ACGTRYSWKMDBHVN";
+char sym_nt_4bit[] = "-ACMGRSVTWYHKDBN";
 
 unsigned int char_fasta_action[256] =
   {
@@ -199,28 +200,59 @@ unsigned int chrmap_2bit[256] =
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
   };
 
+/*
+  New 4 bit ambiguous nucleic acid symbol encoding
+
+  bit 0 = A
+  bit 1 = C
+  bit 2 = G
+  bit 3 = T
+
+  - =      = 0000 =  0
+  A = A    = 0001 =  1
+  C =  C   = 0010 =  2
+  M = AC   = 0011 =  3
+  G =   G  = 0100 =  4
+  R = A G  = 0101 =  5
+  S =  CG  = 0110 =  6
+  V = ACG  = 0111 =  7
+  T =    T = 1000 =  8
+  W = A  T = 1001 =  9
+  Y =  C T = 1010 = 10
+  H = AC T = 1011 = 11
+  K =   GT = 1100 = 12
+  D = A GT = 1101 = 13
+  B =  CGT = 1110 = 14
+  N = ACGT = 1111 = 15
+*/
+
+unsigned int ambiguous_4bit[16] =
+  {
+ /* -  A  C  M  G  R  S  V  T  W  Y  H  K  D  B  N */
+    1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
+  };
 
 unsigned int chrmap_4bit[256] =
   {
     /*
-
       Map from ascii to 4-bit nucleotide code
 
-      Aa: 1
-      Cc: 2
-      Gg: 3
-      TtUu: 4
-      Rr: 5
-      Yy: 6
-      Ss: 7
-      Ww: 8
-      Kk: 9
-      Mm: 10
-      Bb: 11
-      Dd: 12
-      Hh: 13
-      Vv: 14
+      Aa:  1
+      Bb: 14
+      Cc:  2
+      Dd: 13
+      Gg:  4
+      Hh: 11
+      Kk: 12
+      Mm:  3
       Nn: 15
+      Rr:  5
+      Ss:  6
+      Tt:  8
+      Uu:  8
+      Vv:  7
+      Ww:  9
+      Yy: 10
       Others: 0
 
      @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
@@ -231,10 +263,10 @@ unsigned int chrmap_4bit[256] =
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-     0,  1, 11,  2, 12,  0,  0,  3, 13,  0,  0,  9,  0, 10, 15,  0,
-     0,  0,  5,  7,  4,  4, 14,  8,  0,  6,  0,  0,  0,  0,  0,  0,
-     0,  1, 11,  2, 12,  0,  0,  3, 13,  0,  0,  9,  0, 10, 15,  0,
-     0,  0,  5,  7,  4,  4, 14,  8,  0,  6,  0,  0,  0,  0,  0,  0,
+     0,  1, 14,  2, 13,  0,  0,  4, 11,  0,  0, 12,  0,  3, 15,  0,
+     0,  0,  5,  6,  8,  8,  7,  9,  0, 10,  0,  0,  0,  0,  0,  0,
+     0,  1, 14,  2, 13,  0,  0,  4, 11,  0,  0, 12,  0,  3, 15,  0,
+     0,  0,  5,  6,  8,  8,  7,  9,  0, 10,  0,  0,  0,  0,  0,  0,
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,

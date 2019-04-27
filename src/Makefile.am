@@ -12,14 +12,14 @@ endif
 
 AM_CFLAGS=$(AM_CXXFLAGS)
 
-export MACOSX_DEPLOYMENT_TARGET
+export MACOSX_DEPLOYMENT_TARGET=10.9
 
 VSEARCH5DHEADERS=\
-abundance.h \
 align.h \
 align_simd.h \
 allpairs.h \
 arch.h \
+attributes.h \
 bitmap.h \
 chimera.h \
 city.h \
@@ -37,6 +37,8 @@ fastq.h \
 fastqjoin.h \
 fastqops.h \
 fastx.h \
+filter.h \
+getseq.h \
 kmerhash.h \
 linmemalign.h \
 maps.h \
@@ -107,11 +109,11 @@ endif
 endif
 
 __top_builddir__bin_vsearch5d_SOURCES = $(VSEARCH5DHEADERS) \
-abundance.cc \
 align.cc \
 align_simd.cc \
 allpairs.cc \
 arch.cc \
+attributes.cc \
 bitmap.cc \
 chimera.cc \
 cluster.cc \
@@ -126,6 +128,9 @@ fastq.cc \
 fastqjoin.cc \
 fastqops.cc \
 fastx.cc \
+filter.cc \
+getseq.cc \
+kmerhash.cc \
 linmemalign.cc \
 kmerhash.cc \
 maps.cc \

@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -59,16 +60,14 @@
 
 */
 
-int64_t abundance_get(char * header, int header_length);
+int64_t header_get_size(char * header, int header_length);
 
-void abundance_fprint_header_with_size(FILE * fp,
-                                       char * header,
-                                       int header_length,
-                                       uint64_t size);
+void header_fprint_strip_size(FILE * fp,
+                              char * header,
+                              int header_length);
 
-void abundance_fprint_header_strip_size(FILE * fp,
-                                        char * header,
-                                        int header_length);
-
-char * abundance_strip_size(char * header,
-                            int header_length);
+void header_fprint_strip_size_ee(FILE * fp,
+                                 char * header,
+                                 int header_length,
+                                 bool strip_size,
+                                 bool strip_ee);

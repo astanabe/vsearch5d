@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -456,8 +457,12 @@ void udb_read(const char * filename,
       progress_init("Parsing abundances", seqcount);
       for(unsigned int i = 0; i < seqcount; i++)
         {
-          seqindex[i].size = abundance_get(datap + seqindex[i].header_p,
-                                           seqindex[i].headerlen);
+          int64_t size = header_get_size(datap + seqindex[i].header_p,
+                                         seqindex[i].headerlen);
+          if (size > 0)
+            seqindex[i].size = size;
+          else
+            seqindex[i].size = 1;
           progress_update(i+1);
         }
       progress_done();

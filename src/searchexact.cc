@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -293,6 +294,7 @@ void search_exact_output_results(int hit_count,
                             strlen(query_head),
                             qsize,
                             count_matched,
+                            -1.0,
                             -1, -1, 0, 0.0);
     }
   else
@@ -307,6 +309,7 @@ void search_exact_output_results(int hit_count,
                             strlen(query_head),
                             qsize,
                             count_notmatched,
+                            -1.0,
                             -1, -1, 0, 0.0);
     }
 
@@ -755,6 +758,7 @@ void search_exact(char * cmdline, char * progheader)
                                   db_getheaderlen(i),
                                   dbmatched[i],
                                   count_dbmatched,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
           }
         else
@@ -769,6 +773,7 @@ void search_exact(char * cmdline, char * progheader)
                                   db_getheaderlen(i),
                                   0,
                                   count_dbnotmatched,
+                                  -1.0,
                                   -1, -1, 0, 0.0);
           }
     }

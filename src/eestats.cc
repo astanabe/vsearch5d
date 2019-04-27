@@ -2,13 +2,14 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2018, Akifumi S. Tanabe
+  Copyright (C) 2016-2019, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2018, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -60,6 +61,51 @@
 */
 
 #include "vsearch5d.h"
+
+inline int fastq_get_qual_eestats(char q)
+{
+  int qual = q - opt_fastq_ascii;
+
+  if (qual < opt_fastq_qmin)
+    {
+      fprintf(stderr,
+              "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
+              PRId64 ")\n",
+              qual, opt_fastq_qmin);
+      if (fp_log)
+        {
+          fprintf(stderr,
+                  "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
+                  PRId64 ")\n",
+                  qual, opt_fastq_qmin);
+        }
+      exit(EXIT_FAILURE);
+    }
+  else if (qual > opt_fastq_qmax)
+    {
+      fprintf(stderr,
+              "\n\nFatal error: FASTQ quality value (%d) above qmax (%"
+              PRId64 ")\n",
+              qual, opt_fastq_qmax);
+      fprintf(stderr,
+              "By default, quality values range from 0 to 41.\n"
+              "To allow higher quality values, "
+              "please use the option --fastq_qmax %d\n", qual);
+      if (fp_log)
+        {
+          fprintf(fp_log,
+                  "\n\nFatal error: FASTQ quality value (%d) above qmax (%"
+                  PRId64 ")\n",
+                  qual, opt_fastq_qmax);
+          fprintf(fp_log,
+                  "By default, quality values range from 0 to 41.\n"
+                  "To allow higher quality values, "
+                  "please use the option --fastq_qmax %d\n", qual);
+        }
+      exit(EXIT_FAILURE);
+    }
+  return qual;
+}
 
 double q2p(int q)
 {
@@ -178,26 +224,9 @@ void fastq_eestats()
 
           /* quality score */
 
-          int qual = q[i] - opt_fastq_ascii;
-
-          char msg[200];
-
-          if (qual < opt_fastq_qmin)
-            {
-              snprintf(msg, 200, "FASTQ quality value (%d) below qmin (%" PRId64 ")",
-                       qual, opt_fastq_qmin);
-              fatal(msg);
-            }
-          else if (qual > opt_fastq_qmax)
-            {
-              snprintf(msg, 200, "FASTQ quality value (%d) above qmax (%" PRId64 ")",
-                       qual, opt_fastq_qmax);
-              fatal(msg);
-            }
-
+          int qual = fastq_get_qual_eestats(q[i]);
           if (qual < 0)
             qual = 0;
-
           qual_length_table[(max_quality+1)*i + qual]++;
 
 
@@ -432,23 +461,7 @@ void fastq_eestats2()
         {
           /* quality score */
 
-          int qual = q[i] - opt_fastq_ascii;
-
-          char msg[200];
-
-          if (qual < opt_fastq_qmin)
-            {
-              snprintf(msg, 200, "FASTQ quality value (%d) below qmin (%" PRId64 ")",
-                       qual, opt_fastq_qmin);
-              fatal(msg);
-            }
-          else if (qual > opt_fastq_qmax)
-            {
-              snprintf(msg, 200, "FASTQ quality value (%d) above qmax (%" PRId64 ")",
-                       qual, opt_fastq_qmax);
-              fatal(msg);
-            }
-
+          int qual = fastq_get_qual_eestats(q[i]);
           if (qual < 0)
             qual = 0;
 
