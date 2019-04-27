@@ -2336,7 +2336,7 @@ void args_init(int argc, char **argv)
 
   const int commands_count = sizeof(command_options) / sizeof(int);
 
-  const int valid_options[][91] =
+  const int valid_options[][92] =
     {
       {
         option_allpairs_global,
@@ -4120,6 +4120,7 @@ void cmd_help()
               "  --cons_truncate             do not ignore terminal gaps in MSA for consensus\n"
               "  --id REAL                   reject if identity lower, accepted values: 0-1.0\n"
               "  --iddef INT                 id definition, 0-4=CD-HIT,all,int,MBL,BLAST (2)\n"
+              "  --idoffset INT              id offset (0)\n"
               "  --qmask none|dust|soft      mask seqs with dust, soft or no method (dust)\n"
               "  --sizein                    propagate abundance annotation from input\n"
               "  --strand plus|both          cluster using plus or both strands (plus)\n"
@@ -4133,10 +4134,6 @@ void cmd_help()
               "  --clusterout_sort           order msaout, consout, profile by decr abundance\n"
               "  --clusters STRING           output each cluster to a separate FASTA file\n"
               "  --consout FILENAME          output cluster consensus sequences to FASTA file\n"
-              "  --cons_truncate             do not ignore terminal gaps in MSA for consensus\n"
-              "  --id REAL                   reject if identity lower\n"
-              "  --iddef INT                 id definition, 0-4=CD-HIT,all,int,MBL,BLAST (2)\n"
-              "  --idoffset INT              id offset (0)\n"
               "  --mothur_shared_out FN      filename for OTU table output in mothur format\n"
               "  --msaout FILENAME           output multiple seq. alignments to FASTA file\n"
               "  --otutabout FILENAME        filename for OTU table output in classic format\n"

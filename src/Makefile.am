@@ -132,7 +132,6 @@ filter.cc \
 getseq.cc \
 kmerhash.cc \
 linmemalign.cc \
-kmerhash.cc \
 maps.cc \
 mask.cc \
 md5.c \
