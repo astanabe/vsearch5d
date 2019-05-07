@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.13.1], [akifumi.tanabe@gmail.com])
+AC_INIT([vsearch5d], [2.13.3], [akifumi.tanabe@gmail.com])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])

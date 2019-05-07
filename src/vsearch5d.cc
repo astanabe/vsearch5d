@@ -1406,7 +1406,7 @@ void args_init(int argc, char **argv)
           else if (strcasecmp(optarg, "both") == 0)
             opt_strand = 2;
           else
-            opt_strand = 0;
+            fatal("The argument to --strand must be plus or both");
           break;
 
         case option_threads:
@@ -3613,6 +3613,7 @@ void args_init(int argc, char **argv)
         option_selfid,
         option_sizein,
         option_sizeout,
+        option_strand,
         option_threads,
         option_uchimealns,
         option_uchimeout,
@@ -3891,9 +3892,6 @@ void args_init(int argc, char **argv)
 
   if (opt_rowlen < 0)
     fatal("The argument to --rowlen must not be negative");
-
-  if (opt_strand < 1)
-    fatal("The argument to --strand must be plus or both");
 
   if (opt_qmask == MASK_ERROR)
     fatal("The argument to --qmask must be none, dust or soft");

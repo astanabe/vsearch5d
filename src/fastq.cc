@@ -128,7 +128,7 @@ void buffer_filter_extend(fastx_handle h,
           else
             snprintf(msg,
                      200,
-                     "Illegal unprintable character %#.2x (hexadecimal)",
+                     "Illegal unprintable ASCII character no %d",
                      (unsigned char) c);
           fastq_fatal(lineno, msg);
           break;
@@ -374,7 +374,7 @@ bool fastq_next(fastx_handle h,
     fastq_fatal(lineno_qual,
                 "Sequence and quality lines must be equally long");
 
-  buffer_truncate(& h->header_buffer, truncateatspace);
+  fastx_filter_header(h, truncateatspace);
 
   h->seqno++;
 
