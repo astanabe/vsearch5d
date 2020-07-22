@@ -2389,7 +2389,7 @@ void args_init(int argc, char **argv)
     The first line is the command and the lines below are the valid options.
   */
 
-  const int valid_options[][92] =
+  const int valid_options[][93] =
     {
       {
         option_allpairs_global,
