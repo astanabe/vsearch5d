@@ -1116,7 +1116,7 @@ void args_init(int argc, char **argv)
     option_xdrop_nw,
     option_xee,
     option_xn,
-    option_xsize
+    option_xsize,
     option_idoffset
   };
 
