@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -435,7 +435,7 @@ void filter(bool fastq_only, char * filename)
               if (opt_fastaout_rev)
                 fasta_print_general(fp_fastaout_rev,
                                     0,
-                                    fastx_get_sequence(h1) + res2.start,
+                                    fastx_get_sequence(h2) + res2.start,
                                     res2.length,
                                     fastx_get_header(h2),
                                     fastx_get_header_length(h2),

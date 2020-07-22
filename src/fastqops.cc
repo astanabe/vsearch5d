@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -643,7 +643,10 @@ void fastq_stats()
 
   fastq_close(h);
 
-  fprintf(stderr, "Read %" PRIu64 " sequences.\n", seq_count);
+  if (!opt_quiet)
+    {
+        fprintf(stderr, "Read %" PRIu64 " sequences.\n", seq_count);
+    }
 }
 
 void fastx_revcomp()
@@ -651,11 +654,6 @@ void fastx_revcomp()
   uint64_t buffer_alloc = 512;
   char * seq_buffer = (char*) xmalloc(buffer_alloc);
   char * qual_buffer = (char*) xmalloc(buffer_alloc);
-
-  uint64_t header_alloc = 512;
-  char * header = (char*) xmalloc(header_alloc);
-
-  uint64_t suffix_length = opt_label_suffix ? strlen(opt_label_suffix) : 0;
 
   fastx_handle h = fastx_open(opt_fastx_revcomp);
 
@@ -698,19 +696,8 @@ void fastx_revcomp()
       /* header */
 
       uint64_t hlen = fastx_get_header_length(h);
-
-      if (hlen + suffix_length + 1 > header_alloc)
-        {
-          header_alloc = hlen + suffix_length + 1;
-          header = (char*) xrealloc(header, header_alloc);
-        }
-
-      char * d = fastx_get_header(h);
-
-      if (opt_label_suffix)
-        snprintf(header, header_alloc, "%s%s", d, opt_label_suffix);
-      else
-        snprintf(header, header_alloc, "%s", d);
+      char * header = fastx_get_header(h);
+      int64_t abundance = fastx_get_abundance(h);
 
 
       /* sequence */
@@ -747,7 +734,7 @@ void fastx_revcomp()
                             length,
                             header,
                             hlen,
-                            0,
+                            abundance,
                             count,
                             -1.0,
                             -1, -1, 0, 0.0);
@@ -759,7 +746,7 @@ void fastx_revcomp()
                             header,
                             hlen,
                             qual_buffer,
-                            0,
+                            abundance,
                             count,
                             -1.0);
 
@@ -775,7 +762,6 @@ void fastx_revcomp()
 
   fastx_close(h);
 
-  xfree(header);
   xfree(seq_buffer);
   xfree(qual_buffer);
 }
@@ -803,6 +789,7 @@ void fastq_convert()
       /* header */
 
       char * header = fastq_get_header(h);
+      int64_t abundance = fastq_get_abundance(h);
 
       /* sequence */
 
@@ -818,7 +805,9 @@ void fastq_convert()
           if (q < opt_fastq_qmin)
             {
               fprintf(stderr,
-                      "\nFASTQ quality score (%d) below minimum (%" PRId64 ") in entry no %" PRIu64 " starting on line %" PRIu64 "\n",
+                      "\nFASTQ quality score (%d) below minimum (%" PRId64
+                      ") in entry no %" PRIu64
+                      " starting on line %" PRIu64 "\n",
                       q,
                       opt_fastq_qmin,
                       fastq_get_seqno(h) + 1,
@@ -828,7 +817,9 @@ void fastq_convert()
           if (q > opt_fastq_qmax)
             {
               fprintf(stderr,
-                      "\nFASTQ quality score (%d) above maximum (%" PRId64 ") in entry no %" PRIu64 " starting on line %" PRIu64 "\n",
+                      "\nFASTQ quality score (%d) above maximum (%" PRId64
+                      ") in entry no %" PRIu64
+                      " starting on line %" PRIu64 "\n",
                       q,
                       opt_fastq_qmax,
                       fastq_get_seqno(h) + 1,
@@ -849,7 +840,15 @@ void fastq_convert()
       quality[length] = 0;
 
       int hlen = fastq_get_header_length(h);
-      fastq_print_general(fp_fastqout, sequence, length, header, hlen, quality, 0, j, -1.0);
+      fastq_print_general(fp_fastqout,
+                          sequence,
+                          length,
+                          header,
+                          hlen,
+                          quality,
+                          abundance,
+                          j,
+                          -1.0);
 
       j++;
       progress_update(fastq_get_position(h));

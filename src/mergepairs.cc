@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -190,11 +190,9 @@ typedef struct merge_data_s
   int64_t fwd_trunc;
   int64_t rev_trunc;
   int64_t pair_no;
-  char * merged_header;
   char * merged_sequence;
   char * merged_quality;
   int64_t merged_length;
-  int64_t merged_header_alloc;
   int64_t merged_seq_alloc;
   double ee_merged;
   double ee_fwd;
@@ -312,13 +310,17 @@ void precompute_qual()
 
           /* Match */
           p = px * py / 3.0 / (1.0 - px - py + 4.0 * px * py / 3.0);
-          q = opt_fastq_ascii + MIN(round(-10.0*log10(p)), opt_fastq_qmaxout);
-          merge_qual_same[x][y] = q;
+          q = round(-10.0 * log10(p));
+          q = MIN(q, opt_fastq_qmaxout);
+          q = MAX(q, opt_fastq_qminout);
+          merge_qual_same[x][y] = opt_fastq_ascii + q;
 
           /* Mismatch, x is highest quality */
           p = px * (1.0 - py / 3.0) / (px + py - 4.0 * px * py / 3.0);
-          q = opt_fastq_ascii + MIN(round(-10.0*log10(p)), opt_fastq_qmaxout);
-          merge_qual_diff[x][y] = q;
+          q = round(-10.0 * log10(p));
+          q = MIN(q, opt_fastq_qmaxout);
+          q = MAX(q, opt_fastq_qminout);
+          merge_qual_diff[x][y] = opt_fastq_ascii + q;
 
           /*
             observed match,
@@ -394,8 +396,8 @@ void keep(merge_data_t * ip)
       fastq_print_general(fp_fastqout,
                           ip->merged_sequence,
                           ip->merged_length,
-                          ip->merged_header,
-                          strlen(ip->merged_header),
+                          ip->fwd_header,
+                          strlen(ip->fwd_header),
                           ip->merged_quality,
                           0,
                           merged,
@@ -408,8 +410,8 @@ void keep(merge_data_t * ip)
                           0,
                           ip->merged_sequence,
                           ip->merged_length,
-                          ip->merged_header,
-                          strlen(ip->merged_header),
+                          ip->fwd_header,
+                          strlen(ip->fwd_header),
                           0,
                           merged,
                           ip->ee_merged,
@@ -647,12 +649,6 @@ void merge(merge_data_t * ip)
 
   if (ip->ee_merged <= opt_fastq_maxee)
     {
-      if (opt_label_suffix)
-        (void) sprintf(ip->merged_header, "%s%s",
-                       ip->fwd_header, opt_label_suffix);
-      else
-        strcpy(ip->merged_header, ip->fwd_header);
-
       ip->reason = ok;
       ip->merged = 1;
     }
@@ -934,8 +930,6 @@ void process(merge_data_t * ip,
 
 bool read_pair(merge_data_t * ip)
 {
-  int64_t suffix_len = opt_label_suffix ? strlen(opt_label_suffix) : 0;
-
   if (fastq_next(fastq_fwd, 0, chrmap_upcase))
     {
       if (! fastq_next(fastq_rev, 0, chrmap_upcase))
@@ -981,15 +975,6 @@ bool read_pair(merge_data_t * ip)
                                                 merged_seq_needed);
         }
 
-      int64_t merged_header_needed = fwd_header_len + suffix_len + 1;
-
-      if (merged_header_needed > ip->merged_header_alloc)
-        {
-          ip->merged_header_alloc = merged_header_needed;
-          ip->merged_header = (char*) xrealloc(ip->merged_header,
-                                               merged_header_needed);
-        }
-
       /* make local copies of the seq, header and qual */
 
       strcpy(ip->fwd_header,   fastq_get_header(fastq_fwd));
@@ -999,7 +984,6 @@ bool read_pair(merge_data_t * ip)
       strcpy(ip->fwd_quality,  fastq_get_quality(fastq_fwd));
       strcpy(ip->rev_quality,  fastq_get_quality(fastq_rev));
 
-      ip->merged_header[0] = 0;
       ip->merged_sequence[0] = 0;
       ip->merged_quality[0] = 0;
       ip->merged = 0;
@@ -1037,8 +1021,6 @@ void init_merge_data(merge_data_t * ip)
   ip->reason = undefined;
   ip->merged_seq_alloc = 0;
   ip->merged_sequence = 0;
-  ip->merged_header = 0;
-  ip->merged_header_alloc = 0;
   ip->merged_quality = 0;
   ip->merged_length = 0;
 }
@@ -1058,8 +1040,6 @@ void free_merge_data(merge_data_t * ip)
   if (ip->rev_quality)
     xfree(ip->rev_quality);
 
-  if (ip->merged_header)
-    xfree(ip->merged_header);
   if (ip->merged_sequence)
     xfree(ip->merged_sequence);
   if (ip->merged_quality)
@@ -1070,14 +1050,14 @@ inline void chunk_perform_read()
 {
   while((!finished_reading) && (chunks[chunk_read_next].state == empty))
     {
-      pthread_mutex_unlock(&mutex_chunks);
+      xpthread_mutex_unlock(&mutex_chunks);
       progress_update(fastq_get_position(fastq_fwd));
       int r = 0;
       while ((r < chunk_size) &&
              read_pair(chunks[chunk_read_next].merge_data + r))
         r++;
       chunks[chunk_read_next].size = r;
-      pthread_mutex_lock(&mutex_chunks);
+      xpthread_mutex_lock(&mutex_chunks);
       pairs_read += r;
       if (r > 0)
         {
@@ -1086,7 +1066,7 @@ inline void chunk_perform_read()
         }
       if (r < chunk_size)
         finished_reading = true;
-      pthread_cond_broadcast(&cond_chunks);
+      xpthread_cond_broadcast(&cond_chunks);
     }
 }
 
@@ -1094,16 +1074,16 @@ inline void chunk_perform_write()
 {
   while (chunks[chunk_write_next].state == processed)
     {
-      pthread_mutex_unlock(&mutex_chunks);
+      xpthread_mutex_unlock(&mutex_chunks);
       for(int i = 0; i < chunks[chunk_write_next].size; i++)
         keep_or_discard(chunks[chunk_write_next].merge_data + i);
-      pthread_mutex_lock(&mutex_chunks);
+      xpthread_mutex_lock(&mutex_chunks);
       pairs_written += chunks[chunk_write_next].size;
       chunks[chunk_write_next].state = empty;
       if (finished_reading && (pairs_written >= pairs_read))
         finished_all = true;
       chunk_write_next = (chunk_write_next + 1) % chunk_count;
-      pthread_cond_broadcast(&cond_chunks);
+      xpthread_cond_broadcast(&cond_chunks);
     }
 }
 
@@ -1114,13 +1094,13 @@ inline void chunk_perform_process(struct kh_handle_s * kmerhash)
     {
       chunks[chunk_current].state = inprogress;
       chunk_process_next = (chunk_current + 1) % chunk_count;
-      pthread_cond_broadcast(&cond_chunks);
-      pthread_mutex_unlock(&mutex_chunks);
+      xpthread_cond_broadcast(&cond_chunks);
+      xpthread_mutex_unlock(&mutex_chunks);
       for(int i=0; i<chunks[chunk_current].size; i++)
         process(chunks[chunk_current].merge_data + i, kmerhash);
-      pthread_mutex_lock(&mutex_chunks);
+      xpthread_mutex_lock(&mutex_chunks);
       chunks[chunk_current].state = processed;
-      pthread_cond_broadcast(&cond_chunks);
+      xpthread_cond_broadcast(&cond_chunks);
     }
 }
 
@@ -1132,7 +1112,7 @@ void * pair_worker(void * vp)
 
   struct kh_handle_s * kmerhash = kh_init();
 
-  pthread_mutex_lock(&mutex_chunks);
+  xpthread_mutex_lock(&mutex_chunks);
 
   while (! finished_all)
     {
@@ -1156,7 +1136,7 @@ void * pair_worker(void * vp)
                       ||
                       ((!finished_reading) &&
                        chunks[chunk_read_next].state == empty)))
-                pthread_cond_wait(&cond_chunks, &mutex_chunks);
+                xpthread_cond_wait(&cond_chunks, &mutex_chunks);
 
               chunk_perform_read();
               chunk_perform_process(kmerhash);
@@ -1173,7 +1153,7 @@ void * pair_worker(void * vp)
                       (chunks[chunk_write_next].state == processed)
                       )
                      )
-                pthread_cond_wait(&cond_chunks, &mutex_chunks);
+                xpthread_cond_wait(&cond_chunks, &mutex_chunks);
 
               chunk_perform_write();
               chunk_perform_process(kmerhash);
@@ -1194,7 +1174,7 @@ void * pair_worker(void * vp)
                       (chunks[chunk_process_next].state == filled)
                       )
                      )
-                pthread_cond_wait(&cond_chunks, &mutex_chunks);
+                xpthread_cond_wait(&cond_chunks, &mutex_chunks);
 
               chunk_perform_read();
               chunk_perform_process(kmerhash);
@@ -1211,7 +1191,7 @@ void * pair_worker(void * vp)
                       (chunks[chunk_process_next].state == filled)
                       )
                      )
-                pthread_cond_wait(&cond_chunks, &mutex_chunks);
+                xpthread_cond_wait(&cond_chunks, &mutex_chunks);
 
               chunk_perform_write();
               chunk_perform_process(kmerhash);
@@ -1226,14 +1206,14 @@ void * pair_worker(void * vp)
                       (chunks[chunk_process_next].state == filled)
                       )
                      )
-                pthread_cond_wait(&cond_chunks, &mutex_chunks);
+                xpthread_cond_wait(&cond_chunks, &mutex_chunks);
 
               chunk_perform_process(kmerhash);
             }
         }
     }
 
-  pthread_mutex_unlock(&mutex_chunks);
+  xpthread_mutex_unlock(&mutex_chunks);
 
   kh_exit(kmerhash);
 
@@ -1262,34 +1242,32 @@ void pair_all()
         init_merge_data(chunks[i].merge_data + j);
     }
 
-  pthread_mutex_init(&mutex_chunks, NULL);
-  pthread_cond_init(&cond_chunks, 0);
+  xpthread_mutex_init(&mutex_chunks, NULL);
+  xpthread_cond_init(&cond_chunks, 0);
 
   /* prepare threads */
 
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  xpthread_attr_init(&attr);
+  xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
   for(int t=0; t<opt_threads; t++)
-    if (pthread_create(pthread+t, &attr, pair_worker, (void*)(int64_t)t))
-      fatal("Cannot create thread");
+    xpthread_create(pthread+t, &attr, pair_worker, (void*)(int64_t)t);
 
   /* wait for threads to terminate */
 
   for(int t=0; t<opt_threads; t++)
-    if (pthread_join(pthread[t], NULL))
-      fatal("Cannot join thread");
+    xpthread_join(pthread[t], NULL);
 
   /* free threads */
 
   xfree(pthread);
-  pthread_attr_destroy(&attr);
+  xpthread_attr_destroy(&attr);
 
   /* free chunks */
 
-  pthread_cond_destroy(&cond_chunks);
-  pthread_mutex_destroy(&mutex_chunks);
+  xpthread_cond_destroy(&cond_chunks);
+  xpthread_mutex_destroy(&mutex_chunks);
 
   for (int i = 0; i < chunk_count; i++)
     {
@@ -1357,14 +1335,6 @@ void fastq_mergepairs()
           notmerged,
           100.0 * notmerged / total);
 
-  double mean = sum_fragment_length / merged;
-  double stdev = sqrt((sum_squared_fragment_length
-                       - 2.0 * mean * sum_fragment_length
-                       + mean * mean * merged)
-                      / (merged + 0.0));
-
-  double mean_read_length = sum_read_length / (2.0 * pairs_read);
-
   if (notmerged > 0)
     fprintf(stderr, "\nPairs that failed merging due to various reasons:\n");
 
@@ -1410,7 +1380,7 @@ void fastq_mergepairs()
 
   if (failed_minscore)
     fprintf(stderr,
-            "%10" PRIu64 "  alignment score too low, or score drop to high\n",
+            "%10" PRIu64 "  alignment score too low, or score drop too high\n",
             failed_minscore);
 
   if (failed_minovlen)
@@ -1447,46 +1417,57 @@ void fastq_mergepairs()
 
   fprintf(stderr, "Statistics of all reads:\n");
 
+  double mean_read_length = sum_read_length / (2.0 * pairs_read);
+
   fprintf(stderr,
           "%10.2f  Mean read length\n",
           mean_read_length);
 
-  fprintf(stderr, "\n");
+  if (merged > 0)
+    {
+      fprintf(stderr, "\n");
 
-  fprintf(stderr, "Statistics of merged reads:\n");
+      fprintf(stderr, "Statistics of merged reads:\n");
 
-  fprintf(stderr,
-          "%10.2f  Mean fragment length\n",
-          mean);
+      double mean = sum_fragment_length / merged;
 
-  fprintf(stderr,
-          "%10.2f  Standard deviation of fragment length\n",
-          stdev);
+      fprintf(stderr,
+              "%10.2f  Mean fragment length\n",
+              mean);
 
-  fprintf(stderr,
-          "%10.2f  Mean expected error in forward sequences\n",
-          sum_ee_fwd / merged);
+      double stdev = sqrt((sum_squared_fragment_length
+                           - 2.0 * mean * sum_fragment_length
+                           + mean * mean * merged)
+                          / (merged + 0.0));
 
-  fprintf(stderr,
-          "%10.2f  Mean expected error in reverse sequences\n",
-          sum_ee_rev / merged);
+      fprintf(stderr,
+              "%10.2f  Standard deviation of fragment length\n",
+              stdev);
 
-  fprintf(stderr,
-          "%10.2f  Mean expected error in merged sequences\n",
-          sum_ee_merged / merged);
+      fprintf(stderr,
+              "%10.2f  Mean expected error in forward sequences\n",
+              sum_ee_fwd / merged);
 
-  fprintf(stderr,
-        "%10.2f  Mean observed errors in merged region of forward sequences\n",
-          1.0 * sum_errors_fwd / merged);
+      fprintf(stderr,
+              "%10.2f  Mean expected error in reverse sequences\n",
+              sum_ee_rev / merged);
 
-  fprintf(stderr,
-        "%10.2f  Mean observed errors in merged region of reverse sequences\n",
-          1.0 * sum_errors_rev / merged);
+      fprintf(stderr,
+              "%10.2f  Mean expected error in merged sequences\n",
+              sum_ee_merged / merged);
 
-  fprintf(stderr,
-          "%10.2f  Mean observed errors in merged region\n",
-          1.0 * (sum_errors_fwd + sum_errors_rev) / merged);
+      fprintf(stderr,
+              "%10.2f  Mean observed errors in merged region of forward sequences\n",
+              1.0 * sum_errors_fwd / merged);
 
+      fprintf(stderr,
+              "%10.2f  Mean observed errors in merged region of reverse sequences\n",
+              1.0 * sum_errors_rev / merged);
+
+      fprintf(stderr,
+              "%10.2f  Mean observed errors in merged region\n",
+              1.0 * (sum_errors_fwd + sum_errors_rev) / merged);
+    }
 
   /* clean up */
 

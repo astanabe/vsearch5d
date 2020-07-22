@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -78,6 +78,7 @@ bool opt_no_progress;
 bool opt_quiet;
 bool opt_relabel_keep;
 bool opt_relabel_md5;
+bool opt_relabel_self;
 bool opt_relabel_sha1;
 bool opt_samheader;
 bool opt_sff_clip;
@@ -97,10 +98,13 @@ char * opt_cluster_smallmem;
 char * opt_cluster_unoise;
 char * opt_clusters;
 char * opt_consout;
+char * opt_cut;
+char * opt_cut_pattern;
 char * opt_db;
 char * opt_dbmatched;
 char * opt_dbnotmatched;
 char * opt_derep_fulllength;
+char * opt_derep_id;
 char * opt_derep_prefix;
 char * opt_eetabbedout;
 char * opt_fastaout;
@@ -125,12 +129,12 @@ char * opt_fastqout_notmerged_fwd;
 char * opt_fastqout_notmerged_rev;
 char * opt_fastqout_rev;
 char * opt_fastx_filter;
-char * opt_fastx_mask;
-char * opt_fastx_revcomp;
-char * opt_fastx_subsample;
 char * opt_fastx_getseq;
 char * opt_fastx_getseqs;
 char * opt_fastx_getsubseq;
+char * opt_fastx_mask;
+char * opt_fastx_revcomp;
+char * opt_fastx_subsample;
 char * opt_join_padgap;
 char * opt_join_padgapq;
 char * opt_label;
@@ -668,11 +672,14 @@ void args_init(int argc, char **argv)
   opt_clusters = 0;
   opt_cons_truncate = 0;
   opt_consout = 0;
+  opt_cut = 0;
+  opt_cut_pattern = 0;
   opt_db = 0;
   opt_dbmask = MASK_DUST;
   opt_dbmatched = 0;
   opt_dbnotmatched = 0;
   opt_derep_fulllength = 0;
+  opt_derep_id = 0;
   opt_derep_prefix = 0;
   opt_dn = 1.4;
   opt_ee_cutoffs_count = 3;
@@ -781,7 +788,7 @@ void args_init(int argc, char **argv)
   opt_maxaccepts = 1;
   opt_maxdiffs = INT_MAX;
   opt_maxgaps = INT_MAX;
-  opt_maxhits = LONG_MAX;
+  opt_maxhits = 0;
   opt_maxid = 1.0;
   opt_maxqsize = INT_MAX;
   opt_maxqt = DBL_MAX;
@@ -826,6 +833,7 @@ void args_init(int argc, char **argv)
   opt_relabel = 0;
   opt_relabel_keep = 0;
   opt_relabel_md5 = 0;
+  opt_relabel_self = 0;
   opt_relabel_sha1 = 0;
   opt_rereplicate = 0;
   opt_reverse = 0;
@@ -884,440 +892,458 @@ void args_init(int argc, char **argv)
 
   enum
   {
-    option_help,
-    option_version,
+    option_abskew,
+    option_acceptall,
+    option_alignwidth,
+    option_allpairs_global,
     option_alnout,
-    option_usearch_global,
-    option_db,
-    option_id,
-    option_maxaccepts,
-    option_maxrejects,
-    option_wordlength,
-    option_match,
-    option_mismatch,
-    option_fulldp,
-    option_strand,
-    option_threads,
-    option_gapopen,
-    option_gapext,
-    option_rowlen,
-    option_userfields,
-    option_userout,
-    option_self,
+    option_band,
+    option_biomout,
     option_blast6out,
-    option_uc,
-    option_weak_id,
-    option_uc_allhits,
-    option_notrunclabels,
-    option_sortbysize,
-    option_output,
-    option_minsize,
-    option_maxsize,
-    option_relabel,
-    option_sizeout,
-    option_derep_fulllength,
-    option_minseqlength,
-    option_minuniquesize,
-    option_topn,
-    option_maxseqlength,
-    option_sizein,
-    option_sortbylength,
-    option_matched,
-    option_notmatched,
+    option_borderline,
+    option_bzip2_decompress,
+    option_centroids,
+    option_chimeras,
+    option_cluster_fast,
+    option_cluster_size,
+    option_cluster_smallmem,
+    option_cluster_unoise,
+    option_clusterout_id,
+    option_clusterout_sort,
+    option_clusters,
+    option_cons_truncate,
+    option_consout,
+    option_cut,
+    option_cut_pattern,
+    option_db,
+    option_dbmask,
     option_dbmatched,
     option_dbnotmatched,
-    option_fastapairs,
-    option_output_no_hits,
-    option_maxhits,
-    option_top_hits_only,
+    option_derep_fulllength,
+    option_derep_id,
+    option_derep_prefix,
+    option_dn,
+    option_ee_cutoffs,
+    option_eeout,
+    option_eetabbedout,
+    option_fasta_score,
     option_fasta_width,
-    option_query_cov,
-    option_target_cov,
+    option_fastaout,
+    option_fastaout_discarded,
+    option_fastaout_discarded_rev,
+    option_fastaout_notmerged_fwd,
+    option_fastaout_notmerged_rev,
+    option_fastaout_rev,
+    option_fastapairs,
+    option_fastq_allowmergestagger,
+    option_fastq_ascii,
+    option_fastq_asciiout,
+    option_fastq_chars,
+    option_fastq_convert,
+    option_fastq_eeout,
+    option_fastq_eestats,
+    option_fastq_eestats2,
+    option_fastq_filter,
+    option_fastq_join,
+    option_fastq_maxdiffpct,
+    option_fastq_maxdiffs,
+    option_fastq_maxee,
+    option_fastq_maxee_rate,
+    option_fastq_maxlen,
+    option_fastq_maxmergelen,
+    option_fastq_maxns,
+    option_fastq_mergepairs,
+    option_fastq_minlen,
+    option_fastq_minmergelen,
+    option_fastq_minovlen,
+    option_fastq_nostagger,
+    option_fastq_qmax,
+    option_fastq_qmaxout,
+    option_fastq_qmin,
+    option_fastq_qminout,
+    option_fastq_stats,
+    option_fastq_stripleft,
+    option_fastq_stripright,
+    option_fastq_tail,
+    option_fastq_truncee,
+    option_fastq_trunclen,
+    option_fastq_trunclen_keep,
+    option_fastq_truncqual,
+    option_fastqout,
+    option_fastqout_discarded,
+    option_fastqout_discarded_rev,
+    option_fastqout_notmerged_fwd,
+    option_fastqout_notmerged_rev,
+    option_fastqout_rev,
+    option_fastx_filter,
+    option_fastx_getseq,
+    option_fastx_getseqs,
+    option_fastx_getsubseq,
+    option_fastx_mask,
+    option_fastx_revcomp,
+    option_fastx_subsample,
+    option_fulldp,
+    option_gapext,
+    option_gapopen,
+    option_gzip_decompress,
+    option_h,
+    option_hardmask,
+    option_help,
+    option_hspw,
+    option_id,
+    option_iddef,
     option_idprefix,
     option_idsuffix,
-    option_minqt,
-    option_maxqt,
-    option_minsl,
-    option_maxsl,
+    option_join_padgap,
+    option_join_padgapq,
+    option_label,
+    option_label_field,
+    option_label_substr_match,
+    option_label_suffix,
+    option_label_word,
+    option_label_words,
+    option_labels,
     option_leftjust,
-    option_rightjust,
-    option_selfid,
-    option_maxid,
-    option_minsizeratio,
-    option_maxsizeratio,
-    option_maxdiffs,
-    option_maxsubs,
-    option_maxgaps,
-    option_mincols,
-    option_maxqsize,
-    option_mintsize,
-    option_mid,
-    option_shuffle,
-    option_randseed,
+    option_length_cutoffs,
+    option_log,
+    option_makeudb_usearch,
     option_maskfasta,
-    option_hardmask,
-    option_qmask,
-    option_dbmask,
-    option_cluster_smallmem,
-    option_cluster_fast,
-    option_centroids,
-    option_clusters,
-    option_consout,
-    option_cons_truncate,
-    option_msaout,
-    option_usersort,
-    option_xn,
-    option_iddef,
-    option_slots,
-    option_pattern,
+    option_match,
+    option_matched,
+    option_max_unmasked_pct,
+    option_maxaccepts,
+    option_maxdiffs,
+    option_maxgaps,
+    option_maxhits,
+    option_maxid,
+    option_maxqsize,
+    option_maxqt,
+    option_maxrejects,
+    option_maxseqlength,
+    option_maxsize,
+    option_maxsizeratio,
+    option_maxsl,
+    option_maxsubs,
     option_maxuniquesize,
-    option_abskew,
-    option_chimeras,
-    option_dn,
+    option_mid,
+    option_min_unmasked_pct,
+    option_mincols,
     option_mindiffs,
     option_mindiv,
     option_minh,
+    option_minhsp,
+    option_minqt,
+    option_minseqlength,
+    option_minsize,
+    option_minsizeratio,
+    option_minsl,
+    option_mintsize,
+    option_minuniquesize,
+    option_minwordmatches,
+    option_mismatch,
+    option_mothur_shared_out,
+    option_msaout,
+    option_no_progress,
     option_nonchimeras,
+    option_notmatched,
+    option_notmatchedfq,
+    option_notrunclabels,
+    option_otutabout,
+    option_output,
+    option_output_no_hits,
+    option_pattern,
+    option_profile,
+    option_qmask,
+    option_query_cov,
+    option_quiet,
+    option_randseed,
+    option_relabel,
+    option_relabel_keep,
+    option_relabel_md5,
+    option_relabel_self,
+    option_relabel_sha1,
+    option_rereplicate,
+    option_reverse,
+    option_rightjust,
+    option_rowlen,
+    option_samheader,
+    option_samout,
+    option_sample_pct,
+    option_sample_size,
+    option_search_exact,
+    option_self,
+    option_selfid,
+    option_sff_clip,
+    option_sff_convert,
+    option_shuffle,
+    option_sintax,
+    option_sintax_cutoff,
+    option_sizein,
+    option_sizeorder,
+    option_sizeout,
+    option_slots,
+    option_sortbylength,
+    option_sortbysize,
+    option_strand,
+    option_subseq_end,
+    option_subseq_start,
+    option_tabbedout,
+    option_target_cov,
+    option_threads,
+    option_top_hits_only,
+    option_topn,
+    option_uc,
+    option_uc_allhits,
+    option_uchime2_denovo,
+    option_uchime3_denovo,
     option_uchime_denovo,
     option_uchime_ref,
     option_uchimealns,
     option_uchimeout,
     option_uchimeout5,
-    option_alignwidth,
-    option_allpairs_global,
-    option_acceptall,
-    option_cluster_size,
-    option_samout,
-    option_log,
-    option_quiet,
-    option_fastx_subsample,
-    option_sample_pct,
-    option_fastq_chars,
-    option_profile,
-    option_sample_size,
-    option_fastaout,
-    option_xsize,
-    option_clusterout_id,
-    option_clusterout_sort,
-    option_borderline,
-    option_relabel_sha1,
-    option_relabel_md5,
-    option_derep_prefix,
-    option_fastq_filter,
-    option_fastqout,
-    option_fastaout_discarded,
-    option_fastqout_discarded,
-    option_fastq_truncqual,
-    option_fastq_maxee,
-    option_fastq_trunclen,
-    option_fastq_minlen,
-    option_fastq_stripleft,
-    option_fastq_maxee_rate,
-    option_fastq_maxns,
-    option_eeout,
-    option_fastq_ascii,
-    option_fastq_qmin,
-    option_fastq_qmax,
-    option_fastq_qmaxout,
-    option_fastq_stats,
-    option_fastq_tail,
-    option_fastx_revcomp,
-    option_label_suffix,
-    option_h,
-    option_samheader,
-    option_sizeorder,
-    option_minwordmatches,
-    option_v,
-    option_relabel_keep,
-    option_search_exact,
-    option_fastx_mask,
-    option_min_unmasked_pct,
-    option_max_unmasked_pct,
-    option_fastq_convert,
-    option_fastq_asciiout,
-    option_fastq_qminout,
-    option_fastq_mergepairs,
-    option_fastq_eeout,
-    option_fastqout_notmerged_fwd,
-    option_fastqout_notmerged_rev,
-    option_fastq_minovlen,
-    option_fastq_minmergelen,
-    option_fastq_maxmergelen,
-    option_fastq_nostagger,
-    option_fastq_allowmergestagger,
-    option_fastq_maxdiffs,
-    option_fastaout_notmerged_fwd,
-    option_fastaout_notmerged_rev,
-    option_reverse,
-    option_eetabbedout,
-    option_fasta_score,
-    option_fastq_eestats,
-    option_rereplicate,
-    option_xdrop_nw,
-    option_minhsp,
-    option_band,
-    option_hspw,
-    option_gzip_decompress,
-    option_bzip2_decompress,
-    option_fastq_maxlen,
-    option_fastq_truncee,
-    option_fastx_filter,
-    option_otutabout,
-    option_mothur_shared_out,
-    option_biomout,
-    option_fastq_trunclen_keep,
-    option_fastq_stripright,
-    option_no_progress,
-    option_fastq_eestats2,
-    option_ee_cutoffs,
-    option_length_cutoffs,
-    option_makeudb_usearch,
     option_udb2fasta,
     option_udbinfo,
     option_udbstats,
-    option_cluster_unoise,
     option_unoise_alpha,
-    option_uchime2_denovo,
-    option_uchime3_denovo,
-    option_sintax,
-    option_sintax_cutoff,
-    option_tabbedout,
-    option_fastq_maxdiffpct,
-    option_fastq_join,
-    option_join_padgap,
-    option_join_padgapq,
-    option_sff_convert,
-    option_sff_clip,
-    option_fastaout_rev,
-    option_fastaout_discarded_rev,
-    option_fastqout_rev,
-    option_fastqout_discarded_rev,
+    option_usearch_global,
+    option_userfields,
+    option_userout,
+    option_usersort,
+    option_v,
+    option_version,
+    option_weak_id,
+    option_wordlength,
+    option_xdrop_nw,
     option_xee,
-    option_fastx_getseq,
-    option_fastx_getseqs,
-    option_fastx_getsubseq,
-    option_label_substr_match,
-    option_label,
-    option_subseq_start,
-    option_subseq_end,
-    option_notmatchedfq,
-    option_label_field,
-    option_label_word,
-    option_label_words,
-    option_labels,
+    option_xn,
+    option_xsize
     option_idoffset
   };
 
   static struct option long_options[] =
   {
-    {"help",                  no_argument,       0, 0 },
-    {"version",               no_argument,       0, 0 },
+    {"abskew",                required_argument, 0, 0 },
+    {"acceptall",             no_argument,       0, 0 },
+    {"alignwidth",            required_argument, 0, 0 },
+    {"allpairs_global",       required_argument, 0, 0 },
     {"alnout",                required_argument, 0, 0 },
-    {"usearch_global",        required_argument, 0, 0 },
-    {"db",                    required_argument, 0, 0 },
-    {"id",                    required_argument, 0, 0 },
-    {"maxaccepts",            required_argument, 0, 0 },
-    {"maxrejects",            required_argument, 0, 0 },
-    {"wordlength",            required_argument, 0, 0 },
-    {"match",                 required_argument, 0, 0 },
-    {"mismatch",              required_argument, 0, 0 },
-    {"fulldp",                no_argument,       0, 0 },
-    {"strand",                required_argument, 0, 0 },
-    {"threads",               required_argument, 0, 0 },
-    {"gapopen",               required_argument, 0, 0 },
-    {"gapext",                required_argument, 0, 0 },
-    {"rowlen",                required_argument, 0, 0 },
-    {"userfields",            required_argument, 0, 0 },
-    {"userout",               required_argument, 0, 0 },
-    {"self",                  no_argument,       0, 0 },
+    {"band",                  required_argument, 0, 0 },
+    {"biomout",               required_argument, 0, 0 },
     {"blast6out",             required_argument, 0, 0 },
-    {"uc",                    required_argument, 0, 0 },
-    {"weak_id",               required_argument, 0, 0 },
-    {"uc_allhits",            no_argument,       0, 0 },
-    {"notrunclabels",         no_argument,       0, 0 },
-    {"sortbysize",            required_argument, 0, 0 },
-    {"output",                required_argument, 0, 0 },
-    {"minsize",               required_argument, 0, 0 },
-    {"maxsize",               required_argument, 0, 0 },
-    {"relabel",               required_argument, 0, 0 },
-    {"sizeout",               no_argument,       0, 0 },
-    {"derep_fulllength",      required_argument, 0, 0 },
-    {"minseqlength",          required_argument, 0, 0 },
-    {"minuniquesize",         required_argument, 0, 0 },
-    {"topn",                  required_argument, 0, 0 },
-    {"maxseqlength",          required_argument, 0, 0 },
-    {"sizein",                no_argument,       0, 0 },
-    {"sortbylength",          required_argument, 0, 0 },
-    {"matched",               required_argument, 0, 0 },
-    {"notmatched",            required_argument, 0, 0 },
+    {"borderline",            required_argument, 0, 0 },
+    {"bzip2_decompress",      no_argument,       0, 0 },
+    {"centroids",             required_argument, 0, 0 },
+    {"chimeras",              required_argument, 0, 0 },
+    {"cluster_fast",          required_argument, 0, 0 },
+    {"cluster_size",          required_argument, 0, 0 },
+    {"cluster_smallmem",      required_argument, 0, 0 },
+    {"cluster_unoise",        required_argument, 0, 0 },
+    {"clusterout_id",         no_argument,       0, 0 },
+    {"clusterout_sort",       no_argument,       0, 0 },
+    {"clusters",              required_argument, 0, 0 },
+    {"cons_truncate",         no_argument,       0, 0 },
+    {"consout",               required_argument, 0, 0 },
+    {"cut",                   required_argument, 0, 0 },
+    {"cut_pattern",           required_argument, 0, 0 },
+    {"db",                    required_argument, 0, 0 },
+    {"dbmask",                required_argument, 0, 0 },
     {"dbmatched",             required_argument, 0, 0 },
     {"dbnotmatched",          required_argument, 0, 0 },
-    {"fastapairs",            required_argument, 0, 0 },
-    {"output_no_hits",        no_argument,       0, 0 },
-    {"maxhits",               required_argument, 0, 0 },
-    {"top_hits_only",         no_argument,       0, 0 },
+    {"derep_fulllength",      required_argument, 0, 0 },
+    {"derep_id",              required_argument, 0, 0 },
+    {"derep_prefix",          required_argument, 0, 0 },
+    {"dn",                    required_argument, 0, 0 },
+    {"ee_cutoffs",            required_argument, 0, 0 },
+    {"eeout",                 no_argument,       0, 0 },
+    {"eetabbedout",           required_argument, 0, 0 },
+    {"fasta_score",           no_argument,       0, 0 },
     {"fasta_width",           required_argument, 0, 0 },
-    {"query_cov",             required_argument, 0, 0 },
-    {"target_cov",            required_argument, 0, 0 },
+    {"fastaout",              required_argument, 0, 0 },
+    {"fastaout_discarded",    required_argument, 0, 0 },
+    {"fastaout_discarded_rev",required_argument, 0, 0 },
+    {"fastaout_notmerged_fwd",required_argument, 0, 0 },
+    {"fastaout_notmerged_rev",required_argument, 0, 0 },
+    {"fastaout_rev",          required_argument, 0, 0 },
+    {"fastapairs",            required_argument, 0, 0 },
+    {"fastq_allowmergestagger", no_argument,     0, 0 },
+    {"fastq_ascii",           required_argument, 0, 0 },
+    {"fastq_asciiout",        required_argument, 0, 0 },
+    {"fastq_chars",           required_argument, 0, 0 },
+    {"fastq_convert",         required_argument, 0, 0 },
+    {"fastq_eeout",           no_argument,       0, 0 },
+    {"fastq_eestats",         required_argument, 0, 0 },
+    {"fastq_eestats2",        required_argument, 0, 0 },
+    {"fastq_filter",          required_argument, 0, 0 },
+    {"fastq_join",            required_argument, 0, 0 },
+    {"fastq_maxdiffpct",      required_argument, 0, 0 },
+    {"fastq_maxdiffs",        required_argument, 0, 0 },
+    {"fastq_maxee",           required_argument, 0, 0 },
+    {"fastq_maxee_rate",      required_argument, 0, 0 },
+    {"fastq_maxlen",          required_argument, 0, 0 },
+    {"fastq_maxmergelen",     required_argument, 0, 0 },
+    {"fastq_maxns",           required_argument, 0, 0 },
+    {"fastq_mergepairs",      required_argument, 0, 0 },
+    {"fastq_minlen",          required_argument, 0, 0 },
+    {"fastq_minmergelen",     required_argument, 0, 0 },
+    {"fastq_minovlen",        required_argument, 0, 0 },
+    {"fastq_nostagger",       no_argument,       0, 0 },
+    {"fastq_qmax",            required_argument, 0, 0 },
+    {"fastq_qmaxout",         required_argument, 0, 0 },
+    {"fastq_qmin",            required_argument, 0, 0 },
+    {"fastq_qminout",         required_argument, 0, 0 },
+    {"fastq_stats",           required_argument, 0, 0 },
+    {"fastq_stripleft",       required_argument, 0, 0 },
+    {"fastq_stripright",      required_argument, 0, 0 },
+    {"fastq_tail",            required_argument, 0, 0 },
+    {"fastq_truncee",         required_argument, 0, 0 },
+    {"fastq_trunclen",        required_argument, 0, 0 },
+    {"fastq_trunclen_keep",   required_argument, 0, 0 },
+    {"fastq_truncqual",       required_argument, 0, 0 },
+    {"fastqout",              required_argument, 0, 0 },
+    {"fastqout_discarded",    required_argument, 0, 0 },
+    {"fastqout_discarded_rev",required_argument, 0, 0 },
+    {"fastqout_notmerged_fwd",required_argument, 0, 0 },
+    {"fastqout_notmerged_rev",required_argument, 0, 0 },
+    {"fastqout_rev",          required_argument, 0, 0 },
+    {"fastx_filter",          required_argument, 0, 0 },
+    {"fastx_getseq",          required_argument, 0, 0 },
+    {"fastx_getseqs",         required_argument, 0, 0 },
+    {"fastx_getsubseq",       required_argument, 0, 0 },
+    {"fastx_mask",            required_argument, 0, 0 },
+    {"fastx_revcomp",         required_argument, 0, 0 },
+    {"fastx_subsample",       required_argument, 0, 0 },
+    {"fulldp",                no_argument,       0, 0 },
+    {"gapext",                required_argument, 0, 0 },
+    {"gapopen",               required_argument, 0, 0 },
+    {"gzip_decompress",       no_argument,       0, 0 },
+    {"h",                     no_argument,       0, 0 },
+    {"hardmask",              no_argument,       0, 0 },
+    {"help",                  no_argument,       0, 0 },
+    {"hspw",                  required_argument, 0, 0 },
+    {"id",                    required_argument, 0, 0 },
+    {"iddef",                 required_argument, 0, 0 },
     {"idprefix",              required_argument, 0, 0 },
     {"idsuffix",              required_argument, 0, 0 },
-    {"minqt",                 required_argument, 0, 0 },
-    {"maxqt",                 required_argument, 0, 0 },
-    {"minsl",                 required_argument, 0, 0 },
-    {"maxsl",                 required_argument, 0, 0 },
+    {"join_padgap",           required_argument, 0, 0 },
+    {"join_padgapq",          required_argument, 0, 0 },
+    {"label",                 required_argument, 0, 0 },
+    {"label_field",           required_argument, 0, 0 },
+    {"label_substr_match",    no_argument,       0, 0 },
+    {"label_suffix",          required_argument, 0, 0 },
+    {"label_word",            required_argument, 0, 0 },
+    {"label_words",           required_argument, 0, 0 },
+    {"labels",                required_argument, 0, 0 },
     {"leftjust",              no_argument,       0, 0 },
-    {"rightjust",             no_argument,       0, 0 },
-    {"selfid",                no_argument,       0, 0 },
-    {"maxid",                 required_argument, 0, 0 },
-    {"minsizeratio",          required_argument, 0, 0 },
-    {"maxsizeratio",          required_argument, 0, 0 },
-    {"maxdiffs",              required_argument, 0, 0 },
-    {"maxsubs",               required_argument, 0, 0 },
-    {"maxgaps",               required_argument, 0, 0 },
-    {"mincols",               required_argument, 0, 0 },
-    {"maxqsize",              required_argument, 0, 0 },
-    {"mintsize",              required_argument, 0, 0 },
-    {"mid",                   required_argument, 0, 0 },
-    {"shuffle",               required_argument, 0, 0 },
-    {"randseed",              required_argument, 0, 0 },
+    {"length_cutoffs",        required_argument, 0, 0 },
+    {"log",                   required_argument, 0, 0 },
+    {"makeudb_usearch",       required_argument, 0, 0 },
     {"maskfasta",             required_argument, 0, 0 },
-    {"hardmask",              no_argument,       0, 0 },
-    {"qmask",                 required_argument, 0, 0 },
-    {"dbmask",                required_argument, 0, 0 },
-    {"cluster_smallmem",      required_argument, 0, 0 },
-    {"cluster_fast",          required_argument, 0, 0 },
-    {"centroids",             required_argument, 0, 0 },
-    {"clusters",              required_argument, 0, 0 },
-    {"consout",               required_argument, 0, 0 },
-    {"cons_truncate",         no_argument,       0, 0 },
-    {"msaout",                required_argument, 0, 0 },
-    {"usersort",              no_argument,       0, 0 },
-    {"xn",                    required_argument, 0, 0 },
-    {"iddef",                 required_argument, 0, 0 },
-    {"slots",                 required_argument, 0, 0 },
-    {"pattern",               required_argument, 0, 0 },
+    {"match",                 required_argument, 0, 0 },
+    {"matched",               required_argument, 0, 0 },
+    {"max_unmasked_pct",      required_argument, 0, 0 },
+    {"maxaccepts",            required_argument, 0, 0 },
+    {"maxdiffs",              required_argument, 0, 0 },
+    {"maxgaps",               required_argument, 0, 0 },
+    {"maxhits",               required_argument, 0, 0 },
+    {"maxid",                 required_argument, 0, 0 },
+    {"maxqsize",              required_argument, 0, 0 },
+    {"maxqt",                 required_argument, 0, 0 },
+    {"maxrejects",            required_argument, 0, 0 },
+    {"maxseqlength",          required_argument, 0, 0 },
+    {"maxsize",               required_argument, 0, 0 },
+    {"maxsizeratio",          required_argument, 0, 0 },
+    {"maxsl",                 required_argument, 0, 0 },
+    {"maxsubs",               required_argument, 0, 0 },
     {"maxuniquesize",         required_argument, 0, 0 },
-    {"abskew",                required_argument, 0, 0 },
-    {"chimeras",              required_argument, 0, 0 },
-    {"dn",                    required_argument, 0, 0 },
+    {"mid",                   required_argument, 0, 0 },
+    {"min_unmasked_pct",      required_argument, 0, 0 },
+    {"mincols",               required_argument, 0, 0 },
     {"mindiffs",              required_argument, 0, 0 },
     {"mindiv",                required_argument, 0, 0 },
     {"minh",                  required_argument, 0, 0 },
+    {"minhsp",                required_argument, 0, 0 },
+    {"minqt",                 required_argument, 0, 0 },
+    {"minseqlength",          required_argument, 0, 0 },
+    {"minsize",               required_argument, 0, 0 },
+    {"minsizeratio",          required_argument, 0, 0 },
+    {"minsl",                 required_argument, 0, 0 },
+    {"mintsize",              required_argument, 0, 0 },
+    {"minuniquesize",         required_argument, 0, 0 },
+    {"minwordmatches",        required_argument, 0, 0 },
+    {"mismatch",              required_argument, 0, 0 },
+    {"mothur_shared_out",     required_argument, 0, 0 },
+    {"msaout",                required_argument, 0, 0 },
+    {"no_progress",           no_argument,       0, 0 },
     {"nonchimeras",           required_argument, 0, 0 },
+    {"notmatched",            required_argument, 0, 0 },
+    {"notmatchedfq",          required_argument, 0, 0 },
+    {"notrunclabels",         no_argument,       0, 0 },
+    {"otutabout",             required_argument, 0, 0 },
+    {"output",                required_argument, 0, 0 },
+    {"output_no_hits",        no_argument,       0, 0 },
+    {"pattern",               required_argument, 0, 0 },
+    {"profile",               required_argument, 0, 0 },
+    {"qmask",                 required_argument, 0, 0 },
+    {"query_cov",             required_argument, 0, 0 },
+    {"quiet",                 no_argument,       0, 0 },
+    {"randseed",              required_argument, 0, 0 },
+    {"relabel",               required_argument, 0, 0 },
+    {"relabel_keep",          no_argument,       0, 0 },
+    {"relabel_md5",           no_argument,       0, 0 },
+    {"relabel_self",          no_argument,       0, 0 },
+    {"relabel_sha1",          no_argument,       0, 0 },
+    {"rereplicate",           required_argument, 0, 0 },
+    {"reverse",               required_argument, 0, 0 },
+    {"rightjust",             no_argument,       0, 0 },
+    {"rowlen",                required_argument, 0, 0 },
+    {"samheader",             no_argument,       0, 0 },
+    {"samout",                required_argument, 0, 0 },
+    {"sample_pct",            required_argument, 0, 0 },
+    {"sample_size",           required_argument, 0, 0 },
+    {"search_exact",          required_argument, 0, 0 },
+    {"self",                  no_argument,       0, 0 },
+    {"selfid",                no_argument,       0, 0 },
+    {"sff_clip",              no_argument,       0, 0 },
+    {"sff_convert",           required_argument, 0, 0 },
+    {"shuffle",               required_argument, 0, 0 },
+    {"sintax",                required_argument, 0, 0 },
+    {"sintax_cutoff",         required_argument, 0, 0 },
+    {"sizein",                no_argument,       0, 0 },
+    {"sizeorder",             no_argument,       0, 0 },
+    {"sizeout",               no_argument,       0, 0 },
+    {"slots",                 required_argument, 0, 0 },
+    {"sortbylength",          required_argument, 0, 0 },
+    {"sortbysize",            required_argument, 0, 0 },
+    {"strand",                required_argument, 0, 0 },
+    {"subseq_end",            required_argument, 0, 0 },
+    {"subseq_start",          required_argument, 0, 0 },
+    {"tabbedout",             required_argument, 0, 0 },
+    {"target_cov",            required_argument, 0, 0 },
+    {"threads",               required_argument, 0, 0 },
+    {"top_hits_only",         no_argument,       0, 0 },
+    {"topn",                  required_argument, 0, 0 },
+    {"uc",                    required_argument, 0, 0 },
+    {"uc_allhits",            no_argument,       0, 0 },
+    {"uchime2_denovo",        required_argument, 0, 0 },
+    {"uchime3_denovo",        required_argument, 0, 0 },
     {"uchime_denovo",         required_argument, 0, 0 },
     {"uchime_ref",            required_argument, 0, 0 },
     {"uchimealns",            required_argument, 0, 0 },
     {"uchimeout",             required_argument, 0, 0 },
     {"uchimeout5",            no_argument,       0, 0 },
-    {"alignwidth",            required_argument, 0, 0 },
-    {"allpairs_global",       required_argument, 0, 0 },
-    {"acceptall",             no_argument,       0, 0 },
-    {"cluster_size",          required_argument, 0, 0 },
-    {"samout",                required_argument, 0, 0 },
-    {"log",                   required_argument, 0, 0 },
-    {"quiet",                 no_argument,       0, 0 },
-    {"fastx_subsample",       required_argument, 0, 0 },
-    {"sample_pct",            required_argument, 0, 0 },
-    {"fastq_chars",           required_argument, 0, 0 },
-    {"profile",               required_argument, 0, 0 },
-    {"sample_size",           required_argument, 0, 0 },
-    {"fastaout",              required_argument, 0, 0 },
-    {"xsize",                 no_argument,       0, 0 },
-    {"clusterout_id",         no_argument,       0, 0 },
-    {"clusterout_sort",       no_argument,       0, 0 },
-    {"borderline",            required_argument, 0, 0 },
-    {"relabel_sha1",          no_argument,       0, 0 },
-    {"relabel_md5",           no_argument,       0, 0 },
-    {"derep_prefix",          required_argument, 0, 0 },
-    {"fastq_filter",          required_argument, 0, 0 },
-    {"fastqout",              required_argument, 0, 0 },
-    {"fastaout_discarded",    required_argument, 0, 0 },
-    {"fastqout_discarded",    required_argument, 0, 0 },
-    {"fastq_truncqual",       required_argument, 0, 0 },
-    {"fastq_maxee",           required_argument, 0, 0 },
-    {"fastq_trunclen",        required_argument, 0, 0 },
-    {"fastq_minlen",          required_argument, 0, 0 },
-    {"fastq_stripleft",       required_argument, 0, 0 },
-    {"fastq_maxee_rate",      required_argument, 0, 0 },
-    {"fastq_maxns",           required_argument, 0, 0 },
-    {"eeout",                 no_argument,       0, 0 },
-    {"fastq_ascii",           required_argument, 0, 0 },
-    {"fastq_qmin",            required_argument, 0, 0 },
-    {"fastq_qmax",            required_argument, 0, 0 },
-    {"fastq_qmaxout",         required_argument, 0, 0 },
-    {"fastq_stats",           required_argument, 0, 0 },
-    {"fastq_tail",            required_argument, 0, 0 },
-    {"fastx_revcomp",         required_argument, 0, 0 },
-    {"label_suffix",          required_argument, 0, 0 },
-    {"h",                     no_argument,       0, 0 },
-    {"samheader",             no_argument,       0, 0 },
-    {"sizeorder",             no_argument,       0, 0 },
-    {"minwordmatches",        required_argument, 0, 0 },
-    {"v",                     no_argument,       0, 0 },
-    {"relabel_keep",          no_argument,       0, 0 },
-    {"search_exact",          required_argument, 0, 0 },
-    {"fastx_mask",            required_argument, 0, 0 },
-    {"min_unmasked_pct",      required_argument, 0, 0 },
-    {"max_unmasked_pct",      required_argument, 0, 0 },
-    {"fastq_convert",         required_argument, 0, 0 },
-    {"fastq_asciiout",        required_argument, 0, 0 },
-    {"fastq_qminout",         required_argument, 0, 0 },
-    {"fastq_mergepairs",      required_argument, 0, 0 },
-    {"fastq_eeout",           no_argument,       0, 0 },
-    {"fastqout_notmerged_fwd",required_argument, 0, 0 },
-    {"fastqout_notmerged_rev",required_argument, 0, 0 },
-    {"fastq_minovlen",        required_argument, 0, 0 },
-    {"fastq_minmergelen",     required_argument, 0, 0 },
-    {"fastq_maxmergelen",     required_argument, 0, 0 },
-    {"fastq_nostagger",       no_argument,       0, 0 },
-    {"fastq_allowmergestagger", no_argument,     0, 0 },
-    {"fastq_maxdiffs",        required_argument, 0, 0 },
-    {"fastaout_notmerged_fwd",required_argument, 0, 0 },
-    {"fastaout_notmerged_rev",required_argument, 0, 0 },
-    {"reverse",               required_argument, 0, 0 },
-    {"eetabbedout",           required_argument, 0, 0 },
-    {"fasta_score",           no_argument,       0, 0 },
-    {"fastq_eestats",         required_argument, 0, 0 },
-    {"rereplicate",           required_argument, 0, 0 },
-    {"xdrop_nw",              required_argument, 0, 0 },
-    {"minhsp",                required_argument, 0, 0 },
-    {"band",                  required_argument, 0, 0 },
-    {"hspw",                  required_argument, 0, 0 },
-    {"gzip_decompress",       no_argument,       0, 0 },
-    {"bzip2_decompress",      no_argument,       0, 0 },
-    {"fastq_maxlen",          required_argument, 0, 0 },
-    {"fastq_truncee",         required_argument, 0, 0 },
-    {"fastx_filter",          required_argument, 0, 0 },
-    {"otutabout",             required_argument, 0, 0 },
-    {"mothur_shared_out",     required_argument, 0, 0 },
-    {"biomout",               required_argument, 0, 0 },
-    {"fastq_trunclen_keep",   required_argument, 0, 0 },
-    {"fastq_stripright",      required_argument, 0, 0 },
-    {"no_progress",           no_argument,       0, 0 },
-    {"fastq_eestats2",        required_argument, 0, 0 },
-    {"ee_cutoffs",            required_argument, 0, 0 },
-    {"length_cutoffs",        required_argument, 0, 0 },
-    {"makeudb_usearch",       required_argument, 0, 0 },
     {"udb2fasta",             required_argument, 0, 0 },
     {"udbinfo",               required_argument, 0, 0 },
     {"udbstats",              required_argument, 0, 0 },
-    {"cluster_unoise",        required_argument, 0, 0 },
     {"unoise_alpha",          required_argument, 0, 0 },
-    {"uchime2_denovo",        required_argument, 0, 0 },
-    {"uchime3_denovo",        required_argument, 0, 0 },
-    {"sintax",                required_argument, 0, 0 },
-    {"sintax_cutoff",         required_argument, 0, 0 },
-    {"tabbedout",             required_argument, 0, 0 },
-    {"fastq_maxdiffpct",      required_argument, 0, 0 },
-    {"fastq_join",            required_argument, 0, 0 },
-    {"join_padgap",           required_argument, 0, 0 },
-    {"join_padgapq",          required_argument, 0, 0 },
-    {"sff_convert",           required_argument, 0, 0 },
-    {"sff_clip",              no_argument,       0, 0 },
-    {"fastaout_rev",          required_argument, 0, 0 },
-    {"fastaout_discarded_rev",required_argument, 0, 0 },
-    {"fastqout_rev",          required_argument, 0, 0 },
-    {"fastqout_discarded_rev",required_argument, 0, 0 },
+    {"usearch_global",        required_argument, 0, 0 },
+    {"userfields",            required_argument, 0, 0 },
+    {"userout",               required_argument, 0, 0 },
+    {"usersort",              no_argument,       0, 0 },
+    {"v",                     no_argument,       0, 0 },
+    {"version",               no_argument,       0, 0 },
+    {"weak_id",               required_argument, 0, 0 },
+    {"wordlength",            required_argument, 0, 0 },
+    {"xdrop_nw",              required_argument, 0, 0 },
     {"xee",                   no_argument,       0, 0 },
     {"fastx_getseq",          required_argument, 0, 0 },
     {"fastx_getseqs",         required_argument, 0, 0 },
@@ -1331,6 +1357,8 @@ void args_init(int argc, char **argv)
     {"label_word",            required_argument, 0, 0 },
     {"label_words",           required_argument, 0, 0 },
     {"labels",                required_argument, 0, 0 },
+    {"xn",                    required_argument, 0, 0 },
+    {"xsize",                 no_argument,       0, 0 },
     {"idoffset",              required_argument, 0, 0 },
     { 0,                      0,                 0, 0 }
   };
@@ -2269,6 +2297,22 @@ void args_init(int argc, char **argv)
           opt_labels = optarg;
           break;
 
+        case option_cut:
+          opt_cut = optarg;
+          break;
+
+        case option_cut_pattern:
+          opt_cut_pattern = optarg;
+          break;
+
+        case option_relabel_self:
+          opt_relabel_self = 1;
+          break;
+
+        case option_derep_id:
+          opt_derep_id = optarg;
+          break;
+
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
@@ -2287,6 +2331,8 @@ void args_init(int argc, char **argv)
   if (optind < argc)
     fatal("Unrecognized string on command line (%s)", argv[optind]);
 
+  /* Below is a list of all command names, in alphabetical order. */
+
   int command_options[] =
     {
       option_allpairs_global,
@@ -2294,7 +2340,9 @@ void args_init(int argc, char **argv)
       option_cluster_size,
       option_cluster_smallmem,
       option_cluster_unoise,
+      option_cut,
       option_derep_fulllength,
+      option_derep_id,
       option_derep_prefix,
       option_fastq_chars,
       option_fastq_convert,
@@ -2335,6 +2383,11 @@ void args_init(int argc, char **argv)
     };
 
   const int commands_count = sizeof(command_options) / sizeof(int);
+
+  /*
+    Below is a list of all the options that are valid for each command.
+    The first line is the command and the lines below are the valid options.
+  */
 
   const int valid_options[][92] =
     {
@@ -2395,6 +2448,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -2484,6 +2538,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -2575,6 +2630,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -2666,6 +2722,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -2759,6 +2816,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -2785,6 +2843,30 @@ void args_init(int argc, char **argv)
         option_xsize,
         -1 },
 
+      { option_cut,
+        option_bzip2_decompress,
+        option_cut_pattern,
+        option_fasta_width,
+        option_fastaout,
+        option_fastaout_discarded,
+        option_fastaout_discarded_rev,
+        option_fastaout_rev,
+        option_gzip_decompress,
+        option_log,
+        option_no_progress,
+        option_notrunclabels,
+        option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
+        option_xee,
+        option_xsize,
+        -1 },
+
       { option_derep_fulllength,
         option_bzip2_decompress,
         option_fasta_width,
@@ -2801,6 +2883,35 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
+        option_strand,
+        option_threads,
+        option_topn,
+        option_uc,
+        option_xee,
+        option_xsize,
+        -1 },
+
+      { option_derep_id,
+        option_bzip2_decompress,
+        option_fasta_width,
+        option_gzip_decompress,
+        option_log,
+        option_maxseqlength,
+        option_maxuniquesize,
+        option_minseqlength,
+        option_minuniquesize,
+        option_no_progress,
+        option_notrunclabels,
+        option_output,
+        option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -2828,6 +2939,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -2865,6 +2977,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -2937,6 +3050,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_reverse,
         option_sizein,
@@ -2963,8 +3077,11 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_reverse,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -2994,6 +3111,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmax,
         option_fastq_qmaxout,
         option_fastq_qmin,
+        option_fastq_qminout,
         option_fastq_truncqual,
         option_fastqout,
         option_fastqout_notmerged_fwd,
@@ -3006,8 +3124,11 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_reverse,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3063,6 +3184,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_reverse,
         option_sizein,
@@ -3092,7 +3214,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3100,6 +3225,7 @@ void args_init(int argc, char **argv)
 
       { option_fastx_getseqs,
         option_bzip2_decompress,
+        option_fasta_width,
         option_fastaout,
         option_fastq_ascii,
         option_fastq_qmax,
@@ -3121,7 +3247,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3147,7 +3276,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_subseq_end,
         option_subseq_start,
         option_threads,
@@ -3175,7 +3307,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3198,7 +3333,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3223,6 +3361,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sample_pct,
         option_sample_size,
@@ -3251,6 +3390,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_hardmask,
         option_log,
+        option_minseqlength,
         option_no_progress,
         option_notrunclabels,
         option_output,
@@ -3277,7 +3417,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3295,6 +3438,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -3343,6 +3487,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rowlen,
         option_samheader,
@@ -3369,7 +3514,13 @@ void args_init(int argc, char **argv)
         option_log,
         option_no_progress,
         option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
         option_sff_clip,
+        option_sizeout,
         option_threads,
         -1 },
 
@@ -3391,7 +3542,9 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
         option_sizeout,
         option_threads,
         option_topn,
@@ -3435,7 +3588,9 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
         option_sizeout,
         option_threads,
         option_topn,
@@ -3462,7 +3617,9 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
         option_sizeout,
         option_threads,
         option_topn,
@@ -3495,6 +3652,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -3532,6 +3690,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -3569,6 +3728,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_sizein,
         option_sizeout,
@@ -3608,6 +3768,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_self,
         option_selfid,
@@ -3632,7 +3793,10 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
+        option_sizein,
+        option_sizeout,
         option_threads,
         option_xee,
         option_xsize,
@@ -3713,6 +3877,7 @@ void args_init(int argc, char **argv)
         option_relabel,
         option_relabel_keep,
         option_relabel_md5,
+        option_relabel_self,
         option_relabel_sha1,
         option_rightjust,
         option_rowlen,
@@ -3905,14 +4070,9 @@ void args_init(int argc, char **argv)
   if (opt_sample_size < 0)
     fatal("The argument to --sample_size must not be negative");
 
-  if (opt_relabel_sha1 && opt_relabel_md5)
-    fatal("Specify either --relabel_sha1 or --relabel_md5, not both");
-
-  if (opt_relabel && opt_relabel_md5)
-    fatal("Specify either --relabel or --relabel_md5, not both");
-
-  if (opt_relabel && opt_relabel_sha1)
-    fatal("Specify either --relabel or --relabel_sha1, not both");
+  if (((opt_relabel ? 1 : 0) +
+       opt_relabel_md5 + opt_relabel_self + opt_relabel_sha1) > 1)
+    fatal("Specify only one of --relabel, --relabel_self, --relabel_sha1, or --relabel_md5");
 
   if (opt_fastq_tail < 1)
     fatal("The argument to --fastq_tail must be positive");
@@ -3965,6 +4125,9 @@ void args_init(int argc, char **argv)
   if (opt_maxsize < 1)
     fatal("The argument to maxsize must be at least 1");
 
+  if (opt_maxhits < 0)
+    fatal("The argument to maxhits cannot be negative");
+
 
   /* TODO: check valid range of gap penalties */
 
@@ -3995,6 +4158,9 @@ void args_init(int argc, char **argv)
 
   /* set defaults parameters, if not specified */
 
+  if (opt_maxhits == 0)
+    opt_maxhits = LONG_MAX;
+
   if (opt_minwordmatches < 0)
     opt_minwordmatches = minwordmatches_defaults[opt_wordlength];
 
@@ -4020,17 +4186,26 @@ void args_init(int argc, char **argv)
 
   if (opt_minseqlength < 0)
     {
-      if (opt_cluster_smallmem || opt_cluster_fast || opt_cluster_size ||
-          opt_usearch_global || opt_derep_fulllength || opt_derep_prefix ||
-          opt_makeudb_usearch || opt_cluster_unoise || opt_sintax)
+      if (opt_cluster_fast ||
+          opt_cluster_size ||
+          opt_cluster_smallmem ||
+          opt_cluster_unoise ||
+          opt_derep_fulllength ||
+          opt_derep_id ||
+          opt_derep_prefix ||
+          opt_makeudb_usearch ||
+          opt_sintax ||
+          opt_usearch_global)
         opt_minseqlength = 32;
       else
         opt_minseqlength = 1;
     }
 
+  if (opt_sintax)
+    opt_notrunclabels = 1;
+
   if (opt_idoffset >= opt_minseqlength)
     fatal("The argument to --idoffset must be smaller than to --minseqlength");
-
 }
 
 void show_publication()
@@ -4045,7 +4220,29 @@ void show_publication()
 void cmd_version()
 {
   if (! opt_quiet)
-    show_publication();
+    {
+      show_publication();
+
+#ifdef HAVE_ZLIB_H
+      printf("Compiled with support for gzip-compressed files,");
+      if (gz_lib)
+        printf(" and the library is loaded.\n");
+      else
+        printf(" but the library was not found.\n");
+#else
+      printf("Compiled without support for gzip-compressed files.\n");
+#endif
+
+#ifdef HAVE_BZLIB_H
+      printf("Compiled with support for bzip2-compressed files,");
+      if (bz2_lib)
+        printf(" and the library is loaded.\n");
+      else
+        printf(" but the library was not found.\n");
+#else
+      printf("Compiled without support for bzip2-compressed files.\n");
+#endif
+    }
 }
 
 void cmd_help()
@@ -4102,6 +4299,7 @@ void cmd_help()
               "  --relabel STRING            relabel nonchimeras with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
               "  --sizeout                   include abundance information when relabelling\n"
               "  --uchimealns FILENAME       output chimera alignments to file\n"
@@ -4139,6 +4337,7 @@ void cmd_help()
               "  --relabel STRING            relabel centroids with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
               "  --sizeorder                 sort accepted centroids by abundance, AGC\n"
               "  --sizeout                   write cluster abundances to centroid file\n"
@@ -4157,6 +4356,7 @@ void cmd_help()
               "\n"
               "Dereplication and rereplication\n"
               "  --derep_fulllength FILENAME dereplicate sequences in the given FASTA file\n"
+              "  --derep_id FILENAME         dereplicate using both identifiers and sequences\n"
               "  --derep_prefix FILENAME     dereplicate sequences in file based on prefixes\n"
               "  --rereplicate FILENAME      rereplicate sequences in the given FASTA file\n"
               " Parameters\n"
@@ -4169,6 +4369,7 @@ void cmd_help()
               "  --relabel STRING            relabel with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
               "  --sizeout                   write abundance annotation to output\n"
               "  --topn INT                  output only n most abundant sequences after derep\n"
@@ -4243,7 +4444,7 @@ void cmd_help()
               " Data\n"
               "  --reverse FILENAME          specify FASTQ file with reverse reads\n"
               " Parameters\n"
-              "  --fastq_allowmergestagger   Allow merging of staggered reads\n"
+              "  --fastq_allowmergestagger   allow merging of staggered reads\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
               "  --fastq_maxdiffpct REAL     maximum percentage diff. bases in overlap (100.0)\n"
               "  --fastq_maxdiffs INT        maximum number of different bases in overlap (10)\n"
@@ -4268,7 +4469,7 @@ void cmd_help()
               "  --fastqout FILENAME         FASTQ output filename for merged sequences\n"
               "  --fastqout_notmerged_fwd FN FASTQ filename for non-merged forward sequences\n"
               "  --fastqout_notmerged_rev FN FASTQ filename for non-merged reverse sequences\n"
-              "  --label_suffix              suffix to append to label of merged sequences\n"
+              "  --label_suffix STRING       suffix to append to label of merged sequences\n"
               "  --xee                       remove expected errors (ee) info from output\n"
               "\n"
               "Pairwise alignment\n"
@@ -4277,8 +4478,18 @@ void cmd_help()
               "  --alnout FILENAME           filename for human-readable alignment output\n"
               "  --acceptall                 output all pairwise alignments\n"
               "\n"
+              "Restriction site cutting\n"
+              "  --cut FILENAME              filename of FASTA formatted input sequences\n"
+              " Parameters\n"
+              "  --cut_pattern STRING        pattern to match with ^ and _ at cut sites\n"
+              " Output\n"
+              "  --fastaout FILENAME         FASTA filename for fragments on forward strand\n"
+              "  --fastaout_rev FILENAME     FASTA filename for fragments on reverse strand\n"
+              "  --fastaout_discarded FN     FASTA filename for non-matching sequences\n"
+              "  --fastaout_discarded_rev FN FASTA filename for non-matching, reverse compl.\n"
+              "\n"
               "Reverse complementation\n"
-              "  --fastx_revcomp FILENAME    Reverse-complement seqs in FASTA or FASTQ file\n"
+              "  --fastx_revcomp FILENAME    reverse-complement seqs in FASTA or FASTQ file\n"
               " Parameters\n"
               "  --fastq_ascii INT           FASTQ input quality score ASCII base char (33)\n"
               "  --fastq_qmax INT            maximum base quality value for FASTQ input (41)\n"
@@ -4286,7 +4497,7 @@ void cmd_help()
               " Output\n"
               "  --fastaout FILENAME         FASTA output filename\n"
               "  --fastqout FILENAME         FASTQ output filename\n"
-              "  --label_suffix STRING       Label to append to identifier in the output\n"
+              "  --label_suffix STRING       label to append to identifier in the output\n"
               "\n"
               "Searching\n"
               "  --search_exact FILENAME     filename of queries for exact match search\n"
@@ -4373,6 +4584,7 @@ void cmd_help()
               "  --relabel STRING            relabel sequences with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
               "  --sizeout                   include abundance information when relabelling\n"
               "  --topn INT                  output just first n sequences\n"
@@ -4396,6 +4608,7 @@ void cmd_help()
               "  --relabel STRING            relabel sequences with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
               "  --sizeout                   update abundance information in output\n"
               "  --xsize                     strip abundance information in output\n"
@@ -4442,6 +4655,7 @@ void cmd_help()
               "  --relabel STRING            relabel filtered sequences with given prefix\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
               "  --relabel_md5               relabel filtered sequences with md5 digest\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
               "  --relabel_sha1              relabel filtered sequences with sha1 digest\n"
               "  --sizeout                   include abundance information when relabelling\n"
               "  --xee                       remove expected errors (ee) info from output\n"
@@ -4550,6 +4764,8 @@ void cmd_derep()
 
   if (opt_derep_fulllength)
     derep_fulllength();
+  else if (opt_derep_id)
+    derep_id();
   else
     {
       if (opt_strand > 1)
@@ -4635,6 +4851,7 @@ void cmd_none()
             "\n"
             "vsearch --allpairs_global FILENAME --id 0.5 --alnout FILENAME\n"
             "vsearch --cluster_size FILENAME --id 0.97 --centroids FILENAME\n"
+            "vsearch --cut FILENAME --cut_pattern G^AATT_C --fastaout FILENAME\n"
             "vsearch --derep_fulllength FILENAME --output FILENAME\n"
             "vsearch --fastq_chars FILENAME\n"
             "vsearch --fastq_convert FILENAME --fastqout FILENAME --fastq_ascii 64\n"
@@ -4841,7 +5058,7 @@ int main(int argc, char** argv)
     cmd_sortbysize();
   else if (opt_sortbylength)
     cmd_sortbylength();
-  else if (opt_derep_fulllength || opt_derep_prefix)
+  else if (opt_derep_fulllength || opt_derep_id || opt_derep_prefix)
     cmd_derep();
   else if (opt_shuffle)
     cmd_shuffle();
@@ -4899,6 +5116,8 @@ int main(int argc, char** argv)
     fastx_getseqs();
   else if (opt_fastx_getsubseq)
     fastx_getsubseq();
+  else if (opt_cut)
+    cut();
   else
     cmd_none();
 

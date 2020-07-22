@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -170,6 +170,27 @@ void fastx_filter_header(fastx_handle h, bool truncateatspace)
                     h->lineno);
 
           exit(EXIT_FAILURE);
+
+        case 7:
+          /* Non-ASCII but acceptable */
+          fprintf(stderr,
+                  "\n"
+                  "WARNING: Non-ASCII character encountered in FASTA/FASTQ header.\n"
+                  "Character no %d (0x%2x) on or right before line %"
+                  PRIu64 ".\n",
+                  c, c,
+                  h->lineno);
+
+          if (fp_log)
+            fprintf(fp_log,
+                    "\n"
+                    "WARNING: Non-ASCII character encountered in FASTA/FASTQ header.\n"
+                    "Character no %d (0x%2x) on or right before line %"
+                    PRIu64 ".\n",
+                    c, c,
+                    h->lineno);
+
+          *q++ = c;
           break;
 
         case 5:

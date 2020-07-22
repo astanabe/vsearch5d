@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -61,14 +61,14 @@
 */
 
 #ifdef __x86_64__
-void increment_counters_from_bitmap_sse2(unsigned short * counters,
+void increment_counters_from_bitmap_sse2(count_t * counters,
                                          unsigned char * bitmap,
                                          unsigned int totalbits);
-void increment_counters_from_bitmap_ssse3(unsigned short * counters,
+void increment_counters_from_bitmap_ssse3(count_t * counters,
                                           unsigned char * bitmap,
                                           unsigned int totalbits);
 #else
-void increment_counters_from_bitmap(unsigned short * counters,
+void increment_counters_from_bitmap(count_t * counters,
                                     unsigned char * bitmap,
                                     unsigned int totalbits);
 #endif

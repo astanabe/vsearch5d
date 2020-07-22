@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -206,9 +206,10 @@ void rehash(struct bucket * * hashtableref, int64_t alloc_clusters)
   * hashtableref = new_hashtable;
 }
 
-
-void derep_fulllength()
+void derep(char * input_filename, bool use_header)
 {
+  /* dereplicate full length sequences, optionally require identical headers */
+
   show_rusage();
 
   FILE * fp_output = 0;
@@ -228,7 +229,7 @@ void derep_fulllength()
         fatal("Unable to open output (uc) file for writing");
     }
 
-  fastx_handle h = fastx_open(opt_derep_fulllength);
+  fastx_handle h = fastx_open(input_filename);
 
   show_rusage();
 
@@ -283,7 +284,7 @@ void derep_fulllength()
   char * rc_seq_up = (char*) xmalloc(alloc_seqlen + 1);
 
   char * prompt = 0;
-  if (xsprintf(& prompt, "Dereplicating file %s", opt_derep_fulllength) == -1)
+  if (xsprintf(& prompt, "Dereplicating file %s", input_filename) == -1)
     fatal("Out of memory");
 
   progress_init(prompt, filesize);
@@ -370,6 +371,8 @@ void derep_fulllength()
         }
 
       char * seq = fastx_get_sequence(h);
+      char * header = fastx_get_header(h);
+      int64_t headerlen = fastx_get_header_length(h);
 
       /* normalize sequence: uppercase and replace U by T  */
       string_normalize(seq_up, seq, seqlen);
@@ -387,13 +390,16 @@ void derep_fulllength()
       */
 
       uint64_t hash = HASH(seq_up, seqlen);
+      if (use_header)
+        hash ^= HASH(header, headerlen);
       uint64_t j = hash & hash_mask;
       struct bucket * bp = hashtable + j;
 
       while ((bp->size)
              &&
              ((hash != bp->hash) ||
-              (seqcmp(seq_up, bp->seq, seqlen))))
+              (seqcmp(seq_up, bp->seq, seqlen)) ||
+              (use_header && strcmp(header, bp->header))))
         {
           j = (j+1) & hash_mask;
           bp = hashtable + j;
@@ -411,7 +417,8 @@ void derep_fulllength()
           while ((rc_bp->size)
                  &&
                  ((rc_hash != rc_bp->hash) ||
-                  (seqcmp(rc_seq_up, rc_bp->seq, seqlen))))
+                  (seqcmp(rc_seq_up, rc_bp->seq, seqlen)) ||
+                  (use_header && strcmp(header, bp->header))))
             {
               k = (k+1) & hash_mask;
               rc_bp = hashtable + k;
@@ -426,7 +433,6 @@ void derep_fulllength()
             }
         }
 
-      char * header = fastx_get_header(h);
       int abundance = fastx_get_abundance(h);
       int64_t ab = opt_sizein ? abundance : 1;
       sumsize += ab;
@@ -643,11 +649,11 @@ void derep_fulllength()
       for (uint64_t i=0; i<clusters; i++)
         {
           struct bucket * bp = hashtable + i;
-          char * h =  bp->header;
+          char * hh =  bp->header;
           int64_t len = strlen(bp->seq);
 
           fprintf(fp_uc, "S\t%" PRId64 "\t%" PRId64 "\t*\t*\t*\t*\t*\t%s\t*\n",
-                  i, len, h);
+                  i, len, hh);
 
           for (unsigned int next = nextseqtab[bp->seqno_first];
                next != terminal;
@@ -656,7 +662,7 @@ void derep_fulllength()
                     "H\t%" PRId64 "\t%" PRId64 "\t%.1f\t%s\t0\t0\t*\t%s\t%s\n",
                     i, len, 100.0,
                     (match_strand[next] ? "-" : "+"),
-                    headertab[next], h);
+                    headertab[next], hh);
 
           progress_update(i);
         }
@@ -1087,4 +1093,14 @@ void derep_prefix()
   xfree(nextseqtab);
   xfree(hashtable);
   db_free();
+}
+
+void derep_fulllength()
+{
+  derep(opt_derep_fulllength, false);
+}
+
+void derep_id()
+{
+  derep(opt_derep_id, true);
 }

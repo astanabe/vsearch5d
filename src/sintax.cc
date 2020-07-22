@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -218,7 +218,7 @@ void sintax_analyse(char * query_head,
   int level_match[tax_levels];
 
   /* check number of successful bootstraps */
-  if (count >= bootstrap_count / 2)
+  if (count >= (bootstrap_count+1) / 2)
     {
       char * best_h = db_getheader(best_seqno);
 
@@ -253,7 +253,7 @@ void sintax_analyse(char * query_head,
     }
 
   /* write to tabbedout file */
-  pthread_mutex_lock(&mutex_output);
+  xpthread_mutex_lock(&mutex_output);
   fprintf(fp_tabbedout, "%s\t", query_head);
 
   queries++;
@@ -315,7 +315,7 @@ void sintax_analyse(char * query_head,
 #endif
 
   fprintf(fp_tabbedout, "\n");
-  pthread_mutex_unlock(&mutex_output);
+  xpthread_mutex_unlock(&mutex_output);
 }
 
 void sintax_query(int64_t t)
@@ -324,6 +324,13 @@ void sintax_query(int64_t t)
   int best_seqno[2];
   int boot_count[2];
   unsigned int best_count[2];
+
+  best_count[0] = 0;
+  best_count[1] = 0;
+  best_seqno[0] = 0;
+  best_seqno[1] = 0;
+  boot_count[0] = 0;
+  boot_count[1] = 0;
 
   int qseqlen = si_plus[t].qseqlen;
   char * query_head = si_plus[t].query_head;
@@ -345,10 +352,6 @@ void sintax_query(int64_t t)
                    & kmersamplecount, & kmersample, MASK_NONE);
 
       /* perform 100 bootstraps */
-
-      best_count[s] = 0;
-      best_seqno[s] = 0;
-      boot_count[s] = 0;
 
       if (kmersamplecount >= subset_size)
         {
@@ -422,7 +425,7 @@ void sintax_thread_run(int64_t t)
 {
   while (1)
     {
-      pthread_mutex_lock(&mutex_input);
+      xpthread_mutex_lock(&mutex_input);
 
       if (fastx_next(query_fastx_h,
                      ! opt_notrunclabels,
@@ -470,7 +473,7 @@ void sintax_thread_run(int64_t t)
           uint64_t progress = fastx_get_position(query_fastx_h);
 
           /* let other threads read input */
-          pthread_mutex_unlock(&mutex_input);
+          xpthread_mutex_unlock(&mutex_input);
 
           /* minus strand: copy header and reverse complementary sequence */
           if (opt_strand > 1)
@@ -484,16 +487,16 @@ void sintax_thread_run(int64_t t)
           sintax_query(t);
 
           /* lock mutex for update of global data and output */
-          pthread_mutex_lock(&mutex_output);
+          xpthread_mutex_lock(&mutex_output);
 
           /* show progress */
           progress_update(progress);
 
-          pthread_mutex_unlock(&mutex_output);
+          xpthread_mutex_unlock(&mutex_output);
         }
       else
         {
-          pthread_mutex_unlock(&mutex_input);
+          xpthread_mutex_unlock(&mutex_input);
           break;
         }
     }
@@ -538,8 +541,8 @@ void sintax_thread_worker_run()
 {
   /* initialize threads, start them, join them and return */
 
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  xpthread_attr_init(&attr);
+  xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   /* init and create worker threads, put them into stand-by mode */
   for(int t=0; t<opt_threads; t++)
@@ -547,22 +550,20 @@ void sintax_thread_worker_run()
       sintax_thread_init(si_plus+t);
       if (si_minus)
         sintax_thread_init(si_minus+t);
-      if (pthread_create(pthread+t, &attr,
-                         sintax_thread_worker, (void*)(int64_t)t))
-        fatal("Cannot create thread");
+      xpthread_create(pthread+t, &attr,
+                      sintax_thread_worker, (void*)(int64_t)t);
     }
 
   /* finish and clean up worker threads */
   for(int t=0; t<opt_threads; t++)
     {
-      if (pthread_join(pthread[t], NULL))
-        fatal("Cannot join thread");
+      xpthread_join(pthread[t], NULL);
       sintax_thread_exit(si_plus+t);
       if (si_minus)
         sintax_thread_exit(si_minus+t);
     }
 
-  pthread_attr_destroy(&attr);
+  xpthread_attr_destroy(&attr);
 }
 
 void sintax()
@@ -619,8 +620,8 @@ void sintax()
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
   /* init mutexes for input and output */
-  pthread_mutex_init(&mutex_input, NULL);
-  pthread_mutex_init(&mutex_output, NULL);
+  xpthread_mutex_init(&mutex_input, NULL);
+  xpthread_mutex_init(&mutex_output, NULL);
 
   /* run */
 
@@ -638,8 +639,8 @@ void sintax()
 
   /* clean up */
 
-  pthread_mutex_destroy(&mutex_output);
-  pthread_mutex_destroy(&mutex_input);
+  xpthread_mutex_destroy(&mutex_output);
+  xpthread_mutex_destroy(&mutex_input);
 
   xfree(pthread);
   xfree(si_plus);

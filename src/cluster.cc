@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -182,21 +182,21 @@ void * threads_worker(void * vp)
 {
   int64_t t = (int64_t) vp;
   thread_info_s * tip = ti + t;
-  pthread_mutex_lock(&tip->mutex);
+  xpthread_mutex_lock(&tip->mutex);
   /* loop until signalled to quit */
   while (tip->work >= 0)
     {
       /* wait for work available */
       if (tip->work == 0)
-        pthread_cond_wait(&tip->cond, &tip->mutex);
+        xpthread_cond_wait(&tip->cond, &tip->mutex);
       if (tip->work > 0)
         {
           cluster_worker(t);
           tip->work = 0;
-          pthread_cond_signal(&tip->cond);
+          xpthread_cond_signal(&tip->cond);
         }
     }
-  pthread_mutex_unlock(&tip->mutex);
+  xpthread_mutex_unlock(&tip->mutex);
   return 0;
 }
 
@@ -218,27 +218,27 @@ void threads_wakeup(int queries)
       query_next += tip->query_count;
       threads_rest--;
 
-      pthread_mutex_lock(&tip->mutex);
+      xpthread_mutex_lock(&tip->mutex);
       tip->work = 1;
-      pthread_cond_signal(&tip->cond);
-      pthread_mutex_unlock(&tip->mutex);
+      xpthread_cond_signal(&tip->cond);
+      xpthread_mutex_unlock(&tip->mutex);
     }
 
   /* wait for theads to finish their work */
   for(int t=0; t < threads; t++)
     {
       thread_info_t * tip = ti + t;
-      pthread_mutex_lock(&tip->mutex);
+      xpthread_mutex_lock(&tip->mutex);
       while (tip->work > 0)
-        pthread_cond_wait(&tip->cond, &tip->mutex);
-      pthread_mutex_unlock(&tip->mutex);
+        xpthread_cond_wait(&tip->cond, &tip->mutex);
+      xpthread_mutex_unlock(&tip->mutex);
     }
 }
 
 void threads_init()
 {
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  xpthread_attr_init(&attr);
+  xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   /* allocate memory for thread info */
   ti = (thread_info_t *) xmalloc(opt_threads * sizeof(thread_info_t));
@@ -248,10 +248,9 @@ void threads_init()
     {
       thread_info_t * tip = ti + t;
       tip->work = 0;
-      pthread_mutex_init(&tip->mutex, 0);
-      pthread_cond_init(&tip->cond, 0);
-      if (pthread_create(&tip->thread, &attr, threads_worker, (void*)(int64_t)t))
-        fatal("Cannot create thread");
+      xpthread_mutex_init(&tip->mutex, 0);
+      xpthread_cond_init(&tip->cond, 0);
+      xpthread_create(&tip->thread, &attr, threads_worker, (void*)(int64_t)t);
     }
 }
 
@@ -263,20 +262,19 @@ void threads_exit()
       struct thread_info_s * tip = ti + t;
 
       /* tell worker to quit */
-      pthread_mutex_lock(&tip->mutex);
+      xpthread_mutex_lock(&tip->mutex);
       tip->work = -1;
-      pthread_cond_signal(&tip->cond);
-      pthread_mutex_unlock(&tip->mutex);
+      xpthread_cond_signal(&tip->cond);
+      xpthread_mutex_unlock(&tip->mutex);
 
       /* wait for worker to quit */
-      if (pthread_join(tip->thread, 0))
-        fatal("Cannot join thread");
+      xpthread_join(tip->thread, 0);
 
-      pthread_cond_destroy(&tip->cond);
-      pthread_mutex_destroy(&tip->mutex);
+      xpthread_cond_destroy(&tip->cond);
+      xpthread_mutex_destroy(&tip->mutex);
     }
   xfree(ti);
-  pthread_attr_destroy(&attr);
+  xpthread_attr_destroy(&attr);
 }
 
 void cluster_query_init(struct searchinfo_s * si)
@@ -340,6 +338,11 @@ char * relabel_otu(int clusterno, char * sequence, int seqlen)
       label = (char*) xmalloc(strlen(opt_relabel) + 21);
       sprintf(label, "%s%d", opt_relabel, clusterno+1);
     }
+  else if (opt_relabel_self)
+    {
+      label = (char*) xmalloc(seqlen + 1);
+      sprintf(label, "%.*s", seqlen, sequence);
+    }
   else if (opt_relabel_sha1)
     {
       label = (char*) xmalloc(LEN_HEX_DIG_SHA1);
@@ -365,7 +368,7 @@ void cluster_core_results_hit(struct hit * best,
 
   if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
     {
-      if (opt_relabel || opt_relabel_sha1 || opt_relabel_md5)
+      if (opt_relabel || opt_relabel_self || opt_relabel_sha1 || opt_relabel_md5)
         {
           char * label = relabel_otu(clusterno,
                                      db_getsequence(best->target),
@@ -435,7 +438,7 @@ void cluster_core_results_nohit(int clusterno,
 
   if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
     {
-      if (opt_relabel || opt_relabel_sha1 || opt_relabel_md5)
+      if (opt_relabel || opt_relabel_self || opt_relabel_sha1 || opt_relabel_md5)
         {
           char * label = relabel_otu(clusterno, qsequence, qseqlen);
           otutable_add(query_head, label, qsize);
@@ -1196,12 +1199,17 @@ void cluster(char * dbname,
     }
 
 
-  /* Sort clusters */
+  /* Sort sequences in clusters by their abundance or ordinal number */
   /* Sequences in same cluster must always come right after each other. */
   /* The centroid sequence must be the first in each cluster. */
 
   progress_init("Sorting clusters", clusters);
-  qsort(clusterinfo, seqcount, sizeof(clusterinfo_t), compare_byclusterno);
+  if (opt_clusterout_sort)
+    qsort(clusterinfo, seqcount, sizeof(clusterinfo_t),
+          compare_byclusterabundance);
+  else
+    qsort(clusterinfo, seqcount, sizeof(clusterinfo_t),
+          compare_byclusterno);
   progress_done();
 
   progress_init("Writing clusters", seqcount);
@@ -1236,7 +1244,9 @@ void cluster(char * dbname,
                                 cluster_abundance[clusterno],
                                 clusterno+1,
                                 -1.0,
-                                -1, -1, 0, 0.0);
+                                -1,
+                                opt_clusterout_id ? clusterno : -1,
+                                0, 0.0);
 
           if (opt_uc)
             fprintf(fp_uc, "C\t%d\t%" PRId64 "\t*\t*\t*\t*\t*\t%s\t*\n",
@@ -1329,15 +1339,6 @@ void cluster(char * dbname,
                   100.0 * singletons / clusters);
           fprintf(fp_log, "\n");
         }
-    }
-
-  if (opt_clusterout_sort)
-    {
-      /* Optionally sort clusters by abundance */
-      progress_init("Sorting clusters by abundance", clusters);
-      qsort(clusterinfo, seqcount, sizeof(clusterinfo_t),
-            compare_byclusterabundance);
-      progress_done();
     }
 
   if (opt_msaout || opt_consout || opt_profile)

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -62,7 +62,7 @@
 
 #include "vsearch5d.h"
 
-static struct sortinfo_s
+static struct sortinfo_size_s
 {
   unsigned int size;
   unsigned int seqno;
@@ -70,8 +70,8 @@ static struct sortinfo_s
 
 int sortbysize_compare(const void * a, const void * b)
 {
-  struct sortinfo_s * x = (struct sortinfo_s *) a;
-  struct sortinfo_s * y = (struct sortinfo_s *) b;
+  struct sortinfo_size_s * x = (struct sortinfo_size_s *) a;
+  struct sortinfo_size_s * y = (struct sortinfo_size_s *) b;
 
   /* highest abundance first, then by label, otherwise keep order */
 
@@ -110,7 +110,8 @@ void sortbysize()
 
   progress_init("Getting sizes", dbsequencecount);
 
-  sortinfo = (struct sortinfo_s*) xmalloc(dbsequencecount * sizeof(sortinfo_s));
+  sortinfo = (struct sortinfo_size_s*)
+    xmalloc(dbsequencecount * sizeof(sortinfo_size_s));
 
   int passed = 0;
 
@@ -132,7 +133,7 @@ void sortbysize()
   show_rusage();
 
   progress_init("Sorting", 100);
-  qsort(sortinfo, passed, sizeof(sortinfo_s), sortbysize_compare);
+  qsort(sortinfo, passed, sizeof(sortinfo_size_s), sortbysize_compare);
   progress_done();
 
   double median = 0.0;

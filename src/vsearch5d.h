@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -102,12 +102,7 @@
 #ifdef __x86_64__
 
 #define PROG_CPU "x86_64"
-#ifdef __SSE2__
-#include <emmintrin.h>
-#endif
-#ifdef __SSSE3__
-#include <tmmintrin.h>
-#endif
+#include <x86intrin.h>
 
 #elif __PPC__
 
@@ -140,30 +135,50 @@
 #define bswap_32(x) _byteswap_ulong(x)
 #define bswap_64(x) _byteswap_uint64(x)
 
-#else
-
-#ifdef __APPLE__
+#elif __APPLE__
 
 #define PROG_OS "macos"
 #include <sys/sysctl.h>
 #include <libkern/OSByteOrder.h>
+#include <sys/resource.h>
 #define bswap_16(x) OSSwapInt16(x)
 #define bswap_32(x) OSSwapInt32(x)
 #define bswap_64(x) OSSwapInt64(x)
 
-#else
+#elif __linux__
 
-#ifdef __linux__
 #define PROG_OS "linux"
-#else
-#define PROG_OS "unknown"
-#endif
-
 #include <sys/sysinfo.h>
 #include <byteswap.h>
+#include <sys/resource.h>
 
-#endif
+#elif __FreeBSD__
 
+#define PROG_OS "freebsd"
+#include <sys/sysinfo.h>
+#include <sys/resource.h>
+#include <sys/endian.h>
+#define bswap_16(x) bswap16(x)
+#define bswap_32(x) bswap32(x)
+#define bswap_64(x) bswap64(x)
+
+#elif __NetBSD__
+
+#define PROG_OS "netbsd"
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/bswap.h>
+#define bswap_16(x) bswap16(x)
+#define bswap_32(x) bswap32(x)
+#define bswap_64(x) bswap64(x)
+/* Alters behavior, but NetBSD 7 does not have getopt_long_only() */
+#define getopt_long_only getopt_long
+
+#else
+
+#define PROG_OS "unknown"
+#include <sys/sysinfo.h>
+#include <byteswap.h>
 #include <sys/resource.h>
 
 #endif
@@ -234,6 +249,7 @@
 #include "fastqjoin.h"
 #include "sffconvert.h"
 #include "getseq.h"
+#include "cut.h"
 
 /* options */
 
@@ -251,6 +267,7 @@ extern bool opt_no_progress;
 extern bool opt_quiet;
 extern bool opt_relabel_keep;
 extern bool opt_relabel_md5;
+extern bool opt_relabel_self;
 extern bool opt_relabel_sha1;
 extern bool opt_samheader;
 extern bool opt_sff_clip;
@@ -270,10 +287,13 @@ extern char * opt_cluster_smallmem;
 extern char * opt_cluster_unoise;
 extern char * opt_clusters;
 extern char * opt_consout;
+extern char * opt_cut;
+extern char * opt_cut_pattern;
 extern char * opt_db;
 extern char * opt_dbmatched;
 extern char * opt_dbnotmatched;
 extern char * opt_derep_fulllength;
+extern char * opt_derep_id;
 extern char * opt_derep_prefix;
 extern char * opt_eetabbedout;
 extern char * opt_fastaout;

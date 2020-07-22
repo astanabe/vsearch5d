@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2019, Akifumi S. Tanabe
+  Copyright (C) 2016-2020, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2019, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
   This software is dual-licensed and available under a choice
@@ -86,19 +86,18 @@ void buffer_filter_extend(fastx_handle h,
                           uint64_t len,
                           unsigned int * char_action,
                           const unsigned char * char_mapping,
-                          uint64_t lineno_start)
+                          bool * ok,
+                          char * illegal_char)
 {
   buffer_makespace(dest_buffer, len+1);
 
   /* Strip unwanted characters from the string and raise warnings or
      errors on certain characters. */
 
-  uint64_t lineno = lineno_start;
-
   char * p = source_buf;
   char * d = dest_buffer->data + dest_buffer->length;
   char * q = d;
-  char msg[200];
+  * ok = true;
 
   for(uint64_t i = 0; i < len; i++)
     {
@@ -120,17 +119,9 @@ void buffer_filter_extend(fastx_handle h,
 
         case 2:
           /* fatal character */
-          if ((c>=32) && (c<127))
-            snprintf(msg,
-                     200,
-                     "Illegal character '%c'",
-                     c);
-          else
-            snprintf(msg,
-                     200,
-                     "Illegal unprintable ASCII character no %d",
-                     (unsigned char) c);
-          fastq_fatal(lineno, msg);
+          if (*ok)
+            * illegal_char = c;
+          * ok = false;
           break;
 
         case 3:
@@ -139,7 +130,6 @@ void buffer_filter_extend(fastx_handle h,
 
         case 4:
           /* newline (silently stripped) */
-          lineno++;
           break;
         }
     }
@@ -178,6 +168,10 @@ bool fastq_next(fastx_handle h,
   h->quality_buffer.data[0] = 0;
 
   h->lineno_start = h->lineno;
+
+  char msg[200];
+  bool ok = true;
+  char illegal_char = 0;
 
   uint64_t rest = fastx_file_fill_buffer(h);
 
@@ -223,8 +217,6 @@ bool fastq_next(fastx_handle h,
       rest -= len;
     }
 
-  uint64_t lineno_seq = h->lineno;
-
   /* read sequence line(s) */
   lf = 0;
   while (1)
@@ -257,17 +249,26 @@ bool fastq_next(fastx_handle h,
                            & h->sequence_buffer,
                            h->file_buffer.data + h->file_buffer.position,
                            len,
-                           char_fq_action_seq, char_mapping, lineno_seq);
+                           char_fq_action_seq, char_mapping,
+                           & ok, & illegal_char);
       h->file_buffer.position += len;
       rest -= len;
+
+      if (!ok)
+        {
+          if ((illegal_char >= 32) && (illegal_char < 127))
+            snprintf(msg,
+                     200,
+                     "Illegal sequence character '%c'",
+                     illegal_char);
+          else
+            snprintf(msg,
+                     200,
+                     "Illegal sequence character (unprintable, no %d)",
+                     (unsigned char) illegal_char);
+          fastq_fatal(h->lineno - (lf ? 1 : 0), msg);
+        }
     }
-
-#if 0
-  if (h->sequence_buffer.length == 0)
-    fastq_fatal(lineno_seq, "Empty sequence line");
-#endif
-
-  uint64_t lineno_plus = h->lineno;
 
   /* read + line */
 
@@ -321,12 +322,10 @@ bool fastq_next(fastx_handle h,
         plusline_invalid = 1;
     }
   if (plusline_invalid)
-    fastq_fatal(lineno_plus,
+    fastq_fatal(h->lineno - (lf ? 1 : 0),
                 "'+' line must be empty or identical to header");
 
   /* read quality line(s) */
-
-  uint64_t lineno_qual = h->lineno;
 
   lf = 0;
   while (1)
@@ -356,22 +355,38 @@ bool fastq_next(fastx_handle h,
           len = lf - (h->file_buffer.data + h->file_buffer.position) + 1;
           h->lineno++;
         }
+
       buffer_filter_extend(h,
                            & h->quality_buffer,
                            h->file_buffer.data + h->file_buffer.position,
                            len,
-                           char_fq_action_qual, chrmap_identity, lineno_qual);
+                           char_fq_action_qual, chrmap_identity,
+                           & ok, & illegal_char);
       h->file_buffer.position += len;
       rest -= len;
+
+      /* break if quality line already too long */
+      if (h->quality_buffer.length > h->sequence_buffer.length)
+        break;
+
+      if (!ok)
+        {
+          if ((illegal_char >= 32) && (illegal_char < 127))
+            snprintf(msg,
+                     200,
+                     "Illegal quality character '%c'",
+                     illegal_char);
+          else
+            snprintf(msg,
+                     200,
+                     "Illegal quality character (unprintable, no %d)",
+                     (unsigned char) illegal_char);
+          fastq_fatal(h->lineno - (lf ? 1 : 0), msg);
+        }
     }
 
-#if 0
-  if (h->quality_buffer.length == 0)
-    fastq_fatal(lineno_seq, "Empty quality line");
-#endif
-
   if (h->sequence_buffer.length != h->quality_buffer.length)
-    fastq_fatal(lineno_qual,
+    fastq_fatal(h->lineno - (lf ? 1 : 0),
                 "Sequence and quality lines must be equally long");
 
   fastx_filter_header(h, truncateatspace);
@@ -448,6 +463,12 @@ int64_t fastq_get_abundance_and_presence(fastx_handle h)
   return header_get_size(h->header_buffer.data, h->header_buffer.length);
 }
 
+inline void fprint_seq_label(FILE * fp, char * seq, int len)
+{
+  /* normalize first? */
+  fprintf(fp, "%.*s", len, seq);
+}
+
 void fastq_print_general(FILE * fp,
                          char * seq,
                          int len,
@@ -460,7 +481,9 @@ void fastq_print_general(FILE * fp,
 {
   fprintf(fp, "@");
 
-  if (opt_relabel_sha1)
+  if (opt_relabel_self)
+    fprint_seq_label(fp, seq, len);
+  else if (opt_relabel_sha1)
     fprint_seq_digest_sha1(fp, seq, len);
   else if (opt_relabel_md5)
     fprint_seq_digest_md5(fp, seq, len);
@@ -477,6 +500,9 @@ void fastq_print_general(FILE * fp,
                                   xee);
     }
 
+  if (opt_label_suffix)
+    fprintf(fp, "%s", opt_label_suffix);
+
   if (opt_sizeout && (abundance > 0))
     fprintf(fp, ";size=%u", abundance);
 
@@ -484,7 +510,7 @@ void fastq_print_general(FILE * fp,
     fprintf(fp, ";ee=%.4lf", ee);
 
   if (opt_relabel_keep &&
-      ((opt_relabel && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5))
+      ((opt_relabel && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5 || opt_relabel_self))
     fprintf(fp, " %.*s", header_len, header);
 
   fprintf(fp, "\n%.*s\n+\n%.*s\n", len, seq, len, quality);
