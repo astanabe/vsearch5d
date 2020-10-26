@@ -120,6 +120,7 @@ char * opt_fastq_eestats;
 char * opt_fastq_eestats2;
 char * opt_fastq_filter;
 char * opt_fastq_join;
+char * opt_fastq_join2;
 char * opt_fastq_mergepairs;
 char * opt_fastq_stats;
 char * opt_fastqout;
@@ -708,6 +709,7 @@ void args_init(int argc, char **argv)
   opt_fastq_eestats2 = 0;
   opt_fastq_filter = 0;
   opt_fastq_join = 0;
+  opt_fastq_join2 = 0;
   opt_fastq_maxdiffpct = 100.0;
   opt_fastq_maxdiffs = 10;
   opt_fastq_maxee = DBL_MAX;
@@ -945,6 +947,7 @@ void args_init(int argc, char **argv)
     option_fastq_eestats2,
     option_fastq_filter,
     option_fastq_join,
+    option_fastq_join2,
     option_fastq_maxdiffpct,
     option_fastq_maxdiffs,
     option_fastq_maxee,
@@ -1175,6 +1178,7 @@ void args_init(int argc, char **argv)
     {"fastq_eestats2",        required_argument, 0, 0 },
     {"fastq_filter",          required_argument, 0, 0 },
     {"fastq_join",            required_argument, 0, 0 },
+    {"fastq_join2",           required_argument, 0, 0 },
     {"fastq_maxdiffpct",      required_argument, 0, 0 },
     {"fastq_maxdiffs",        required_argument, 0, 0 },
     {"fastq_maxee",           required_argument, 0, 0 },
@@ -2213,6 +2217,10 @@ void args_init(int argc, char **argv)
           opt_fastq_join = optarg;
           break;
 
+        case option_fastq_join2:
+          opt_fastq_join2 = optarg;
+          break;
+
         case option_join_padgap:
           opt_join_padgap = optarg;
           break;
@@ -2350,6 +2358,7 @@ void args_init(int argc, char **argv)
       option_fastq_eestats2,
       option_fastq_filter,
       option_fastq_join,
+      option_fastq_join2,
       option_fastq_mergepairs,
       option_fastq_stats,
       option_fastx_filter,
@@ -3061,6 +3070,33 @@ void args_init(int argc, char **argv)
         -1 },
 
       { option_fastq_join,
+        option_bzip2_decompress,
+        option_fasta_width,
+        option_fastaout,
+        option_fastq_ascii,
+        option_fastq_qmax,
+        option_fastq_qmin,
+        option_fastqout,
+        option_gzip_decompress,
+        option_join_padgap,
+        option_join_padgapq,
+        option_log,
+        option_no_progress,
+        option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
+        option_reverse,
+        option_sizein,
+        option_sizeout,
+        option_threads,
+        option_xee,
+        option_xsize,
+        -1 },
+
+      { option_fastq_join2,
         option_bzip2_decompress,
         option_fasta_width,
         option_fastaout,

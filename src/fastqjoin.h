@@ -61,3 +61,4 @@
 */
 
 void fastq_join();
+void fastq_join2();

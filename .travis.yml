@@ -16,7 +16,3 @@ script:
 - ./autogen.sh
 - ./configure
 - make
-- export PATH=$PWD/bin:$PATH
-- git clone https://github.com/frederic-mahe/vsearch-tests.git
-- cd vsearch-tests
-- bash ./run_all_tests.sh

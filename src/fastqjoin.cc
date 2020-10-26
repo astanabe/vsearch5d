@@ -73,7 +73,7 @@ FILE * join_fileopenw(char * filename)
   return fp;
 }
 
-void fastq_join()
+void fastq_join2()
 {
   FILE * fp_fastqout = 0;
   FILE * fp_fastaout = 0;
@@ -182,6 +182,180 @@ void fastq_join()
         }
       seq[len] = 0;
       qual[len] = 0;
+
+      /* write output */
+
+      if (opt_fastqout)
+        {
+          fastq_print_general(fp_fastqout,
+                              seq,
+                              len,
+                              fastq_get_header(fastq_fwd),
+                              fastq_get_header_length(fastq_fwd),
+                              qual,
+                              0,
+                              total + 1,
+                              -1.0);
+        }
+
+      if (opt_fastaout)
+        {
+          fasta_print_general(fp_fastaout,
+                              0,
+                              seq,
+                              len,
+                              fastq_get_header(fastq_fwd),
+                              fastq_get_header_length(fastq_fwd),
+                              0,
+                              total + 1,
+                              -1.0,
+                              -1,
+                              -1,
+                              0,
+                              0);
+        }
+
+      total++;
+      progress_update(fastq_get_position(fastq_fwd));
+    }
+
+  progress_done();
+
+  if (fastq_next(fastq_rev, 0, chrmap_no_change))
+    fatal("More reverse reads than forward reads");
+
+  fprintf(stderr,
+          "%" PRIu64 " pairs joined\n",
+          total);
+
+  /* clean up */
+
+  if (opt_fastaout)
+    fclose(fp_fastaout);
+  if (opt_fastqout)
+    fclose(fp_fastqout);
+
+  fastq_close(fastq_rev);
+  fastq_rev = 0;
+  fastq_close(fastq_fwd);
+  fastq_fwd = 0;
+
+  xfree(seq);
+  xfree(qual);
+  xfree(padgap);
+  xfree(padgapq);
+}
+
+void fastq_join2()
+{
+  FILE * fp_fastqout = 0;
+  FILE * fp_fastaout = 0;
+
+  fastx_handle fastq_fwd = 0;
+  fastx_handle fastq_rev = 0;
+
+  uint64_t total = 0;
+
+  /* check input and options */
+
+  if (!opt_reverse)
+    fatal("No reverse reads file specified with --reverse");
+
+  if ((!opt_fastqout) && (!opt_fastaout))
+    fatal("No output files specified");
+
+  char * padgap = 0;
+  char * padgapq = 0;
+
+  if (opt_join_padgap)
+    padgap = xstrdup(opt_join_padgap);
+  else
+    padgap = xstrdup("NNNNNNNN");
+
+  uint64_t padlen = strlen(padgap);
+
+  if (opt_join_padgapq)
+    padgapq = xstrdup(opt_join_padgapq);
+  else
+    {
+      padgapq = (char *) xmalloc(padlen + 1);
+      for(uint64_t i = 0; i < padlen; i++)
+        padgapq[i] = 'I';
+      padgapq[padlen] = 0;
+    }
+
+  if (padlen != strlen(padgapq))
+    fatal("Strings given by --join_padgap and --join_padgapq differ in length");
+
+  /* open input files */
+
+  fastq_fwd = fastq_open(opt_fastq_join);
+  fastq_rev = fastq_open(opt_reverse);
+
+  /* open output files */
+
+  if (opt_fastqout)
+    fp_fastqout = join_fileopenw(opt_fastqout);
+  if (opt_fastaout)
+    fp_fastaout = join_fileopenw(opt_fastaout);
+
+  /* main */
+
+  uint64_t filesize = fastq_get_size(fastq_fwd);
+  progress_init("Joining reads", filesize);
+
+  /* do it */
+
+  total = 0;
+
+  uint64_t alloc = 0;
+  uint64_t len = 0;
+  char * seq = 0;
+  char * qual = 0;
+
+  while(fastq_next(fastq_fwd, 0, chrmap_no_change))
+    {
+      if (! fastq_next(fastq_rev, 0, chrmap_no_change))
+        fatal("More forward reads than reverse reads");
+
+      uint64_t fwd_seq_length = fastq_get_sequence_length(fastq_fwd);
+      uint64_t rev_seq_length = fastq_get_sequence_length(fastq_rev);
+
+      /* allocate enough mem */
+
+      uint64_t needed = fwd_seq_length + rev_seq_length + padlen + 1;
+      if (alloc < needed)
+        {
+          seq = (char *) xrealloc(seq, needed);
+          qual = (char *) xrealloc(qual, needed);
+          alloc = needed;
+        }
+
+      /* join them */
+
+      /* reverse complement reverse read */
+
+      char * rev_seq = fastq_get_sequence(fastq_rev);
+      char * rev_qual = fastq_get_quality(fastq_rev);
+
+      for(uint64_t i = 0; i < rev_seq_length; i++)
+        {
+          uint64_t rev_pos = rev_seq_length - 1 - i;
+          seq[len]  = chrmap_complement[(int)(rev_seq[rev_pos])];
+          qual[len] = rev_qual[rev_pos];
+          len++;
+        }
+      seq[len] = 0;
+      qual[len] = 0;
+      len = rev_seq_length;
+
+      strcpy(seq + len, padgap);
+      strcpy(qual + len, padgapq);
+      len += padlen;
+
+      strcpy(seq + len, fastq_get_sequence(fastq_fwd));
+      strcpy(qual + len, fastq_get_quality(fastq_fwd));
+      len += fwd_seq_length;
 
       /* write output */
 
