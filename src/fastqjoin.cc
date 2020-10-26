@@ -73,7 +73,7 @@ FILE * join_fileopenw(char * filename)
   return fp;
 }
 
-void fastq_join2()
+void fastq_join()
 {
   FILE * fp_fastqout = 0;
   FILE * fp_fastaout = 0;
