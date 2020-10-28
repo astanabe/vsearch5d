@@ -289,7 +289,7 @@ void fastq_join2()
 
   /* open input files */
 
-  fastq_fwd = fastq_open(opt_fastq_join);
+  fastq_fwd = fastq_open(opt_fastq_join2);
   fastq_rev = fastq_open(opt_reverse);
 
   /* open output files */
