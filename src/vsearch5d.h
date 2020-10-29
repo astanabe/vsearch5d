@@ -309,6 +309,7 @@ extern char * opt_fastq_eestats2;
 extern char * opt_fastq_eestats;
 extern char * opt_fastq_filter;
 extern char * opt_fastq_join;
+extern char * opt_fastq_join2;
 extern char * opt_fastq_mergepairs;
 extern char * opt_fastq_stats;
 extern char * opt_fastqout;
