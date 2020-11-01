@@ -4467,7 +4467,7 @@ void cmd_help()
               "\n"
               "Paired-end reads joining\n"
               "  --fastq_join FILENAME       join paired-end reads into one sequence with gap\n"
-              "  --fastq_join2 FILENAME       join paired-end reads into one sequence with gap\n"
+              "  --fastq_join2 FILENAME      join paired-end reads into one sequence with gap\n"
               " Data\n"
               "  --reverse FILENAME          specify FASTQ file with reverse reads\n"
               "  --join_padgap STRING        sequence string used for padding (NNNNNNNN)\n"
