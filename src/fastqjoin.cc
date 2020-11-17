@@ -333,6 +333,20 @@ void fastq_join2()
 
       /* join them */
 
+      len = rev_seq_length;
+
+      /* padding */
+
+      strcpy(seq + len, padgap);
+      strcpy(qual + len, padgapq);
+      len += padlen;
+
+      /* forward read */
+
+      strcpy(seq + len, fastq_get_sequence(fastq_fwd));
+      strcpy(qual + len, fastq_get_quality(fastq_fwd));
+      len += fwd_seq_length;
+
       /* reverse complement reverse read */
 
       char * rev_seq = fastq_get_sequence(fastq_rev);
@@ -341,20 +355,11 @@ void fastq_join2()
       for(uint64_t i = 0; i < rev_seq_length; i++)
         {
           uint64_t rev_pos = rev_seq_length - 1 - i;
-          seq[len]  = chrmap_complement[(int)(rev_seq[rev_pos])];
-          qual[len] = rev_qual[rev_pos];
-          len++;
+          seq[i]  = chrmap_complement[(int)(rev_seq[rev_pos])];
+          qual[i] = rev_qual[rev_pos];
         }
 
-      /* forward read */
-
-      strcpy(seq + len, padgap);
-      strcpy(qual + len, padgapq);
-      len += padlen;
-
-      strcpy(seq + len, fastq_get_sequence(fastq_fwd));
-      strcpy(qual + len, fastq_get_quality(fastq_fwd));
-      len += fwd_seq_length;
+      len = fwd_seq_length + rev_seq_length + padlen;
       seq[len] = 0;
       qual[len] = 0;
 
