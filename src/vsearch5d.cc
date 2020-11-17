@@ -1349,18 +1349,6 @@ void args_init(int argc, char **argv)
     {"wordlength",            required_argument, 0, 0 },
     {"xdrop_nw",              required_argument, 0, 0 },
     {"xee",                   no_argument,       0, 0 },
-    {"fastx_getseq",          required_argument, 0, 0 },
-    {"fastx_getseqs",         required_argument, 0, 0 },
-    {"fastx_getsubseq",       required_argument, 0, 0 },
-    {"label_substr_match",    no_argument,       0, 0 },
-    {"label",                 required_argument, 0, 0 },
-    {"subseq_start",          required_argument, 0, 0 },
-    {"subseq_end",            required_argument, 0, 0 },
-    {"notmatchedfq",          required_argument, 0, 0 },
-    {"label_field",           required_argument, 0, 0 },
-    {"label_word",            required_argument, 0, 0 },
-    {"label_words",           required_argument, 0, 0 },
-    {"labels",                required_argument, 0, 0 },
     {"xn",                    required_argument, 0, 0 },
     {"xsize",                 no_argument,       0, 0 },
     {"idoffset",              required_argument, 0, 0 },
@@ -4262,7 +4250,23 @@ void cmd_version()
 #ifdef HAVE_ZLIB_H
       printf("Compiled with support for gzip-compressed files,");
       if (gz_lib)
-        printf(" and the library is loaded.\n");
+        {
+          printf(" and the library is loaded.\n");
+
+          char * (*zlibVersion_p)();
+          zlibVersion_p = (char * (*)()) arch_dlsym(gz_lib,
+                                                    "zlibVersion");
+          char * gz_version = (*zlibVersion_p)();
+          uLong (*zlibCompileFlags_p)(void);
+          zlibCompileFlags_p = (uLong (*)()) arch_dlsym(gz_lib,
+                                                        "zlibCompileFlags");
+          uLong flags = (*zlibCompileFlags_p)();
+
+          printf("zlib version %s, compile flags %lx", gz_version, flags);
+          if (flags & 0x0400)
+            printf(" (ZLIB_WINAPI)");
+          printf("\n");
+        }
       else
         printf(" but the library was not found.\n");
 #else
