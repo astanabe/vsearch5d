@@ -345,9 +345,8 @@ void fastq_join2()
           qual[len] = rev_qual[rev_pos];
           len++;
         }
-      seq[len] = 0;
-      qual[len] = 0;
-      len = rev_seq_length;
+
+      /* forward read */
 
       strcpy(seq + len, padgap);
       strcpy(qual + len, padgapq);
@@ -356,6 +355,8 @@ void fastq_join2()
       strcpy(seq + len, fastq_get_sequence(fastq_fwd));
       strcpy(qual + len, fastq_get_quality(fastq_fwd));
       len += fwd_seq_length;
+      seq[len] = 0;
+      qual[len] = 0;
 
       /* write output */
 
