@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -113,7 +114,9 @@ uint64_t arch_get_memtotal()
   int64_t phys_pages = sysconf(_SC_PHYS_PAGES);
   int64_t pagesize = sysconf(_SC_PAGESIZE);
   if ((phys_pages == -1) || (pagesize == -1))
-    fatal("Cannot determine amount of RAM");
+    {
+      fatal("Cannot determine amount of RAM");
+    }
   return pagesize * phys_pages;
 
 #else
@@ -173,9 +176,13 @@ void arch_srandom()
 #else
       int fd = open("/dev/urandom", O_RDONLY);
       if (fd < 0)
-        fatal("Unable to open /dev/urandom");
+        {
+          fatal("Unable to open /dev/urandom");
+        }
       if (read(fd, & seed, sizeof(seed)) < 0)
-        fatal("Unable to read from /dev/urandom");
+        {
+          fatal("Unable to read from /dev/urandom");
+        }
       close(fd);
       srandom(seed);
 #endif
@@ -202,30 +209,40 @@ uint64_t arch_random()
 void * xmalloc(size_t size)
 {
   if (size == 0)
-    size = 1;
-  void * t = 0;
+    {
+      size = 1;
+    }
+  void * t = nullptr;
 #ifdef _WIN32
   t = _aligned_malloc(size, memalignment);
 #else
   if (posix_memalign(& t, memalignment, size))
-    t = 0;
+    {
+      t = nullptr;
+    }
 #endif
   if (!t)
-    fatal("Unable to allocate enough memory.");
+    {
+      fatal("Unable to allocate enough memory.");
+    }
   return t;
 }
 
 void * xrealloc(void *ptr, size_t size)
 {
   if (size == 0)
-    size = 1;
+    {
+      size = 1;
+    }
 #ifdef _WIN32
   void * t = _aligned_realloc(ptr, size, memalignment);
 #else
   void * t = realloc(ptr, size);
 #endif
   if (!t)
-    fatal("Unable to reallocate enough memory.");
+    {
+      fatal("Unable to reallocate enough memory.");
+    }
   return t;
 }
 
@@ -240,7 +257,9 @@ void xfree(void * ptr)
 #endif
     }
   else
-    fatal("Trying to free a null pointer");
+    {
+      fatal("Trying to free a null pointer");
+    }
 }
 
 int xfstat(int fd, xstat_t * buf)

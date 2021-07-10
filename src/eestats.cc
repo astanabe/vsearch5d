@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -123,13 +124,15 @@ void fastq_eestats()
 
   uint64_t filesize = fastq_get_size(h);
 
-  FILE * fp_output = 0;
+  FILE * fp_output = nullptr;
 
   if (opt_output)
     {
       fp_output = fopen_output(opt_output);
       if (!fp_output)
-        fatal("Unable to open output file for writing");
+        {
+          fatal("Unable to open output file for writing");
+        }
     }
 
   progress_init("Reading FASTQ file", filesize);
@@ -144,26 +147,26 @@ void fastq_eestats()
 
   int64_t ee_size = ee_start(len_alloc, resolution);
 
-  uint64_t * read_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * len_alloc);
+  auto * read_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * len_alloc);
   memset(read_length_table, 0, sizeof(uint64_t) * len_alloc);
 
-  uint64_t * qual_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * len_alloc *
-                                           (max_quality+1));
+  auto * qual_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * len_alloc *
+                                                 (max_quality+1));
   memset(qual_length_table, 0, sizeof(uint64_t) * len_alloc * (max_quality+1));
 
-  uint64_t * ee_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * ee_size);
+  auto * ee_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * ee_size);
   memset(ee_length_table, 0, sizeof(uint64_t) * ee_size);
 
-  double * sum_ee_length_table = (double*) xmalloc(sizeof(double) * len_alloc);
+  auto * sum_ee_length_table = (double*) xmalloc(sizeof(double) * len_alloc);
   memset(sum_ee_length_table, 0, sizeof(double) * len_alloc);
 
-  double * sum_pe_length_table = (double*) xmalloc(sizeof(double) * len_alloc);
+  auto * sum_pe_length_table = (double*) xmalloc(sizeof(double) * len_alloc);
   memset(sum_pe_length_table, 0, sizeof(double) * len_alloc);
 
   int64_t len_min = LONG_MAX;
   int64_t len_max = 0;
 
-  while(fastq_next(h, 0, chrmap_upcase))
+  while(fastq_next(h, false, chrmap_upcase))
     {
       seq_count++;
 
@@ -179,27 +182,27 @@ void fastq_eestats()
           int64_t new_ee_size = ee_start(new_alloc, resolution);
 
           read_length_table = (uint64_t*) xrealloc(read_length_table,
-                                              sizeof(uint64_t) * new_alloc);
+                                                   sizeof(uint64_t) * new_alloc);
           memset(read_length_table + len_alloc, 0,
                  sizeof(uint64_t) * (new_alloc - len_alloc));
 
           qual_length_table = (uint64_t*) xrealloc(qual_length_table, sizeof(uint64_t) *
-                                              new_alloc * (max_quality+1));
+                                                   new_alloc * (max_quality+1));
           memset(qual_length_table + (max_quality+1) * len_alloc, 0,
                  sizeof(uint64_t) * (new_alloc - len_alloc) * (max_quality+1));
 
           ee_length_table = (uint64_t*) xrealloc(ee_length_table, sizeof(uint64_t) *
-                                            new_ee_size);
+                                                 new_ee_size);
           memset(ee_length_table + ee_size, 0,
                  sizeof(uint64_t) * (new_ee_size - ee_size));
 
           sum_ee_length_table = (double*) xrealloc(sum_ee_length_table,
-                                              sizeof(double) * new_alloc);
+                                                   sizeof(double) * new_alloc);
           memset(sum_ee_length_table + len_alloc, 0,
                  sizeof(double) * (new_alloc - len_alloc));
 
           sum_pe_length_table = (double*) xrealloc(sum_pe_length_table,
-                                              sizeof(double) * new_alloc);
+                                                   sizeof(double) * new_alloc);
           memset(sum_pe_length_table + len_alloc, 0,
                  sizeof(double) * (new_alloc - len_alloc));
 
@@ -208,9 +211,13 @@ void fastq_eestats()
         }
 
       if (len < len_min)
-        len_min = len;
+        {
+          len_min = len;
+        }
       if (len > len_max)
-        len_max = len;
+        {
+          len_max = len;
+        }
 
       /* update quality statistics */
 
@@ -226,7 +233,9 @@ void fastq_eestats()
 
           int qual = fastq_get_qual_eestats(q[i]);
           if (qual < 0)
-            qual = 0;
+            {
+              qual = 0;
+            }
           qual_length_table[(max_quality+1)*i + qual]++;
 
 
@@ -281,16 +290,24 @@ void fastq_eestats()
               n += x;
 
               if (min_q<0)
-                min_q = q;
+                {
+                  min_q = q;
+                }
 
               if ((low_q<0) && (n >= 0.25 * reads))
-                low_q = q;
+                {
+                  low_q = q;
+                }
 
               if ((med_q<0) && (n >= 0.50 * reads))
-                med_q = q;
+                {
+                  med_q = q;
+                }
 
               if ((hi_q<0)  && (n >= 0.75 * reads))
-                hi_q = q;
+                {
+                  hi_q = q;
+                }
 
               max_q = q;
             }
@@ -320,16 +337,24 @@ void fastq_eestats()
               n += x;
 
               if (min_pe<0)
-                min_pe = pe;
+                {
+                  min_pe = pe;
+                }
 
               if ((low_pe<0) && (n >= 0.25 * reads))
-                low_pe = pe;
+                {
+                  low_pe = pe;
+                }
 
               if ((med_pe<0) && (n >= 0.50 * reads))
-                med_pe = pe;
+                {
+                  med_pe = pe;
+                }
 
               if ((hi_pe<0)  && (n >= 0.75 * reads))
-                hi_pe = pe;
+                {
+                  hi_pe = pe;
+                }
 
               max_pe = pe;
             }
@@ -359,16 +384,24 @@ void fastq_eestats()
               n += x;
 
               if (min_ee<0)
-                min_ee = e;
+                {
+                  min_ee = e;
+                }
 
               if ((low_ee<0) && (n >= 0.25 * reads))
-                low_ee = e;
+                {
+                  low_ee = e;
+                }
 
               if ((med_ee<0) && (n >= 0.50 * reads))
-                med_ee = e;
+                {
+                  med_ee = e;
+                }
 
               if ((hi_ee<0)  && (n >= 0.75 * reads))
-                hi_ee = e;
+                {
+                  hi_ee = e;
+                }
 
               max_ee = e;
             }
@@ -410,13 +443,15 @@ void fastq_eestats2()
 
   uint64_t filesize = fastq_get_size(h);
 
-  FILE * fp_output = 0;
+  FILE * fp_output = nullptr;
 
   if (opt_output)
     {
       fp_output = fopen_output(opt_output);
       if (!fp_output)
-        fatal("Unable to open output file for writing");
+        {
+          fatal("Unable to open output file for writing");
+        }
     }
 
   progress_init("Reading FASTQ file", filesize);
@@ -427,9 +462,9 @@ void fastq_eestats2()
 
   int len_steps = 0;
 
-  uint64_t * count_table = 0;
+  uint64_t * count_table = nullptr;
 
-  while(fastq_next(h, 0, chrmap_upcase))
+  while(fastq_next(h, false, chrmap_upcase))
     {
       seq_count++;
 
@@ -463,7 +498,9 @@ void fastq_eestats2()
 
           int qual = fastq_get_qual_eestats(q[i]);
           if (qual < 0)
-            qual = 0;
+            {
+              qual = 0;
+            }
 
           double pe = q2p(qual);
 
@@ -473,9 +510,15 @@ void fastq_eestats2()
             {
               uint64_t len_cutoff = opt_length_cutoffs_shortest + x * opt_length_cutoffs_increment;
               if (i+1 == len_cutoff)
-                for (int y = 0; y < opt_ee_cutoffs_count; y++)
-                  if (ee <= opt_ee_cutoffs_values[y])
-                    count_table[x * opt_ee_cutoffs_count + y]++;
+                {
+                  for (int y = 0; y < opt_ee_cutoffs_count; y++)
+                    {
+                      if (ee <= opt_ee_cutoffs_values[y])
+                        {
+                          count_table[x * opt_ee_cutoffs_count + y]++;
+                        }
+                    }
+                }
             }
         }
 
@@ -484,16 +527,28 @@ void fastq_eestats2()
   progress_done();
 
   fprintf(fp_output,
-          "%" PRIu64 " reads, max len %" PRIu64 ", avg %.1f\n\n",
-          seq_count, longest, 1.0 * symbols / seq_count);
+          "%" PRIu64 " reads",
+          seq_count);
+
+  if (seq_count > 0)
+    {
+      fprintf(fp_output,
+              ", max len %" PRIu64 ", avg %.1f",
+              longest, 1.0 * symbols / seq_count);
+    }
+  fprintf(fp_output, "\n\n");
 
   fprintf(fp_output, "Length");
   for (int y = 0; y < opt_ee_cutoffs_count; y++)
-    fprintf(fp_output, "         MaxEE %.2f", opt_ee_cutoffs_values[y]);
+    {
+      fprintf(fp_output, "         MaxEE %.2f", opt_ee_cutoffs_values[y]);
+    }
   fprintf(fp_output, "\n");
   fprintf(fp_output, "------");
   for (int y = 0; y < opt_ee_cutoffs_count; y++)
-    fprintf(fp_output, "   ----------------");
+    {
+      fprintf(fp_output, "   ----------------");
+    }
   fprintf(fp_output, "\n");
 
   for (int x = 0; x < len_steps; x++)
@@ -501,15 +556,19 @@ void fastq_eestats2()
       int len_cutoff = opt_length_cutoffs_shortest + x * opt_length_cutoffs_increment;
 
       if (len_cutoff > opt_length_cutoffs_longest)
-        break;
+        {
+          break;
+        }
 
       fprintf(fp_output, "%6d", len_cutoff);
 
       for (int y = 0; y < opt_ee_cutoffs_count; y++)
-        fprintf(fp_output,
-                "   %8" PRIu64 "(%5.1f%%)",
-                count_table[x * opt_ee_cutoffs_count + y],
-                100.0 * count_table[x * opt_ee_cutoffs_count + y] / seq_count);
+        {
+          fprintf(fp_output,
+                  "   %8" PRIu64 "(%5.1f%%)",
+                  count_table[x * opt_ee_cutoffs_count + y],
+                  100.0 * count_table[x * opt_ee_cutoffs_count + y] / seq_count);
+        }
       fprintf(fp_output, "\n");
     }
 
@@ -521,11 +580,15 @@ void fastq_eestats2()
 
       fprintf(fp_log, "Length");
       for (int y = 0; y < opt_ee_cutoffs_count; y++)
-        fprintf(fp_log, "         MaxEE %.2f", opt_ee_cutoffs_values[y]);
+        {
+          fprintf(fp_log, "         MaxEE %.2f", opt_ee_cutoffs_values[y]);
+        }
       fprintf(fp_log, "\n");
       fprintf(fp_log, "------");
       for (int y = 0; y < opt_ee_cutoffs_count; y++)
-        fprintf(fp_log, "   ----------------");
+        {
+          fprintf(fp_log, "   ----------------");
+        }
       fprintf(fp_log, "\n");
 
       for (int x = 0; x < len_steps; x++)
@@ -533,15 +596,19 @@ void fastq_eestats2()
           int len_cutoff = opt_length_cutoffs_shortest + x * opt_length_cutoffs_increment;
 
           if (len_cutoff > opt_length_cutoffs_longest)
-            break;
+            {
+              break;
+            }
 
           fprintf(fp_log, "%6d", len_cutoff);
 
           for (int y = 0; y < opt_ee_cutoffs_count; y++)
-            fprintf(fp_log,
-                    "   %8" PRIu64 "(%5.1f%%)",
-                    count_table[x * opt_ee_cutoffs_count + y],
-                    100.0 * count_table[x * opt_ee_cutoffs_count + y] / seq_count);
+            {
+              fprintf(fp_log,
+                      "   %8" PRIu64 "(%5.1f%%)",
+                      count_table[x * opt_ee_cutoffs_count + y],
+                      100.0 * count_table[x * opt_ee_cutoffs_count + y] / seq_count);
+            }
           fprintf(fp_log, "\n");
         }
     }
@@ -549,7 +616,7 @@ void fastq_eestats2()
   if (count_table)
     {
       xfree(count_table);
-      count_table = 0;
+      count_table = nullptr;
     }
 
   fclose(fp_output);

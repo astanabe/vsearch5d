@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -139,7 +140,7 @@ void increment_counters_from_bitmap(count_t * counters,
   for(int j=0; j<r; j++)
     {
       vector unsigned char r0, r1, r2;
-      vector bool char r3;
+      vector __bool char r3;
       vector signed short r4, r5;
 
       r0 = * (vector unsigned char *) p;
@@ -197,8 +198,8 @@ void increment_counters_from_bitmap_sse2(count_t * counters,
   const __m128i c3 =
     _mm_set_epi32(0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
 
-  unsigned short * p = (unsigned short *)(bitmap);
-  __m128i * q = (__m128i *)(counters);
+  auto * p = (unsigned short *)(bitmap);
+  auto * q = (__m128i *)(counters);
   int r = (totalbits + 15) / 16;
 
   for(int j=0; j<r; j++)

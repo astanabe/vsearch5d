@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -70,31 +71,37 @@
 #include "config.h"
 #endif
 
-#include <regex.h>
-
-#include <string>
-#include <set>
+#include <cctype>
+#include <cfloat>
+#include <cinttypes>
+#include <climits>
+#include <clocale>
+#include <cmath>
+#include <cstdarg>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 #include <map>
+#include <set>
+#include <string>
+
+/* include appropriate regex library */
+
+#ifdef HAVE_REGEX_H
+#include <regex.h>
+#else
+#include <regex>
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <stdio.h>
-#include <string.h>
 #include <pthread.h>
 #include <getopt.h>
-#include <stdlib.h>
-#include <time.h>
-#include <limits.h>
-#include <locale.h>
-#include <math.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <float.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <stdarg.h>
 
 #define PROG_NAME PACKAGE
 #define PROG_VERSION PACKAGE_VERSION
@@ -109,6 +116,7 @@
 #ifdef __LITTLE_ENDIAN__
 #define PROG_CPU "ppc64le"
 #include <altivec.h>
+#undef bool
 #else
 #error Big endian ppc64 CPUs not supported
 #endif
@@ -250,6 +258,8 @@
 #include "sffconvert.h"
 #include "getseq.h"
 #include "cut.h"
+#include "orient.h"
+#include "fa2fq.h"
 
 /* options */
 
@@ -296,6 +306,7 @@ extern char * opt_derep_fulllength;
 extern char * opt_derep_id;
 extern char * opt_derep_prefix;
 extern char * opt_eetabbedout;
+extern char * opt_fasta2fastq;
 extern char * opt_fastaout;
 extern char * opt_fastaout_discarded;
 extern char * opt_fastaout_discarded_rev;
@@ -342,6 +353,7 @@ extern char * opt_msaout;
 extern char * opt_nonchimeras;
 extern char * opt_notmatched;
 extern char * opt_notmatchedfq;
+extern char * opt_orient;
 extern char * opt_otutabout;
 extern char * opt_output;
 extern char * opt_pattern;

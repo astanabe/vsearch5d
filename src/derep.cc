@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -77,35 +78,51 @@ struct bucket
 
 int derep_compare_prefix(const void * a, const void * b)
 {
-  struct bucket * x = (struct bucket *) a;
-  struct bucket * y = (struct bucket *) b;
+  auto * x = (struct bucket *) a;
+  auto * y = (struct bucket *) b;
 
   /* highest abundance first, then by label, otherwise keep order */
 
   if (x->deleted > y->deleted)
-    return +1;
+    {
+      return +1;
+    }
   else if (x->deleted < y->deleted)
-    return -1;
+    {
+      return -1;
+    }
   else
     {
       if (x->size < y->size)
-        return +1;
+        {
+          return +1;
+        }
       else if (x->size > y->size)
-        return -1;
+        {
+          return -1;
+        }
       else
         {
           int r = strcmp(db_getheader(x->seqno_first),
                          db_getheader(y->seqno_first));
           if (r != 0)
-            return r;
+            {
+              return r;
+            }
           else
             {
               if (x->seqno_first < y->seqno_first)
-                return -1;
+                {
+                  return -1;
+                }
               else if (x->seqno_first > y->seqno_first)
-                return +1;
+                {
+                  return +1;
+                }
               else
-                return 0;
+                {
+                  return 0;
+                }
             }
         }
     }
@@ -113,36 +130,54 @@ int derep_compare_prefix(const void * a, const void * b)
 
 int derep_compare_full(const void * a, const void * b)
 {
-  struct bucket * x = (struct bucket *) a;
-  struct bucket * y = (struct bucket *) b;
+  auto * x = (struct bucket *) a;
+  auto * y = (struct bucket *) b;
 
   /* highest abundance first, then by label, otherwise keep order */
 
   if (x->deleted > y->deleted)
-    return +1;
+    {
+      return +1;
+    }
   else if (x->deleted < y->deleted)
-    return -1;
+    {
+      return -1;
+    }
   else
     {
       if (x->size < y->size)
-        return +1;
+        {
+          return +1;
+        }
       else if (x->size > y->size)
-        return -1;
+        {
+          return -1;
+        }
       else
         {
           if (x->size == 0)
-            return 0;
+            {
+              return 0;
+            }
           int r = strcmp(x->header, y->header);
           if (r != 0)
-            return r;
+            {
+              return r;
+            }
           else
             {
               if (x->seqno_first < y->seqno_first)
-                return -1;
+                {
+                  return -1;
+                }
               else if (x->seqno_first > y->seqno_first)
-                return +1;
+                {
+                  return +1;
+                }
               else
-                return 0;
+                {
+                  return 0;
+                }
             }
         }
     }
@@ -154,12 +189,16 @@ int seqcmp(char * a, char * b, int n)
   char * q = b;
 
   if (n <= 0)
-    return 0;
+    {
+      return 0;
+    }
 
   while ((n-- > 0) && (chrmap_4bit[(int)(*p)] == chrmap_4bit[(int)(*q)]))
     {
       if ((n == 0) || (*p == 0) || (*q == 0))
-        break;
+        {
+          break;
+        }
       p++;
       q++;
     }
@@ -183,7 +222,7 @@ void rehash(struct bucket * * hashtableref, int64_t alloc_clusters)
   uint64_t new_hashtablesize = 2 * old_hashtablesize;
   uint64_t new_hash_mask = new_hashtablesize - 1;
 
-  struct bucket * new_hashtable =
+  auto * new_hashtable =
     (struct bucket *) xmalloc(sizeof(bucket) * new_hashtablesize);
   memset(new_hashtable, 0, sizeof(bucket) * new_hashtablesize);
 
@@ -195,7 +234,9 @@ void rehash(struct bucket * * hashtableref, int64_t alloc_clusters)
         {
           uint64_t k = old_bp->hash & new_hash_mask;
           while (new_hashtable[k].size)
-            k = (k + 1) & new_hash_mask;
+            {
+              k = (k + 1) & new_hash_mask;
+            }
           struct bucket * new_bp = new_hashtable + k;
 
           * new_bp = * old_bp;
@@ -212,21 +253,25 @@ void derep(char * input_filename, bool use_header)
 
   show_rusage();
 
-  FILE * fp_output = 0;
-  FILE * fp_uc = 0;
+  FILE * fp_output = nullptr;
+  FILE * fp_uc = nullptr;
 
   if (opt_output)
     {
       fp_output = fopen_output(opt_output);
       if (!fp_output)
-        fatal("Unable to open output file for writing");
+        {
+          fatal("Unable to open output file for writing");
+        }
     }
 
   if (opt_uc)
     {
       fp_uc = fopen_output(opt_uc);
       if (!fp_uc)
-        fatal("Unable to open output (uc) file for writing");
+        {
+          fatal("Unable to open output (uc) file for writing");
+        }
     }
 
   fastx_handle h = fastx_open(input_filename);
@@ -234,7 +279,9 @@ void derep(char * input_filename, bool use_header)
   show_rusage();
 
   if (!h)
-    fatal("Unrecognized input file type (not proper FASTA or FASTQ format)");
+    {
+      fatal("Unrecognized input file type (not proper FASTA or FASTQ format)");
+    }
 
   uint64_t filesize = fastx_get_size(h);
 
@@ -248,16 +295,16 @@ void derep(char * input_filename, bool use_header)
 
   uint64_t hashtablesize = 2 * alloc_clusters;
   uint64_t hash_mask = hashtablesize - 1;
-  struct bucket * hashtable =
+  auto * hashtable =
     (struct bucket *) xmalloc(sizeof(bucket) * hashtablesize);
   memset(hashtable, 0, sizeof(bucket) * hashtablesize);
 
   show_rusage();
 
-  unsigned int * nextseqtab = 0;
-  const unsigned int terminal = (unsigned int)(-1);
-  char ** headertab = 0;
-  char * match_strand = 0;
+  unsigned int * nextseqtab = nullptr;
+  const auto terminal = (unsigned int)(-1);
+  char ** headertab = nullptr;
+  char * match_strand = nullptr;
 
   if (opt_uc)
     {
@@ -283,9 +330,11 @@ void derep(char * input_filename, bool use_header)
   char * seq_up = (char*) xmalloc(alloc_seqlen + 1);
   char * rc_seq_up = (char*) xmalloc(alloc_seqlen + 1);
 
-  char * prompt = 0;
+  char * prompt = nullptr;
   if (xsprintf(& prompt, "Dereplicating file %s", input_filename) == -1)
-    fatal("Out of memory");
+    {
+      fatal("Out of memory");
+    }
 
   progress_init(prompt, filesize);
 
@@ -319,9 +368,13 @@ void derep(char * input_filename, bool use_header)
 
       nucleotidecount += seqlen;
       if (seqlen > longest)
-        longest = seqlen;
+        {
+          longest = seqlen;
+        }
       if (seqlen < shortest)
-        shortest = seqlen;
+        {
+          shortest = seqlen;
+        }
 
       /* check allocations */
 
@@ -379,7 +432,9 @@ void derep(char * input_filename, bool use_header)
 
       /* reverse complement if necessary */
       if (opt_strand > 1)
-        reverse_complement(rc_seq_up, seq_up, seqlen);
+        {
+          reverse_complement(rc_seq_up, seq_up, seqlen);
+        }
 
       /*
         Find free bucket or bucket for identical sequence.
@@ -391,9 +446,13 @@ void derep(char * input_filename, bool use_header)
 
       uint64_t hash_header;
       if (use_header)
-        hash_header = HASH(header, headerlen);
+        {
+          hash_header = HASH(header, headerlen);
+        }
       else
-        hash_header = 0;
+        {
+          hash_header = 0;
+        }
 
       uint64_t hash = HASH(seq_up, seqlen) ^ hash_header;
       uint64_t j = hash & hash_mask;
@@ -433,7 +492,10 @@ void derep(char * input_filename, bool use_header)
               bp = rc_bp;
               j = k;
               if (opt_uc)
-                match_strand[sequencecount] = 1;
+                {
+                  match_strand[sequencecount] = 1;
+
+                }
             }
         }
 
@@ -467,7 +529,9 @@ void derep(char * input_filename, bool use_header)
         }
 
       if (bp->size > maxsize)
-        maxsize = bp->size;
+        {
+          maxsize = bp->size;
+        }
 
       sequencecount++;
 
@@ -482,37 +546,45 @@ void derep(char * input_filename, bool use_header)
   if (!opt_quiet)
     {
       if (sequencecount > 0)
-        fprintf(stderr,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64
-                ", max %'" PRIu64 ", avg %'.0f\n",
-                nucleotidecount,
-                sequencecount,
-                shortest,
-                longest,
-                nucleotidecount * 1.0 / sequencecount);
+        {
+          fprintf(stderr,
+                  "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64
+                  ", max %'" PRIu64 ", avg %'.0f\n",
+                  nucleotidecount,
+                  sequencecount,
+                  shortest,
+                  longest,
+                  nucleotidecount * 1.0 / sequencecount);
+        }
       else
-        fprintf(stderr,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n",
-                nucleotidecount,
-                sequencecount);
+        {
+          fprintf(stderr,
+                  "%'" PRIu64 " nt in %'" PRIu64 " seqs\n",
+                  nucleotidecount,
+                  sequencecount);
+        }
     }
 
   if (opt_log)
     {
       if (sequencecount > 0)
-        fprintf(fp_log,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64
-                ", max %'" PRIu64 ", avg %'.0f\n",
-                nucleotidecount,
-                sequencecount,
-                shortest,
-                longest,
-                nucleotidecount * 1.0 / sequencecount);
+        {
+          fprintf(fp_log,
+                  "%'" PRIu64 " nt in %'" PRIu64 " seqs, min %'" PRIu64
+                  ", max %'" PRIu64 ", avg %'.0f\n",
+                  nucleotidecount,
+                  sequencecount,
+                  shortest,
+                  longest,
+                  nucleotidecount * 1.0 / sequencecount);
+        }
       else
-        fprintf(fp_log,
-                "%'" PRIu64 " nt in %'" PRIu64 " seqs\n",
-                nucleotidecount,
-                sequencecount);
+        {
+          fprintf(fp_log,
+                  "%'" PRIu64 " nt in %'" PRIu64 " seqs\n",
+                  nucleotidecount,
+                  sequencecount);
+        }
     }
 
   if (discarded_short)
@@ -524,11 +596,13 @@ void derep(char * input_filename, bool use_header)
               (discarded_short == 1 ? "sequence" : "sequences"));
 
       if (opt_log)
-        fprintf(fp_log,
-                "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
-                opt_minseqlength,
-                discarded_short,
-                (discarded_short == 1 ? "sequence" : "sequences"));
+        {
+          fprintf(fp_log,
+                  "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
+                  opt_minseqlength,
+                  discarded_short,
+                  (discarded_short == 1 ? "sequence" : "sequences"));
+        }
     }
 
   if (discarded_long)
@@ -540,11 +614,13 @@ void derep(char * input_filename, bool use_header)
               (discarded_long == 1 ? "sequence" : "sequences"));
 
       if (opt_log)
-        fprintf(fp_log,
-                "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
-                opt_maxseqlength,
-                discarded_long,
-                (discarded_long == 1 ? "sequence" : "sequences"));
+        {
+          fprintf(fp_log,
+                  "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
+                  opt_maxseqlength,
+                  discarded_long,
+                  (discarded_long == 1 ? "sequence" : "sequences"));
+        }
     }
 
   xfree(seq_up);
@@ -561,10 +637,14 @@ void derep(char * input_filename, bool use_header)
   if (clusters > 0)
     {
       if (clusters % 2)
-        median = hashtable[(clusters-1)/2].size;
+        {
+          median = hashtable[(clusters-1)/2].size;
+        }
       else
-        median = (hashtable[(clusters/2)-1].size +
-                  hashtable[clusters/2].size) / 2.0;
+        {
+          median = (hashtable[(clusters/2)-1].size +
+                    hashtable[clusters/2].size) / 2.0;
+        }
     }
 
   average = 1.0 * sumsize / clusters;
@@ -572,26 +652,34 @@ void derep(char * input_filename, bool use_header)
   if (clusters < 1)
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "0 unique sequences\n");
+        {
+          fprintf(stderr,
+                  "0 unique sequences\n");
+        }
       if (opt_log)
-        fprintf(fp_log,
-                "0 unique sequences\n\n");
+        {
+          fprintf(fp_log,
+                  "0 unique sequences\n\n");
+        }
     }
   else
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "%" PRId64
-                " unique sequences, avg cluster %.1lf, median %.0f, max %"
-                PRIu64 "\n",
-                clusters, average, median, maxsize);
+        {
+          fprintf(stderr,
+                  "%" PRId64
+                  " unique sequences, avg cluster %.1lf, median %.0f, max %"
+                  PRIu64 "\n",
+                  clusters, average, median, maxsize);
+        }
       if (opt_log)
-        fprintf(fp_log,
-                "%" PRId64
-                " unique sequences, avg cluster %.1lf, median %.0f, max %"
-                PRIu64 "\n\n",
-                clusters, average, median, maxsize);
+        {
+          fprintf(fp_log,
+                  "%" PRId64
+                  " unique sequences, avg cluster %.1lf, median %.0f, max %"
+                  PRIu64 "\n\n",
+                  clusters, average, median, maxsize);
+        }
     }
 
   /* count selected */
@@ -605,7 +693,9 @@ void derep(char * input_filename, bool use_header)
         {
           selected++;
           if (selected == (uint64_t) opt_topn)
-            break;
+            {
+              break;
+            }
         }
     }
 
@@ -626,7 +716,7 @@ void derep(char * input_filename, bool use_header)
             {
               relabel_count++;
               fasta_print_general(fp_output,
-                                  0,
+                                  nullptr,
                                   bp->seq,
                                   strlen(bp->seq),
                                   bp->header,
@@ -634,9 +724,11 @@ void derep(char * input_filename, bool use_header)
                                   size,
                                   relabel_count,
                                   -1.0,
-                                  -1, -1, 0, 0.0);
+                                  -1, -1, nullptr, 0.0);
               if (relabel_count == opt_topn)
-                break;
+                {
+                  break;
+                }
             }
           progress_update(i);
         }
@@ -662,11 +754,13 @@ void derep(char * input_filename, bool use_header)
           for (unsigned int next = nextseqtab[bp->seqno_first];
                next != terminal;
                next = nextseqtab[next])
-            fprintf(fp_uc,
-                    "H\t%" PRId64 "\t%" PRId64 "\t%.1f\t%s\t0\t0\t*\t%s\t%s\n",
-                    i, len, 100.0,
-                    (match_strand[next] ? "-" : "+"),
-                    headertab[next], hh);
+            {
+              fprintf(fp_uc,
+                      "H\t%" PRId64 "\t%" PRId64 "\t%.1f\t%s\t0\t0\t*\t%s\t%s\n",
+                      i, len, 100.0,
+                      (match_strand[next] ? "-" : "+"),
+                      headertab[next], hh);
+            }
 
           progress_update(i);
         }
@@ -689,18 +783,22 @@ void derep(char * input_filename, bool use_header)
   if (selected < clusters)
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "%" PRId64 " uniques written, %"
-                PRId64 " clusters discarded (%.1f%%)\n",
-                selected, clusters - selected,
-                100.0 * (clusters - selected) / clusters);
+        {
+          fprintf(stderr,
+                  "%" PRId64 " uniques written, %"
+                  PRId64 " clusters discarded (%.1f%%)\n",
+                  selected, clusters - selected,
+                  100.0 * (clusters - selected) / clusters);
+        }
 
       if (opt_log)
-        fprintf(fp_log,
-                "%" PRId64 " uniques written, %"
-                PRId64 " clusters discarded (%.1f%%)\n\n",
-                selected, clusters - selected,
-                100.0 * (clusters - selected) / clusters);
+        {
+          fprintf(fp_log,
+                  "%" PRId64 " uniques written, %"
+                  PRId64 " clusters discarded (%.1f%%)\n\n",
+                  selected, clusters - selected,
+                  100.0 * (clusters - selected) / clusters);
+        }
     }
 
   show_rusage();
@@ -720,8 +818,12 @@ void derep(char * input_filename, bool use_header)
   if (opt_uc)
     {
       for (uint64_t i=0; i<alloc_seqs; i++)
-        if (headertab[i])
-          xfree(headertab[i]);
+        {
+          if (headertab[i])
+            {
+              xfree(headertab[i]);
+            }
+        }
       xfree(headertab);
       xfree(nextseqtab);
       xfree(match_strand);
@@ -736,21 +838,25 @@ void derep(char * input_filename, bool use_header)
 
 void derep_prefix()
 {
-  FILE * fp_output = 0;
-  FILE * fp_uc = 0;
+  FILE * fp_output = nullptr;
+  FILE * fp_uc = nullptr;
 
   if (opt_output)
     {
       fp_output = fopen_output(opt_output);
       if (!fp_output)
-        fatal("Unable to open output file for writing");
+        {
+          fatal("Unable to open output file for writing");
+        }
     }
 
   if (opt_uc)
     {
       fp_uc = fopen_output(opt_uc);
       if (!fp_uc)
-        fatal("Unable to open output (uc) file for writing");
+        {
+          fatal("Unable to open output (uc) file for writing");
+        }
     }
 
   db_read(opt_derep_prefix, 0);
@@ -772,7 +878,7 @@ void derep_prefix()
     }
   int hash_mask = hashtablesize - 1;
 
-  struct bucket * hashtable =
+  auto * hashtable =
     (struct bucket *) xmalloc(sizeof(bucket) * hashtablesize);
 
   memset(hashtable, 0, sizeof(bucket) * hashtablesize);
@@ -785,9 +891,9 @@ void derep_prefix()
 
   /* alloc and init table of links to other sequences in cluster */
 
-  unsigned int * nextseqtab
+  auto * nextseqtab
     = (unsigned int*) xmalloc(sizeof(unsigned int) * dbsequencecount);
-  const unsigned int terminal = (unsigned int)(-1);
+  const auto terminal = (unsigned int)(-1);
   memset(nextseqtab, -1, sizeof(unsigned int) * dbsequencecount);
 
   char * seq_up = (char*) xmalloc(db_getlongestsequence() + 1);
@@ -796,7 +902,7 @@ void derep_prefix()
 
   unsigned int len_longest = db_getlongestsequence();
   unsigned int len_shortest = db_getshortestsequence();
-  uint64_t * prefix_hashes = (uint64_t *)
+  auto * prefix_hashes = (uint64_t *)
     xmalloc(sizeof(uint64_t) * (len_longest+1));
 
   progress_init("Dereplicating", dbsequencecount);
@@ -812,22 +918,22 @@ void derep_prefix()
       sumsize += ab;
 
       /*
-         Look for matching identical or prefix sequences.
+        Look for matching identical or prefix sequences.
 
-         Use a hash function that can quickly be applied iteratively on longer
-         and longer sequences.
+        Use a hash function that can quickly be applied iteratively on longer
+        and longer sequences.
 
-         Hash values are generated for all prefixes and saved.
+        Hash values are generated for all prefixes and saved.
 
-         Should start at exact sequence and then try shorter and shorter
-         sequences.
+        Should start at exact sequence and then try shorter and shorter
+        sequences.
 
-         No need to check shorter sequences than the shortest in the database.
+        No need to check shorter sequences than the shortest in the database.
 
-         Three cases:
-         1) Exact match: Update count, point to next
-         2) Prefix match: Mark old, insert new, update count, point to next
-         3) No match: Insert new entry
+        Three cases:
+        1) Exact match: Update count, point to next
+        2) Prefix match: Mark old, insert new, update count, point to next
+        3) No match: Insert new entry
 
       */
 
@@ -857,7 +963,9 @@ void derep_prefix()
         {
           bp++;
           if (bp >= hashtable + hashtablesize)
-            bp = hashtable;
+            {
+              bp = hashtable;
+            }
         }
 
       /* at this point, bp points either to (1) a free empty hash bucket, or
@@ -875,7 +983,9 @@ void derep_prefix()
           bp->seqno_last = i;
 
           if (bp->size > maxsize)
-            maxsize = bp->size;
+            {
+              maxsize = bp->size;
+            }
         }
       else
         {
@@ -897,7 +1007,9 @@ void derep_prefix()
                 {
                   bp++;
                   if (bp >= hashtable + hashtablesize)
-                    bp = hashtable;
+                    {
+                      bp = hashtable;
+                    }
                 }
             }
 
@@ -920,7 +1032,9 @@ void derep_prefix()
               bp->seqno_last = last;
 
               if (bp->size > maxsize)
-                maxsize = bp->size;
+                {
+                  maxsize = bp->size;
+                }
             }
           else
             {
@@ -931,7 +1045,9 @@ void derep_prefix()
               orig_bp->seqno_last = i;
 
               if (ab > maxsize)
-                maxsize = ab;
+                {
+                  maxsize = ab;
+                }
               clusters++;
             }
         }
@@ -953,10 +1069,14 @@ void derep_prefix()
   if (clusters > 0)
     {
       if (clusters % 2)
-        median = hashtable[(clusters-1)/2].size;
+        {
+          median = hashtable[(clusters-1)/2].size;
+        }
       else
-        median = (hashtable[(clusters/2)-1].size +
-                  hashtable[clusters/2].size) / 2.0;
+        {
+          median = (hashtable[(clusters/2)-1].size +
+                    hashtable[clusters/2].size) / 2.0;
+        }
     }
 
   average = 1.0 * sumsize / clusters;
@@ -964,26 +1084,34 @@ void derep_prefix()
   if (clusters < 1)
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "0 unique sequences\n");
+        {
+          fprintf(stderr,
+                  "0 unique sequences\n");
+        }
       if (opt_log)
-        fprintf(fp_log,
-                "0 unique sequences\n\n");
+        {
+          fprintf(fp_log,
+                  "0 unique sequences\n\n");
+        }
     }
   else
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "%" PRId64
-                " unique sequences, avg cluster %.1lf, median %.0f, max %"
-                PRIu64 "\n",
-                clusters, average, median, maxsize);
+        {
+          fprintf(stderr,
+                  "%" PRId64
+                  " unique sequences, avg cluster %.1lf, median %.0f, max %"
+                  PRIu64 "\n",
+                  clusters, average, median, maxsize);
+        }
       if (opt_log)
-        fprintf(fp_log,
-                "%" PRId64
-                " unique sequences, avg cluster %.1lf, median %.0f, max %"
-                PRIu64 "\n\n",
-                clusters, average, median, maxsize);
+        {
+          fprintf(fp_log,
+                  "%" PRId64
+                  " unique sequences, avg cluster %.1lf, median %.0f, max %"
+                  PRIu64 "\n\n",
+                  clusters, average, median, maxsize);
+        }
     }
 
   show_rusage();
@@ -999,7 +1127,9 @@ void derep_prefix()
         {
           selected++;
           if (selected == opt_topn)
-            break;
+            {
+              break;
+            }
         }
     }
 
@@ -1019,7 +1149,7 @@ void derep_prefix()
             {
               relabel_count++;
               fasta_print_general(fp_output,
-                                  0,
+                                  nullptr,
                                   db_getsequence(bp->seqno_first),
                                   db_getsequencelen(bp->seqno_first),
                                   db_getheader(bp->seqno_first),
@@ -1027,9 +1157,11 @@ void derep_prefix()
                                   size,
                                   relabel_count,
                                   -1.0,
-                                  -1, -1, 0, 0.0);
+                                  -1, -1, nullptr, 0.0);
               if (relabel_count == opt_topn)
-                break;
+                {
+                  break;
+                }
             }
           progress_update(i);
         }
@@ -1055,9 +1187,11 @@ void derep_prefix()
           for (unsigned int next = nextseqtab[bp->seqno_first];
                next != terminal;
                next = nextseqtab[next])
-            fprintf(fp_uc,
-                    "H\t%" PRId64 "\t%" PRIu64 "\t%.1f\t+\t0\t0\t*\t%s\t%s\n",
-                    i, db_getsequencelen(next), 100.0, db_getheader(next), h);
+            {
+              fprintf(fp_uc,
+                      "H\t%" PRId64 "\t%" PRIu64 "\t%.1f\t+\t0\t0\t*\t%s\t%s\n",
+                      i, db_getsequencelen(next), 100.0, db_getheader(next), h);
+            }
 
           progress_update(i);
         }
@@ -1080,18 +1214,22 @@ void derep_prefix()
   if (selected < clusters)
     {
       if (!opt_quiet)
-        fprintf(stderr,
-                "%" PRId64 " uniques written, %" PRId64
-                " clusters discarded (%.1f%%)\n",
-                selected, clusters - selected,
-                100.0 * (clusters - selected) / clusters);
+        {
+          fprintf(stderr,
+                  "%" PRId64 " uniques written, %" PRId64
+                  " clusters discarded (%.1f%%)\n",
+                  selected, clusters - selected,
+                  100.0 * (clusters - selected) / clusters);
+        }
 
       if (opt_log)
-        fprintf(fp_log,
-                "%" PRId64 " uniques written, %" PRId64
-                " clusters discarded (%.1f%%)\n\n",
-                selected, clusters - selected,
-                100.0 * (clusters - selected) / clusters);
+        {
+          fprintf(fp_log,
+                  "%" PRId64 " uniques written, %" PRId64
+                  " clusters discarded (%.1f%%)\n\n",
+                  selected, clusters - selected,
+                  100.0 * (clusters - selected) / clusters);
+        }
     }
 
   xfree(nextseqtab);

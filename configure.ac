@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.15.1], [akifumi.tanabe@gmail.com])
+AC_INIT([vsearch5d], [2.17.1], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])
@@ -25,11 +25,10 @@ AC_PROG_INSTALL
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_create])
 AC_CHECK_LIB([dl], [dlopen])
-#AC_CHECK_LIB([regex], [regexec])
 AC_CHECK_LIB([psapi], [GetProcessMemoryInfo])
 
 # Checks for header files.
-AC_CHECK_HEADERS([getopt.h fcntl.h float.h regex.h ctype.h locale.h limits.h string.h sys/time.h dlfcn.h])
+AC_CHECK_HEADERS([getopt.h fcntl.h float.h regex.h ctype.h locale.h limits.h string.h sys/time.h dlfcn.h pthread.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -44,32 +43,22 @@ AC_FUNC_MALLOC
 AC_FUNC_STRTOD
 AC_FUNC_ALLOCA
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memmove memcpy posix_memalign gettimeofday localtime_r memchr memset pow regcomp strcasecmp strchr strcspn sysinfo])
+AC_CHECK_FUNCS([memmove memcpy posix_memalign gettimeofday localtime memchr memset pow regcomp strcasecmp strchr strcspn sysinfo])
 
-have_pthreads=no
 have_bzip2=no
-have_zlib=no
-
-AC_SEARCH_LIBS([pthread_create], [pthread], [have_pthreads=yes])
-
 AC_ARG_ENABLE(bzip2, AS_HELP_STRING([--disable-bzip2], [Disable bzip2 support]))
 AS_IF([test "x$enable_bzip2" != "xno"], [
   have_bzip2=yes
 ])
-
-AC_ARG_ENABLE(zlib, AS_HELP_STRING([--disable-zlib], [Disable zlib support]))
-AS_IF([test "x$enable_zlib" != "xno"], [
-  have_zlib=yes
-])
-
-if test "x${have_pthreads}" = "xyes"; then
-  AC_CHECK_HEADERS([pthread.h], [], [have_pthreads=no])
-fi
-
 if test "x${have_bzip2}" = "xyes"; then
   AC_CHECK_HEADERS([bzlib.h], [], [have_bzip2=no])
 fi
 
+have_zlib=no
+AC_ARG_ENABLE(zlib, AS_HELP_STRING([--disable-zlib], [Disable zlib support]))
+AS_IF([test "x$enable_zlib" != "xno"], [
+  have_zlib=yes
+])
 if test "x${have_zlib}" = "xyes"; then
   AC_CHECK_HEADERS([zlib.h], [], [have_zlib=no])
 fi
@@ -81,9 +70,6 @@ esac
 
 AC_CHECK_HEADERS([windows.h], [AM_CONDITIONAL(TARGET_WIN, true)], [AM_CONDITIONAL(TARGET_WIN, false)])
 
-AM_CONDITIONAL(HAVE_BZLIB, test "x${have_bzip2}" = "xyes")
-AM_CONDITIONAL(HAVE_ZLIB, test "x${have_zlib}" = "xyes")
-AM_CONDITIONAL(HAVE_PTHREADS, test "x${have_pthreads}" = "xyes")
 AM_CONDITIONAL(TARGET_PPC, test "x${target_ppc}" = "xyes")
 AM_CONDITIONAL(TARGET_AARCH64, test "x${target_aarch64}" = "xyes")
 AM_PROG_CC_C_O

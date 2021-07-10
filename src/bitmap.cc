@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -64,7 +65,7 @@
 
 bitmap_t * bitmap_init(unsigned int size)
 {
-  bitmap_t * b = (bitmap_t*) xmalloc(sizeof(bitmap_t));
+  auto * b = (bitmap_t*) xmalloc(sizeof(bitmap_t));
   b->size = size;
   b->bitmap = (unsigned char *) xmalloc((size+7)/8);
   return b;
@@ -73,6 +74,8 @@ bitmap_t * bitmap_init(unsigned int size)
 void bitmap_free(bitmap_t* b)
 {
   if (b->bitmap)
-    xfree(b->bitmap);
+    {
+      xfree(b->bitmap);
+    }
   xfree(b);
 }

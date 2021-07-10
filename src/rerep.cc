@@ -3,14 +3,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -65,15 +66,17 @@
 
 void rereplicate()
 {
-  opt_xsize = 1;
+  opt_xsize = true;
 
-  FILE * fp_output = 0;
+  FILE * fp_output = nullptr;
 
   if (opt_output)
     {
       fp_output = fopen_output(opt_output);
       if (!fp_output)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   fastx_handle fh = fasta_open(opt_rereplicate);
@@ -98,16 +101,18 @@ void rereplicate()
         {
           i++;
           if (opt_output)
-            fasta_print_general(fp_output,
-                                0,
-                                fasta_get_sequence(fh),
-                                fasta_get_sequence_length(fh),
-                                fasta_get_header(fh),
-                                fasta_get_header_length(fh),
-                                1,
-                                i,
-                                -1.0,
-                                -1, -1, 0, 0.0);
+            {
+              fasta_print_general(fp_output,
+                                  nullptr,
+                                  fasta_get_sequence(fh),
+                                  fasta_get_sequence_length(fh),
+                                  fasta_get_header(fh),
+                                  fasta_get_header_length(fh),
+                                  1,
+                                  i,
+                                  -1.0,
+                                  -1, -1, nullptr, 0.0);
+            }
         }
 
       progress_update(fasta_get_position(fh));
@@ -117,14 +122,18 @@ void rereplicate()
   if (! opt_quiet)
     {
       if (missing)
-        fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+        {
+          fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+        }
       fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
     }
 
   if (opt_log)
     {
       if (missing)
-        fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+        {
+          fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
+        }
       fprintf(fp_log, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
     }
 

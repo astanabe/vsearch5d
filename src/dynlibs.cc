@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -93,9 +94,11 @@ const char bz2_libname[] = "libbz2.so";
 #  endif
 void * bz2_lib;
 # endif
+
 BZFILE* (*BZ2_bzReadOpen_p)(int*, FILE*, int, int, void*, int);
 void (*BZ2_bzReadClose_p)(int*, BZFILE*);
 int (*BZ2_bzRead_p)(int*, BZFILE*, void*, int);
+
 #endif
 
 void dynlibs_open()
@@ -108,11 +111,16 @@ void dynlibs_open()
 #endif
   if (gz_lib)
     {
-      gzdopen_p = (gzFile (*)(int, const char*)) arch_dlsym(gz_lib, "gzdopen");
-      gzclose_p = (int (*)(gzFile)) arch_dlsym(gz_lib, "gzclose");
-      gzread_p = (int (*)(gzFile, void*, unsigned)) arch_dlsym(gz_lib, "gzread");
+      gzdopen_p = (gzFile (*)(int, const char*))
+        arch_dlsym(gz_lib, "gzdopen");
+      gzclose_p = (int (*)(gzFile))
+        arch_dlsym(gz_lib, "gzclose");
+      gzread_p = (int (*)(gzFile, void*, unsigned))
+        arch_dlsym(gz_lib, "gzread");
       if (!(gzdopen_p && gzclose_p && gzread_p))
-        fatal("Invalid compression library (zlib)");
+        {
+          fatal("Invalid compression library (zlib)");
+        }
     }
 #endif
 
@@ -131,7 +139,9 @@ void dynlibs_open()
       BZ2_bzRead_p = (int (*)(int*, BZFILE*, void*, int))
         arch_dlsym(bz2_lib, "BZ2_bzRead");
       if (!(BZ2_bzReadOpen_p && BZ2_bzReadClose_p && BZ2_bzRead_p))
-        fatal("Invalid compression library (bz2)");
+        {
+          fatal("Invalid compression library (bz2)");
+        }
     }
 #endif
 }
@@ -140,20 +150,25 @@ void dynlibs_close()
 {
 #ifdef HAVE_ZLIB_H
   if (gz_lib)
+    {
 #ifdef _WIN32
-    FreeLibrary(gz_lib);
+      FreeLibrary(gz_lib);
 #else
-    dlclose(gz_lib);
+      dlclose(gz_lib);
 #endif
-  gz_lib = 0;
+    }
+  gz_lib = nullptr;
 #endif
+
 #ifdef HAVE_BZLIB_H
   if (bz2_lib)
+    {
 #ifdef _WIN32
-    FreeLibrary(bz2_lib);
+      FreeLibrary(bz2_lib);
 #else
-    dlclose(bz2_lib);
+      dlclose(bz2_lib);
 #endif
-  bz2_lib = 0;
+    }
+  bz2_lib = nullptr;
 #endif
 }

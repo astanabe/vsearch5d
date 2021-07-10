@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -74,14 +75,14 @@ static pthread_mutex_t mutex_output;
 static int qmatches;
 static int queries;
 static int64_t progress = 0;
-static FILE * fp_alnout = 0;
-static FILE * fp_samout = 0;
-static FILE * fp_userout = 0;
-static FILE * fp_blast6out = 0;
-static FILE * fp_uc = 0;
-static FILE * fp_fastapairs = 0;
-static FILE * fp_matched = 0;
-static FILE * fp_notmatched = 0;
+static FILE * fp_alnout = nullptr;
+static FILE * fp_samout = nullptr;
+static FILE * fp_userout = nullptr;
+static FILE * fp_blast6out = nullptr;
+static FILE * fp_uc = nullptr;
+static FILE * fp_fastapairs = nullptr;
+static FILE * fp_matched = nullptr;
+static FILE * fp_notmatched = nullptr;
 
 static int count_matched = 0;
 static int count_notmatched = 0;
@@ -92,18 +93,25 @@ inline int allpairs_hit_compare_typed(struct hit * x, struct hit * y)
   // early target, then late target
 
   if (x->id > y->id)
-    return -1;
-  else
-    if (x->id < y->id)
+    {
+      return -1;
+    }
+  else if (x->id < y->id)
+    {
       return +1;
-    else
-      if (x->target < y->target)
-        return -1;
-      else
-        if (x->target > y->target)
-          return +1;
-        else
-          return 0;
+    }
+  else if (x->target < y->target)
+    {
+      return -1;
+    }
+  else if (x->target > y->target)
+    {
+      return +1;
+    }
+  else
+    {
+      return 0;
+    }
 }
 
 int allpairs_hit_compare(const void * a, const void * b)
@@ -122,22 +130,26 @@ void allpairs_output_results(int hit_count,
   int64_t toreport = MIN(opt_maxhits, hit_count);
 
   if (fp_alnout)
-    results_show_alnout(fp_alnout,
-                        hits,
-                        toreport,
-                        query_head,
-                        qsequence,
-                        qseqlen,
-                        qsequence_rc);
+    {
+      results_show_alnout(fp_alnout,
+                          hits,
+                          toreport,
+                          query_head,
+                          qsequence,
+                          qseqlen,
+                          qsequence_rc);
+    }
 
   if (fp_samout)
-    results_show_samout(fp_samout,
-                        hits,
-                        toreport,
-                        query_head,
-                        qsequence,
-                        qseqlen,
-                        qsequence_rc);
+    {
+      results_show_samout(fp_samout,
+                          hits,
+                          toreport,
+                          query_head,
+                          qsequence,
+                          qseqlen,
+                          qsequence_rc);
+    }
 
   if (toreport)
     {
@@ -148,71 +160,89 @@ void allpairs_output_results(int hit_count,
           struct hit * hp = hits + t;
 
           if (opt_top_hits_only && (hp->id < top_hit_id))
-            break;
+            {
+              break;
+            }
 
           if (fp_fastapairs)
-            results_show_fastapairs_one(fp_fastapairs,
-                                        hp,
-                                        query_head,
-                                        qsequence,
-                                        qseqlen,
-                                        qsequence_rc);
+            {
+              results_show_fastapairs_one(fp_fastapairs,
+                                          hp,
+                                          query_head,
+                                          qsequence,
+                                          qseqlen,
+                                          qsequence_rc);
+            }
 
           if (fp_uc)
-            if ((t==0) || opt_uc_allhits)
-              results_show_uc_one(fp_uc,
-                                  hp,
-                                  query_head,
-                                  qsequence,
-                                  qseqlen,
-                                  qsequence_rc,
-                                  hp->target);
+            {
+              if ((t==0) || opt_uc_allhits)
+                {
+                  results_show_uc_one(fp_uc,
+                                      hp,
+                                      query_head,
+                                      qsequence,
+                                      qseqlen,
+                                      qsequence_rc,
+                                      hp->target);
+                }
+            }
 
           if (fp_userout)
-            results_show_userout_one(fp_userout,
-                                     hp,
-                                     query_head,
-                                     qsequence,
-                                     qseqlen,
-                                     qsequence_rc);
-
-          if (fp_blast6out)
-            results_show_blast6out_one(fp_blast6out,
+            {
+              results_show_userout_one(fp_userout,
                                        hp,
                                        query_head,
                                        qsequence,
                                        qseqlen,
                                        qsequence_rc);
+            }
+
+          if (fp_blast6out)
+            {
+              results_show_blast6out_one(fp_blast6out,
+                                         hp,
+                                         query_head,
+                                         qsequence,
+                                         qseqlen,
+                                         qsequence_rc);
+            }
         }
     }
   else
     {
       if (fp_uc)
-        results_show_uc_one(fp_uc,
-                            0,
-                            query_head,
-                            qsequence,
-                            qseqlen,
-                            qsequence_rc,
-                            0);
+        {
+          results_show_uc_one(fp_uc,
+                              nullptr,
+                              query_head,
+                              qsequence,
+                              qseqlen,
+                              qsequence_rc,
+                              0);
+        }
 
       if (opt_output_no_hits)
         {
           if (fp_userout)
-            results_show_userout_one(fp_userout,
-                                     0,
-                                     query_head,
-                                     qsequence,
-                                     qseqlen,
-                                     qsequence_rc);
-
-          if (fp_blast6out)
-            results_show_blast6out_one(fp_blast6out,
-                                       0,
+            {
+              results_show_userout_one(fp_userout,
+                                       nullptr,
                                        query_head,
                                        qsequence,
                                        qseqlen,
                                        qsequence_rc);
+            }
+
+          if (fp_blast6out)
+            {
+              results_show_blast6out_one(fp_blast6out,
+                                         nullptr,
+                                         query_head,
+                                         qsequence,
+                                         qseqlen,
+                                         qsequence_rc);
+            }
         }
     }
 
@@ -220,31 +250,35 @@ void allpairs_output_results(int hit_count,
     {
       count_matched++;
       if (opt_matched)
-        fasta_print_general(fp_matched,
-                            0,
-                            qsequence,
-                            qseqlen,
-                            query_head,
-                            strlen(query_head),
-                            0,
-                            count_matched,
-                            -1.0,
-                            -1, -1, 0, 0.0);
+        {
+          fasta_print_general(fp_matched,
+                              nullptr,
+                              qsequence,
+                              qseqlen,
+                              query_head,
+                              strlen(query_head),
+                              0,
+                              count_matched,
+                              -1.0,
+                              -1, -1, nullptr, 0.0);
+        }
     }
   else
     {
       count_notmatched++;
       if (opt_notmatched)
-        fasta_print_general(fp_notmatched,
-                            0,
-                            qsequence,
-                            qseqlen,
-                            query_head,
-                            strlen(query_head),
-                            0,
-                            count_notmatched,
-                            -1.0,
-                            -1, -1, 0, 0.0);
+        {
+          fasta_print_general(fp_notmatched,
+                              nullptr,
+                              qsequence,
+                              qseqlen,
+                              query_head,
+                              strlen(query_head),
+                              0,
+                              count_notmatched,
+                              -1.0,
+                              -1, -1, nullptr, 0.0);
+        }
     }
 }
 
@@ -260,8 +294,8 @@ void allpairs_thread_run(int64_t t)
   si->query_head_alloc = 0;
   si->seq_alloc = 0;
   si->kmersamplecount = 0;
-  si->kmers = 0;
-  si->m = 0;
+  si->kmers = nullptr;
+  si->m = nullptr;
   si->finalized = 0;
 
   si->hits = (struct hit *) xmalloc(sizeof(struct hit) * seqcount);
@@ -304,24 +338,24 @@ void allpairs_thread_run(int64_t t)
 
   /* allocate memory for alignment results */
   unsigned int maxhits = seqcount;
-  unsigned int * pseqnos =
+  auto * pseqnos =
     (unsigned int *) xmalloc(sizeof(unsigned int) * maxhits);
   CELL * pscores =
     (CELL*) xmalloc(sizeof(CELL) * maxhits);
-  unsigned short * paligned =
+  auto * paligned =
     (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
-  unsigned short * pmatches =
+  auto * pmatches =
     (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
-  unsigned short * pmismatches =
+  auto * pmismatches =
     (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
-  unsigned short * pgaps =
+  auto * pgaps =
     (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
   char** pcigar = (char**) xmalloc(sizeof(char*) * maxhits);
 
-  struct hit * finalhits
+  auto * finalhits
     = (struct hit *) xmalloc(sizeof(struct hit) * seqcount);
 
-  bool cont = 1;
+  bool cont = true;
 
   while (cont)
     {
@@ -351,7 +385,9 @@ void allpairs_thread_run(int64_t t)
               target < seqcount; target++)
             {
               if (opt_acceptall || search_acceptable_unaligned(si, target))
-                pseqnos[si->hit_count++] = target;
+                {
+                  pseqnos[si->hit_count++] = target;
+                }
             }
 
           if (si->hit_count)
@@ -378,11 +414,11 @@ void allpairs_thread_run(int64_t t)
                   unsigned int target = pseqnos[h];
                   int64_t nwscore = pscores[h];
 
-                  char * nwcigar;
-                  int64_t nwalignmentlength;
-                  int64_t nwmatches;
-                  int64_t nwmismatches;
-                  int64_t nwgaps;
+                  char * nwcigar {nullptr};
+                  int64_t nwalignmentlength {0};
+                  int64_t nwmatches {0};
+                  int64_t nwmismatches {0};
+                  int64_t nwgaps {0};
 
                   if (nwscore == SHRT_MAX)
                     {
@@ -394,12 +430,14 @@ void allpairs_thread_run(int64_t t)
                       int64_t tseqlen = db_getsequencelen(target);
 
                       if (pcigar[h])
-                        xfree(pcigar[h]);
+                        {
+                          xfree(pcigar[h]);
+                        }
 
                       nwcigar = xstrdup(lma.align(si->qsequence,
-                                                 tseq,
-                                                 si->qseqlen,
-                                                 tseqlen));
+                                                  tseq,
+                                                  si->qseqlen,
+                                                  tseqlen));
                       lma.alignstats(nwcigar,
                                      si->qsequence,
                                      tseq,
@@ -422,10 +460,10 @@ void allpairs_thread_run(int64_t t)
                   hit->strand = 0;
                   hit->count = 0;
 
-                  hit->accepted = 0;
-                  hit->rejected = 0;
-                  hit->aligned = 1;
-                  hit->weak = 0;
+                  hit->accepted = false;
+                  hit->rejected = false;
+                  hit->aligned = true;
+                  hit->weak = false;
 
                   hit->nwscore = nwscore;
                   hit->nwdiff = nwalignmentlength - nwmatches;
@@ -447,7 +485,9 @@ void allpairs_thread_run(int64_t t)
 
                   /* test accept/reject criteria after alignment */
                   if (opt_acceptall || search_acceptable_aligned(si, hit))
-                    finalhits[si->accepts++] = *hit;
+                    {
+                      finalhits[si->accepts++] = *hit;
+                    }
                 }
 
               /* sort hits */
@@ -464,11 +504,13 @@ void allpairs_thread_run(int64_t t)
                                   si->query_head,
                                   si->qseqlen,
                                   si->qsequence,
-                                  0);
+                                  nullptr);
 
           /* update stats */
           if (si->accepts)
-            qmatches++;
+            {
+              qmatches++;
+            }
 
           /* show progress */
           progress += seqcount - query_no - 1;
@@ -478,15 +520,19 @@ void allpairs_thread_run(int64_t t)
 
           /* free memory for alignment strings */
           for(int i=0; i < si->hit_count; i++)
-            if (si->hits[i].aligned)
-              xfree(si->hits[i].nwalignment);
+            {
+              if (si->hits[i].aligned)
+                {
+                  xfree(si->hits[i].nwalignment);
+                }
+            }
         }
       else
         {
           /* let other threads read input */
           xpthread_mutex_unlock(&mutex_input);
 
-          cont = 0;
+          cont = false;
         }
     }
 
@@ -511,9 +557,9 @@ void allpairs_thread_run(int64_t t)
 
 void * allpairs_thread_worker(void * vp)
 {
-  int64_t t = (int64_t) vp;
+  auto t = (int64_t) vp;
   allpairs_thread_run(t);
-  return 0;
+  return nullptr;
 }
 
 void allpairs_thread_worker_run()
@@ -525,12 +571,16 @@ void allpairs_thread_worker_run()
 
   /* init and create worker threads, put them into stand-by mode */
   for(int t=0; t<opt_threads; t++)
-    xpthread_create(pthread+t, &attr,
-                    allpairs_thread_worker, (void*)(int64_t)t);
+    {
+      xpthread_create(pthread+t, &attr,
+                      allpairs_thread_worker, (void*)(int64_t)t);
+    }
 
   /* finish and clean up worker threads */
   for(int t=0; t<opt_threads; t++)
-    xpthread_join(pthread[t], NULL);
+    {
+      xpthread_join(pthread[t], nullptr);
+    }
 
   xpthread_attr_destroy(&attr);
 }
@@ -547,7 +597,9 @@ void allpairs_global(char * cmdline, char * progheader)
     {
       fp_alnout = fopen_output(opt_alnout);
       if (! fp_alnout)
-        fatal("Unable to open alignment output file for writing");
+        {
+          fatal("Unable to open alignment output file for writing");
+        }
 
       fprintf(fp_alnout, "%s\n", cmdline);
       fprintf(fp_alnout, "%s\n", progheader);
@@ -557,49 +609,63 @@ void allpairs_global(char * cmdline, char * progheader)
     {
       fp_samout = fopen_output(opt_samout);
       if (! fp_samout)
-        fatal("Unable to open SAM output file for writing");
+        {
+          fatal("Unable to open SAM output file for writing");
+        }
     }
 
   if (opt_userout)
     {
       fp_userout = fopen_output(opt_userout);
       if (! fp_userout)
-        fatal("Unable to open user-defined output file for writing");
+        {
+          fatal("Unable to open user-defined output file for writing");
+        }
     }
 
   if (opt_blast6out)
     {
       fp_blast6out = fopen_output(opt_blast6out);
       if (! fp_blast6out)
-        fatal("Unable to open blast6-like output file for writing");
+        {
+          fatal("Unable to open blast6-like output file for writing");
+        }
     }
 
   if (opt_uc)
     {
       fp_uc = fopen_output(opt_uc);
       if (! fp_uc)
-        fatal("Unable to open uc output file for writing");
+        {
+          fatal("Unable to open uc output file for writing");
+        }
     }
 
   if (opt_fastapairs)
     {
       fp_fastapairs = fopen_output(opt_fastapairs);
       if (! fp_fastapairs)
-        fatal("Unable to open fastapairs output file for writing");
+        {
+          fatal("Unable to open fastapairs output file for writing");
+        }
     }
 
   if (opt_matched)
     {
       fp_matched = fopen_output(opt_matched);
       if (! fp_matched)
-        fatal("Unable to open matched output file for writing");
+        {
+          fatal("Unable to open matched output file for writing");
+        }
     }
 
   if (opt_notmatched)
     {
       fp_notmatched = fopen_output(opt_notmatched);
       if (! fp_notmatched)
-        fatal("Unable to open notmatched output file for writing");
+        {
+          fatal("Unable to open notmatched output file for writing");
+        }
     }
 
   db_read(opt_allpairs_global, 0);
@@ -607,9 +673,13 @@ void allpairs_global(char * cmdline, char * progheader)
   results_show_samheader(fp_samout, cmdline, opt_allpairs_global);
 
   if (opt_qmask == MASK_DUST)
-    dust_all();
+    {
+      dust_all();
+    }
   else if ((opt_qmask == MASK_SOFT) && (opt_hardmask))
-    hardmask_all();
+    {
+      hardmask_all();
+    }
 
   show_rusage();
 
@@ -622,8 +692,8 @@ void allpairs_global(char * cmdline, char * progheader)
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
   /* init mutexes for input and output */
-  xpthread_mutex_init(&mutex_input, NULL);
-  xpthread_mutex_init(&mutex_output, NULL);
+  xpthread_mutex_init(&mutex_input, nullptr);
+  xpthread_mutex_init(&mutex_output, nullptr);
 
   progress = 0;
   progress_init("Aligning", MAX(0,((int64_t)seqcount)*((int64_t)seqcount-1))/2);
@@ -631,13 +701,25 @@ void allpairs_global(char * cmdline, char * progheader)
   progress_done();
 
   if (!opt_quiet)
-    fprintf(stderr, "Matching query sequences: %d of %d (%.2f%%)\n",
-            qmatches, queries, 100.0 * qmatches / queries);
+    {
+      fprintf(stderr, "Matching query sequences: %d of %d",
+              qmatches, queries);
+      if (queries > 0)
+        {
+          fprintf(stderr, " (%.2f%%)", 100.0 * qmatches / queries);
+        }
+      fprintf(stderr, "\n");
+    }
 
   if (opt_log)
     {
-      fprintf(fp_log, "Matching query sequences: %d of %d (%.2f%%)\n\n",
-              qmatches, queries, 100.0 * qmatches / queries);
+      fprintf(fp_log, "Matching query sequences: %d of %d",
+              qmatches, queries);
+      if (queries > 0)
+        {
+          fprintf(fp_log, " (%.2f%%)", 100.0 * qmatches / queries);
+        }
+      fprintf(fp_log, "\n\n");
     }
 
   xpthread_mutex_destroy(&mutex_output);
@@ -648,20 +730,36 @@ void allpairs_global(char * cmdline, char * progheader)
   /* clean up, global */
   db_free();
   if (opt_matched)
-    fclose(fp_matched);
+    {
+      fclose(fp_matched);
+    }
   if (opt_notmatched)
-    fclose(fp_notmatched);
+    {
+      fclose(fp_notmatched);
+    }
   if (opt_fastapairs)
-    fclose(fp_fastapairs);
+    {
+      fclose(fp_fastapairs);
+    }
   if (fp_uc)
-    fclose(fp_uc);
+    {
+      fclose(fp_uc);
+    }
   if (fp_blast6out)
-    fclose(fp_blast6out);
+    {
+      fclose(fp_blast6out);
+    }
   if (fp_userout)
-    fclose(fp_userout);
+    {
+      fclose(fp_userout);
+    }
   if (fp_alnout)
-    fclose(fp_alnout);
+    {
+      fclose(fp_alnout);
+    }
   if (fp_samout)
-    fclose(fp_samout);
+    {
+      fclose(fp_samout);
+    }
   show_rusage();
 }

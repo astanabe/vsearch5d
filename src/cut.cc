@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -116,37 +117,41 @@ int cut_one(fastx_handle h,
           if (frag_length > 0)
             {
               if (opt_fastaout)
-                fasta_print_general(fp_fastaout,
-                                    0,
-                                    fasta_get_sequence(h) + frag_start,
-                                    frag_length,
-                                    fasta_get_header(h),
-                                    fasta_get_header_length(h),
-                                    fasta_get_abundance(h),
-                                    ++fragment_no,
-                                    -1.0,
-                                    -1,
-                                    -1,
-                                    0,
-                                    0.0);
+                {
+                  fasta_print_general(fp_fastaout,
+                                      nullptr,
+                                      fasta_get_sequence(h) + frag_start,
+                                      frag_length,
+                                      fasta_get_header(h),
+                                      fasta_get_header_length(h),
+                                      fasta_get_abundance(h),
+                                      ++fragment_no,
+                                      -1.0,
+                                      -1,
+                                      -1,
+                                      nullptr,
+                                      0.0);
+                }
             }
 
           if (rc_length > 0)
             {
               if (opt_fastaout_rev)
-                fasta_print_general(fp_fastaout_rev,
-                                    0,
-                                    rc + rc_start,
-                                    rc_length,
-                                    fasta_get_header(h),
-                                    fasta_get_header_length(h),
-                                    fasta_get_abundance(h),
-                                    ++fragment_rev_no,
-                                    -1.0,
-                                    -1,
-                                    -1,
-                                    0,
-                                    0.0);
+                {
+                  fasta_print_general(fp_fastaout_rev,
+                                      nullptr,
+                                      rc + rc_start,
+                                      rc_length,
+                                      fasta_get_header(h),
+                                      fasta_get_header_length(h),
+                                      fasta_get_abundance(h),
+                                      ++fragment_rev_no,
+                                      -1.0,
+                                      -1,
+                                      -1,
+                                      nullptr,
+                                      0.0);
+                }
             }
 
           frag_start += frag_length;
@@ -160,20 +165,21 @@ int cut_one(fastx_handle h,
       if (frag_length > 0)
         {
           if (opt_fastaout)
-            fasta_print_general(fp_fastaout,
-                                0,
-                                fasta_get_sequence(h) + frag_start,
-                                frag_length,
-                                fasta_get_header(h),
-                                fasta_get_header_length(h),
-                                fasta_get_abundance(h),
-                                ++fragment_no,
-                                -1.0,
-                                -1,
-                                -1,
-                                0,
-                                0.0);
-
+            {
+              fasta_print_general(fp_fastaout,
+                                  nullptr,
+                                  fasta_get_sequence(h) + frag_start,
+                                  frag_length,
+                                  fasta_get_header(h),
+                                  fasta_get_header_length(h),
+                                  fasta_get_abundance(h),
+                                  ++fragment_no,
+                                  -1.0,
+                                  -1,
+                                  -1,
+                                  nullptr,
+                                  0.0);
+            }
         }
 
       rc_length = rc_start;
@@ -182,52 +188,58 @@ int cut_one(fastx_handle h,
       if (rc_length > 0)
         {
           if (opt_fastaout_rev)
-            fasta_print_general(fp_fastaout_rev,
-                                0,
-                                rc + rc_start,
-                                rc_length,
-                                fasta_get_header(h),
-                                fasta_get_header_length(h),
-                                fasta_get_abundance(h),
-                                ++fragment_rev_no,
-                                -1.0,
-                                -1,
-                                -1,
-                                0,
-                                0.0);
+            {
+              fasta_print_general(fp_fastaout_rev,
+                                  nullptr,
+                                  rc + rc_start,
+                                  rc_length,
+                                  fasta_get_header(h),
+                                  fasta_get_header_length(h),
+                                  fasta_get_abundance(h),
+                                  ++fragment_rev_no,
+                                  -1.0,
+                                  -1,
+                                  -1,
+                                  nullptr,
+                                  0.0);
+            }
         }
     }
   else
     {
       if (opt_fastaout_discarded)
-        fasta_print_general(fp_fastaout_discarded,
-                            0,
-                            fasta_get_sequence(h),
-                            seq_length,
-                            fasta_get_header(h),
-                            fasta_get_header_length(h),
-                            fasta_get_abundance(h),
-                            ++fragment_discarded_no,
-                            -1.0,
-                            -1,
-                            -1,
-                            0,
-                            0.0);
+        {
+          fasta_print_general(fp_fastaout_discarded,
+                              nullptr,
+                              fasta_get_sequence(h),
+                              seq_length,
+                              fasta_get_header(h),
+                              fasta_get_header_length(h),
+                              fasta_get_abundance(h),
+                              ++fragment_discarded_no,
+                              -1.0,
+                              -1,
+                              -1,
+                              nullptr,
+                              0.0);
+        }
 
       if (opt_fastaout_discarded_rev)
-        fasta_print_general(fp_fastaout_discarded_rev,
-                            0,
-                            rc,
-                            seq_length,
-                            fasta_get_header(h),
-                            fasta_get_header_length(h),
-                            fasta_get_abundance(h),
-                            ++fragment_discarded_rev_no,
-                            -1.0,
-                            -1,
-                            -1,
-                            0,
-                            0.0);
+        {
+          fasta_print_general(fp_fastaout_discarded_rev,
+                              nullptr,
+                              rc,
+                              seq_length,
+                              fasta_get_header(h),
+                              fasta_get_header_length(h),
+                              fasta_get_abundance(h),
+                              ++fragment_discarded_rev_no,
+                              -1.0,
+                              -1,
+                              -1,
+                              nullptr,
+                              0.0);
+        }
     }
 
   xfree(rc);
@@ -241,59 +253,75 @@ void cut()
       (!opt_fastaout_discarded) &&
       (!opt_fastaout_rev) &&
       (!opt_fastaout_discarded_rev))
-    fatal("No output files specified");
+    {
+      fatal("No output files specified");
+    }
 
-  fastx_handle h = 0;
+  fastx_handle h = nullptr;
 
   h = fasta_open(opt_cut);
 
   if (!h)
-    fatal("Unrecognized file type (not proper FASTA format)");
+    {
+      fatal("Unrecognized file type (not proper FASTA format)");
+    }
 
   uint64_t filesize = fasta_get_size(h);
 
-  FILE * fp_fastaout = 0;
-  FILE * fp_fastaout_discarded = 0;
-  FILE * fp_fastaout_rev = 0;
-  FILE * fp_fastaout_discarded_rev = 0;
+  FILE * fp_fastaout = nullptr;
+  FILE * fp_fastaout_discarded = nullptr;
+  FILE * fp_fastaout_rev = nullptr;
+  FILE * fp_fastaout_discarded_rev = nullptr;
 
   if (opt_fastaout)
     {
       fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   if (opt_fastaout_rev)
     {
       fp_fastaout_rev = fopen_output(opt_fastaout_rev);
       if (!fp_fastaout_rev)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   if (opt_fastaout_discarded)
     {
       fp_fastaout_discarded = fopen_output(opt_fastaout_discarded);
       if (!fp_fastaout_discarded)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   if (opt_fastaout_discarded_rev)
     {
       fp_fastaout_discarded_rev = fopen_output(opt_fastaout_discarded_rev);
       if (!fp_fastaout_discarded_rev)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   char * pattern = opt_cut_pattern;
 
-  if (pattern == 0)
-    fatal("No cut pattern string specified with --cut_pattern");
+  if (pattern == nullptr)
+    {
+      fatal("No cut pattern string specified with --cut_pattern");
+    }
 
   int n = strlen(pattern);
 
   if (n == 0)
-    fatal("Empty cut pattern string");
+    {
+      fatal("Empty cut pattern string");
+    }
 
   int cut_fwd = -1;
   int cut_rev = -1;
@@ -305,13 +333,19 @@ void cut()
       if (x == '^')
         {
           if (j < 0)
-            fatal("Multiple cut sites not supported");
+            {
+              fatal("Multiple cut sites not supported");
+
+            }
           cut_fwd = j;
         }
       else if (x == '_')
         {
           if (j < 0)
-            fatal("Multiple cut sites not supported");
+            {
+              fatal("Multiple cut sites not supported");
+
+            }
           cut_rev = j;
         }
       else if (chrmap_4bit[(unsigned int)x])
@@ -319,14 +353,20 @@ void cut()
           pattern[j++] = x;
         }
       else
-        fatal("Illegal character in cut pattern");
+        {
+          fatal("Illegal character in cut pattern");
+        }
     }
 
   if (cut_fwd < 0)
-    fatal("No forward sequence cut site (^) found in pattern");
+    {
+      fatal("No forward sequence cut site (^) found in pattern");
+    }
 
   if (cut_rev < 0)
-    fatal("No reverse sequence cut site (_) found in pattern");
+    {
+      fatal("No reverse sequence cut site (_) found in pattern");
+    }
 
   progress_init("Cutting sequences", filesize);
 
@@ -334,7 +374,7 @@ void cut()
   int64_t uncut = 0;
   int64_t matches = 0;
 
-  while(fasta_next(h, 0, chrmap_no_change))
+  while(fasta_next(h, false, chrmap_no_change))
     {
       int64_t m = cut_one(h,
                           fp_fastaout,
@@ -347,9 +387,13 @@ void cut()
                           cut_rev);
       matches += m;
       if (m > 0)
-        cut++;
+        {
+          cut++;
+        }
       else
-        uncut++;
+        {
+          uncut++;
+        }
 
       progress_update(fasta_get_position(h));
     }
@@ -357,26 +401,38 @@ void cut()
   progress_done();
 
   if (! opt_quiet)
-    fprintf(stderr,
-            "%" PRId64 " sequence(s) cut %" PRId64 " times, %" PRId64 " sequence(s) never cut.\n",
-            cut, matches, uncut);
+    {
+      fprintf(stderr,
+              "%" PRId64 " sequence(s) cut %" PRId64 " times, %" PRId64 " sequence(s) never cut.\n",
+              cut, matches, uncut);
+    }
 
   if (opt_log)
-    fprintf(fp_log,
-            "%" PRId64 " sequence(s) cut %" PRId64 " times, %" PRId64 " sequence(s) never cut.\n",
-            cut, matches, uncut);
+    {
+      fprintf(fp_log,
+              "%" PRId64 " sequence(s) cut %" PRId64 " times, %" PRId64 " sequence(s) never cut.\n",
+              cut, matches, uncut);
+    }
 
   if (opt_fastaout)
-    fclose(fp_fastaout);
+    {
+      fclose(fp_fastaout);
+    }
 
   if (opt_fastaout_rev)
-    fclose(fp_fastaout_rev);
+    {
+      fclose(fp_fastaout_rev);
+    }
 
   if (opt_fastaout_discarded)
-    fclose(fp_fastaout_discarded);
+    {
+      fclose(fp_fastaout_discarded);
+    }
 
   if (opt_fastaout_discarded_rev)
-    fclose(fp_fastaout_discarded_rev);
+    {
+      fclose(fp_fastaout_discarded_rev);
+    }
 
   fasta_close(h);
 }

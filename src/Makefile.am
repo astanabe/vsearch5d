@@ -1,7 +1,7 @@
 bin_PROGRAMS = $(top_builddir)/bin/vsearch5d
 
 if TARGET_PPC
-AM_CXXFLAGS=-Wall -Wsign-compare -O3 -g -mcpu=power8
+AM_CXXFLAGS=-Wall -Wsign-compare -O3 -g -mcpu=power8 -maltivec
 else
 if TARGET_AARCH64
 AM_CXXFLAGS=-Wall -Wsign-compare -O3 -g -march=armv8-a+simd -mtune=generic
@@ -33,6 +33,7 @@ dbindex.h \
 derep.h \
 dynlibs.h \
 eestats.h \
+fa2fq.h \
 fasta.h \
 fastq.h \
 fastqjoin.h \
@@ -48,6 +49,7 @@ md5.h \
 mergepairs.h \
 minheap.h \
 msa.h \
+orient.h \
 otutable.h \
 rerep.h \
 results.h \
@@ -91,7 +93,7 @@ if TARGET_WIN
 
 libcityhash_a_CXXFLAGS = $(AM_CXXFLAGS) -Wno-sign-compare -D_MSC_VER
 __top_builddir__bin_vsearch5d_LDFLAGS = -static
-__top_builddir__bin_vsearch5d_LDADD = libregex.a libcityhash.a libcpu_ssse3.a libcpu_sse2.a
+__top_builddir__bin_vsearch5d_LDADD = libcityhash.a libcpu_ssse3.a libcpu_sse2.a
 
 else
 
@@ -125,6 +127,7 @@ dbindex.cc \
 derep.cc \
 dynlibs.cc \
 eestats.cc \
+fa2fq.cc \
 fasta.cc \
 fastq.cc \
 fastqjoin.cc \
@@ -140,6 +143,7 @@ md5.c \
 mergepairs.cc \
 minheap.cc \
 msa.cc \
+orient.cc \
 otutable.cc \
 rerep.cc \
 results.cc \

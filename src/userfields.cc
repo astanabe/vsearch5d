@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -107,10 +108,10 @@ static const char * userfields_names[] =
     "qihi",
     "tilo",
     "tihi", // 42
-    0
+    nullptr
   };
 
-int * userfields_requested = 0;
+int * userfields_requested = nullptr;
 int userfields_requested_count = 0;
 
 int parse_userfields_arg(char * arg)
@@ -123,8 +124,12 @@ int parse_userfields_arg(char * arg)
 
   userfields_requested_count = 1;
   while(p<e)
-    if (*p++ == '+')
-      userfields_requested_count++;
+    {
+      if (*p++ == '+')
+        {
+          userfields_requested_count++;
+        }
+    }
 
   userfields_requested = (int*) xmalloc(sizeof(int) * (uint64_t)userfields_requested_count);
 
@@ -134,33 +139,41 @@ int parse_userfields_arg(char * arg)
 
   int fields = 0;
 
-  while(1)
+  while(true)
     {
       q = strchr(p, '+');
       if (!q)
-        q = e;
+        {
+          q = e;
+        }
 
-      uint64_t n = (uint64_t)(q - p);
+      auto n = (uint64_t)(q - p);
 
       char ** u = (char**) userfields_names;
 
       while (*u)
         {
           if ((strncmp(p, *u, n) == 0) && (strlen(*u) == n))
-            break;
+            {
+              break;
+            }
           u++;
         }
 
-      if (!*u)    // reached end of list -> unrecognized field
-        return 0; // bad argument
+      if (!*u)
+        {    // reached end of list -> unrecognized field
+          return 0; // bad argument
+        }
 
       int i = (int)(((const char**)u) - userfields_names);
       userfields_requested[fields++] = i;
 
       p = q;
 
-      if (p == e)  // reached end of argument
-        return 1;
+      if (p == e)
+        {  // reached end of argument
+          return 1;
+        }
 
       p++;
     }

@@ -1,16 +1,13 @@
 /*
 
-  VSEARCH5D: a modified version of VSEARCH
+  VSEARCH: a versatile open source tool for metagenomics
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
-
-  Contact: Akifumi S. Tanabe
-  https://github.com/astanabe/vsearch5d
-
-  Original version of VSEARCH
   Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
+  Contact: Torbjorn Rognes <torognes@ifi.uio.no>,
+  Department of Informatics, University of Oslo,
+  PO Box 1080 Blindern, NO-0316 Oslo, Norway
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -61,4 +58,87 @@
 
 */
 
-void search_exact(char * cmdline, char * progheader);
+#include "vsearch.h"
+
+void fasta2fastq()
+{
+  if (! opt_fastqout)
+    fatal("Output FASTQ file not specified with the --fastqout option");
+
+  fastx_handle h = fasta_open(opt_fasta2fastq);
+
+  if (!h)
+    fatal("Unable to open FASTA file for reading");
+
+  FILE * fp_fastqout = nullptr;
+
+  fp_fastqout = fopen_output(opt_fastqout);
+  if (!fp_fastqout)
+    fatal("Unable to open FASTQ output file for writing");
+
+  const auto max_ascii_value = opt_fastq_asciiout + opt_fastq_qmaxout;
+  int count = 0;
+  size_t alloc = 0;
+  char * quality = nullptr;
+
+  progress_init("Converting FASTA file to FASTQ", fasta_get_size(h));
+
+  while(fasta_next(h, 0, chrmap_no_change))
+    {
+      /* header */
+
+      char * header = fasta_get_header(h);
+      int hlen = fasta_get_header_length(h);
+      int64_t abundance = fastq_get_abundance(h);
+
+      /* sequence */
+
+      uint64_t length = fastq_get_sequence_length(h);
+      char * sequence = fastq_get_sequence(h);
+
+      /* allocate more mem if necessary */
+
+      if (alloc < length + 1)
+        {
+          alloc = length + 1;
+          quality = (char*) xrealloc(quality, alloc);
+        }
+
+      /* set quality values */
+
+      for(uint64_t i=0; i < length; i++)
+        {
+          quality[i] = max_ascii_value;
+        }
+
+      quality[length] = 0;
+
+      count++;
+
+      /* write to fasta file */
+
+      fastq_print_general(fp_fastqout,
+                          sequence,
+                          length,
+                          header,
+                          hlen,
+                          quality,
+                          abundance,
+                          count,
+                          -1.0);
+
+      progress_update(fasta_get_position(h));
+    }
+
+  progress_done();
+
+  if (quality)
+    {
+      xfree(quality);
+      quality = nullptr;
+    }
+
+  fclose(fp_fastqout);
+
+  fasta_close(h);
+}

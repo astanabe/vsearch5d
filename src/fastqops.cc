@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -88,7 +89,7 @@ void fastq_chars()
 
   int qmin_n = 255, qmax_n = 0;
 
-  while(fastq_next(h, 0, chrmap_upcase))
+  while(fastq_next(h, false, chrmap_upcase))
     {
       int64_t len = fastq_get_sequence_length(h);
       char * p = fastq_get_sequence(h);
@@ -111,16 +112,22 @@ void fastq_chars()
           if ((pc == 'N') || (pc == 'n'))
             {
               if (qc < qmin_n)
-                qmin_n = qc;
+                {
+                  qmin_n = qc;
+                }
               if (qc > qmax_n)
-                qmax_n = qc;
+                {
+                  qmax_n = qc;
+                }
             }
 
           if (pc == run_char)
             {
               run++;
               if (run > maxrun[run_char])
-                maxrun[run_char] = run;
+                {
+                  maxrun[run_char] = run;
+                }
             }
           else
             {
@@ -140,10 +147,14 @@ void fastq_chars()
             {
               tail_len++;
               if (tail_len >= opt_fastq_tail)
-                break;
+                {
+                  break;
+                }
             }
           if (tail_len >= opt_fastq_tail)
-            tail_chars[tail_char]++;
+            {
+              tail_chars[tail_char]++;
+            }
         }
 
       progress_update(fastq_get_position(h));
@@ -176,9 +187,13 @@ void fastq_chars()
   char fastq_ascii, fastq_qmin, fastq_qmax;
 
   if ((qmin < 59) || (qmax < 75))
-    fastq_ascii = 33;
+    {
+      fastq_ascii = 33;
+    }
   else
-    fastq_ascii = 64;
+    {
+      fastq_ascii = 64;
+    }
 
   fastq_qmax = qmax - fastq_ascii;
   fastq_qmin = qmin - fastq_ascii;
@@ -187,66 +202,83 @@ void fastq_chars()
     {
       fprintf(stderr, "Read %" PRIu64 " sequences.\n", seq_count);
 
-      fprintf(stderr, "Qmin %d, QMax %d, Range %d\n",
-              qmin, qmax, qmax-qmin+1);
-
-      fprintf(stderr, "Guess: -fastq_qmin %d -fastq_qmax %d -fastq_ascii %d\n",
-              fastq_qmin, fastq_qmax, fastq_ascii);
-
-      if (fastq_ascii == 64)
+      if (seq_count > 0)
         {
-          if (qmin < 64)
-            fprintf(stderr, "Guess: Solexa format (phred+64)\n");
-          else if (qmin < 66)
-            fprintf(stderr, "Guess: Illumina 1.3+ format (phred+64)\n");
-          else
-            fprintf(stderr, "Guess: Illumina 1.5+ format (phred+64)\n");
-        }
-      else
-        {
-          if (qmax > 73)
-            fprintf(stderr, "Guess: Illumina 1.8+ format (phred+33)\n");
-          else
-            fprintf(stderr, "Guess: Original Sanger format (phred+33)\n");
-        }
+          fprintf(stderr, "Qmin %d, QMax %d, Range %d\n",
+                  qmin, qmax, qmax-qmin+1);
 
-      fprintf(stderr, "\n");
-      fprintf(stderr, "Letter          N   Freq MaxRun\n");
-      fprintf(stderr, "------ ---------- ------ ------\n");
+          fprintf(stderr, "Guess: -fastq_qmin %d -fastq_qmax %d -fastq_ascii %d\n",
+                  fastq_qmin, fastq_qmax, fastq_ascii);
 
-      for(int c=0; c<256; c++)
-        {
-          if (sequence_chars[c] > 0)
+          if (fastq_ascii == 64)
             {
-              fprintf(stderr, "     %c %10" PRIu64 " %5.1f%% %6d",
-                      c,
-                      sequence_chars[c],
-                      100.0 * sequence_chars[c] / total_chars,
-                      maxrun[c]);
-              if ((c == 'N') || (c == 'n'))
+              if (qmin < 64)
                 {
-                  if (qmin_n < qmax_n)
-                    fprintf(stderr, "  Q=%c..%c", qmin_n, qmax_n);
-                  else
-                    fprintf(stderr, "  Q=%c", qmin_n);
+                  fprintf(stderr, "Guess: Solexa format (phred+64)\n");
                 }
-              fprintf(stderr, "\n");
+              else if (qmin < 66)
+                {
+                  fprintf(stderr, "Guess: Illumina 1.3+ format (phred+64)\n");
+                }
+              else
+                {
+                  fprintf(stderr, "Guess: Illumina 1.5+ format (phred+64)\n");
+                }
             }
-        }
-
-      fprintf(stderr, "\n");
-      fprintf(stderr, "Char  ASCII    Freq       Tails\n");
-      fprintf(stderr, "----  -----  ------  ----------\n");
-
-      for(int c=qmin; c<=qmax; c++)
-        {
-          if (quality_chars[c] > 0)
+          else
             {
-              fprintf(stderr, " '%c'  %5d  %5.1f%%  %10" PRIu64 "\n",
-                      c,
-                      c,
-                      100.0 * quality_chars[c] / total_chars,
-                      tail_chars[c]);
+              if (qmax > 73)
+                {
+                  fprintf(stderr, "Guess: Illumina 1.8+ format (phred+33)\n");
+                }
+              else
+                {
+                  fprintf(stderr, "Guess: Original Sanger format (phred+33)\n");
+                }
+            }
+
+          fprintf(stderr, "\n");
+          fprintf(stderr, "Letter          N   Freq MaxRun\n");
+          fprintf(stderr, "------ ---------- ------ ------\n");
+
+          for(int c=0; c<256; c++)
+            {
+              if (sequence_chars[c] > 0)
+                {
+                  fprintf(stderr, "     %c %10" PRIu64 " %5.1f%% %6d",
+                          c,
+                          sequence_chars[c],
+                          100.0 * sequence_chars[c] / total_chars,
+                          maxrun[c]);
+                  if ((c == 'N') || (c == 'n'))
+                    {
+                      if (qmin_n < qmax_n)
+                        {
+                          fprintf(stderr, "  Q=%c..%c", qmin_n, qmax_n);
+                        }
+                      else
+                        {
+                          fprintf(stderr, "  Q=%c", qmin_n);
+                        }
+                    }
+                  fprintf(stderr, "\n");
+                }
+            }
+
+          fprintf(stderr, "\n");
+          fprintf(stderr, "Char  ASCII    Freq       Tails\n");
+          fprintf(stderr, "----  -----  ------  ----------\n");
+
+          for(int c=qmin; c<=qmax; c++)
+            {
+              if (quality_chars[c] > 0)
+                {
+                  fprintf(stderr, " '%c'  %5d  %5.1f%%  %10" PRIu64 "\n",
+                          c,
+                          c,
+                          100.0 * quality_chars[c] / total_chars,
+                          tail_chars[c]);
+                }
             }
         }
     }
@@ -255,66 +287,83 @@ void fastq_chars()
     {
       fprintf(fp_log, "Read %" PRIu64 " sequences.\n", seq_count);
 
-      fprintf(fp_log, "Qmin %d, QMax %d, Range %d\n",
-              qmin, qmax, qmax-qmin+1);
-
-      fprintf(fp_log, "Guess: -fastq_qmin %d -fastq_qmax %d -fastq_ascii %d\n",
-              fastq_qmin, fastq_qmax, fastq_ascii);
-
-      if (fastq_ascii == 64)
+      if (seq_count > 0)
         {
-          if (qmin < 64)
-            fprintf(fp_log, "Guess: Solexa format (phred+64)\n");
-          else if (qmin < 66)
-            fprintf(fp_log, "Guess: Illumina 1.3+ format (phred+64)\n");
-          else
-            fprintf(fp_log, "Guess: Illumina 1.5+ format (phred+64)\n");
-        }
-      else
-        {
-          if (qmax > 73)
-            fprintf(fp_log, "Guess: Illumina 1.8+ format (phred+33)\n");
-          else
-            fprintf(fp_log, "Guess: Original Sanger format (phred+33)\n");
-        }
+          fprintf(fp_log, "Qmin %d, QMax %d, Range %d\n",
+                  qmin, qmax, qmax-qmin+1);
 
-      fprintf(fp_log, "\n");
-      fprintf(fp_log, "Letter          N   Freq MaxRun\n");
-      fprintf(fp_log, "------ ---------- ------ ------\n");
+          fprintf(fp_log, "Guess: -fastq_qmin %d -fastq_qmax %d -fastq_ascii %d\n",
+                  fastq_qmin, fastq_qmax, fastq_ascii);
 
-      for(int c=0; c<256; c++)
-        {
-          if (sequence_chars[c] > 0)
+          if (fastq_ascii == 64)
             {
-              fprintf(fp_log, "     %c %10" PRIu64 " %5.1f%% %6d",
-                      c,
-                      sequence_chars[c],
-                      100.0 * sequence_chars[c] / total_chars,
-                      maxrun[c]);
-              if ((c == 'N') || (c == 'n'))
+              if (qmin < 64)
                 {
-                  if (qmin_n < qmax_n)
-                    fprintf(fp_log, "  Q=%c..%c", qmin_n, qmax_n);
-                  else
-                    fprintf(fp_log, "  Q=%c", qmin_n);
+                  fprintf(fp_log, "Guess: Solexa format (phred+64)\n");
                 }
-              fprintf(fp_log, "\n");
+              else if (qmin < 66)
+                {
+                  fprintf(fp_log, "Guess: Illumina 1.3+ format (phred+64)\n");
+                }
+              else
+                {
+                  fprintf(fp_log, "Guess: Illumina 1.5+ format (phred+64)\n");
+                }
             }
-        }
-
-      fprintf(fp_log, "\n");
-      fprintf(fp_log, "Char  ASCII    Freq       Tails\n");
-      fprintf(fp_log, "----  -----  ------  ----------\n");
-
-      for(int c=qmin; c<=qmax; c++)
-        {
-          if (quality_chars[c] > 0)
+          else
             {
-              fprintf(fp_log, " '%c'  %5d  %5.1f%%  %10" PRIu64 "\n",
-                      c,
-                      c,
-                      100.0 * quality_chars[c] / total_chars,
-                      tail_chars[c]);
+              if (qmax > 73)
+                {
+                  fprintf(fp_log, "Guess: Illumina 1.8+ format (phred+33)\n");
+                }
+              else
+                {
+                  fprintf(fp_log, "Guess: Original Sanger format (phred+33)\n");
+                }
+            }
+
+          fprintf(fp_log, "\n");
+          fprintf(fp_log, "Letter          N   Freq MaxRun\n");
+          fprintf(fp_log, "------ ---------- ------ ------\n");
+
+          for(int c=0; c<256; c++)
+            {
+              if (sequence_chars[c] > 0)
+                {
+                  fprintf(fp_log, "     %c %10" PRIu64 " %5.1f%% %6d",
+                          c,
+                          sequence_chars[c],
+                          100.0 * sequence_chars[c] / total_chars,
+                          maxrun[c]);
+                  if ((c == 'N') || (c == 'n'))
+                    {
+                      if (qmin_n < qmax_n)
+                        {
+                          fprintf(fp_log, "  Q=%c..%c", qmin_n, qmax_n);
+                        }
+                      else
+                        {
+                          fprintf(fp_log, "  Q=%c", qmin_n);
+                        }
+                    }
+                  fprintf(fp_log, "\n");
+                }
+            }
+
+          fprintf(fp_log, "\n");
+          fprintf(fp_log, "Char  ASCII    Freq       Tails\n");
+          fprintf(fp_log, "----  -----  ------  ----------\n");
+
+          for(int c=qmin; c<=qmax; c++)
+            {
+              if (quality_chars[c] > 0)
+                {
+                  fprintf(fp_log, " '%c'  %5d  %5.1f%%  %10" PRIu64 "\n",
+                          c,
+                          c,
+                          100.0 * quality_chars[c] / total_chars,
+                          tail_chars[c]);
+                }
             }
         }
     }
@@ -338,19 +387,19 @@ void fastq_stats()
 
   int64_t read_length_alloc = 512;
 
-  uint64_t * read_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * read_length_alloc);
+  auto * read_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * read_length_alloc);
   memset(read_length_table, 0, sizeof(uint64_t) * read_length_alloc);
 
-  uint64_t * qual_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * read_length_alloc * 256);
+  auto * qual_length_table = (uint64_t*) xmalloc(sizeof(uint64_t) * read_length_alloc * 256);
   memset(qual_length_table, 0, sizeof(uint64_t) * read_length_alloc * 256);
 
-  uint64_t * ee_length_table = (uint64_t *) xmalloc(sizeof(uint64_t) * read_length_alloc * 4);
+  auto * ee_length_table = (uint64_t *) xmalloc(sizeof(uint64_t) * read_length_alloc * 4);
   memset(ee_length_table, 0, sizeof(uint64_t) * read_length_alloc * 4);
 
-  uint64_t * q_length_table = (uint64_t *) xmalloc(sizeof(uint64_t) * read_length_alloc * 4);
+  auto * q_length_table = (uint64_t *) xmalloc(sizeof(uint64_t) * read_length_alloc * 4);
   memset(q_length_table, 0, sizeof(uint64_t) * read_length_alloc * 4);
 
-  double * sumee_length_table = (double *) xmalloc(sizeof(double) * read_length_alloc);
+  auto * sumee_length_table = (double *) xmalloc(sizeof(double) * read_length_alloc);
   memset(sumee_length_table, 0, sizeof(double) * read_length_alloc);
 
   int64_t len_min = LONG_MAX;
@@ -360,10 +409,12 @@ void fastq_stats()
   int qmax = -1000;
 
   uint64_t quality_chars[256];
-  for(int c=0; c<256; c++)
-    quality_chars[c] = 0;
+  for(uint64_t & quality_char : quality_chars)
+    {
+      quality_char = 0;
+    }
 
-  while(fastq_next(h, 0, chrmap_upcase))
+  while(fastq_next(h, false, chrmap_upcase))
     {
       seq_count++;
 
@@ -375,22 +426,22 @@ void fastq_stats()
       if (len+1 > read_length_alloc)
         {
           read_length_table = (uint64_t*) xrealloc(read_length_table,
-                                              sizeof(uint64_t) * (len+1));
+                                                   sizeof(uint64_t) * (len+1));
           memset(read_length_table + read_length_alloc, 0,
                  sizeof(uint64_t) * (len + 1 - read_length_alloc));
 
           qual_length_table = (uint64_t*) xrealloc(qual_length_table,
-                                              sizeof(uint64_t) * (len+1) * 256);
+                                                   sizeof(uint64_t) * (len+1) * 256);
           memset(qual_length_table + 256 * read_length_alloc, 0,
                  sizeof(uint64_t) * (len + 1 - read_length_alloc) * 256);
 
           ee_length_table = (uint64_t*) xrealloc(ee_length_table,
-                                            sizeof(uint64_t) * (len+1) * 4);
+                                                 sizeof(uint64_t) * (len+1) * 4);
           memset(ee_length_table + 4 * read_length_alloc, 0,
                  sizeof(uint64_t) * (len + 1 - read_length_alloc) * 4);
 
           q_length_table = (uint64_t*) xrealloc(q_length_table,
-                                           sizeof(uint64_t) * (len+1) * 4);
+                                                sizeof(uint64_t) * (len+1) * 4);
           memset(q_length_table + 4 * read_length_alloc, 0,
                  sizeof(uint64_t) * (len + 1 - read_length_alloc) * 4);
 
@@ -405,9 +456,13 @@ void fastq_stats()
       read_length_table[len]++;
 
       if (len < len_min)
-        len_min = len;
+        {
+          len_min = len;
+        }
       if (len > len_max)
-        len_max = len;
+        {
+          len_max = len;
+        }
 
       /* update quality statistics */
 
@@ -431,17 +486,25 @@ void fastq_stats()
                            "--fastq_ascii, --fastq_qmin or --fastq_qmax options. For a complete\n"
                            "diagnosis with suggested values, please run vsearch --fastq_chars file.",
                            qual, opt_fastq_qmin, opt_fastq_qmax) > 0)
-                fatal(msg);
+                {
+                  fatal(msg);
+                }
               else
-                fatal("Out of memory");
+                {
+                  fatal("Out of memory");
+                }
               xfree(msg);
             }
 
           quality_chars[qc]++;
           if (qc < qmin)
-            qmin = qc;
+            {
+              qmin = qc;
+            }
           if (qc > qmax)
-            qmax = qc;
+            {
+              qmax = qc;
+            }
 
           qual_length_table[256*i + qc]++;
 
@@ -452,20 +515,30 @@ void fastq_stats()
           for(int z=0; z<4; z++)
             {
               if (ee <= ee_limit[z])
-                ee_length_table[4*i+z]++;
+                {
+                  ee_length_table[4*i+z]++;
+                }
               else
-                break;
+                {
+                  break;
+                }
             }
 
           if (qual < qmin_this)
-            qmin_this = qual;
+            {
+              qmin_this = qual;
+            }
 
           for(int z=0; z<4; z++)
             {
               if (qmin_this > 5*(z+1))
-                q_length_table[4*i+z]++;
+                {
+                  q_length_table[4*i+z]++;
+                }
               else
-                break;
+                {
+                  break;
+                }
             }
         }
 
@@ -475,13 +548,13 @@ void fastq_stats()
 
   /* compute various distributions */
 
-  uint64_t * length_dist = (uint64_t*) xmalloc(sizeof(uint64_t) * (len_max+1));
-  int64_t * symb_dist = (int64_t*) xmalloc(sizeof(int64_t) * (len_max+1));
+  auto * length_dist = (uint64_t*) xmalloc(sizeof(uint64_t) * (len_max+1));
+  auto * symb_dist = (int64_t*) xmalloc(sizeof(int64_t) * (len_max+1));
 
-  double * rate_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
-  double * avgq_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
-  double * avgee_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
-  double * avgp_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
+  auto * rate_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
+  auto * avgq_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
+  auto * avgee_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
+  auto * avgp_dist = (double*) xmalloc(sizeof(double) * (len_max+1));
 
   int64_t length_accum = 0;
   int64_t symb_accum = 0;
@@ -520,12 +593,14 @@ void fastq_stats()
       for(int64_t i = len_max; i >= len_min; i--)
         {
           if (read_length_table[i] > 0)
-            fprintf(fp_log, "%2s%5" PRId64 "  %10" PRIu64 "   %5.1lf%%   %5.1lf%%\n",
-                    (i == len_max ? ">=" : "  "),
-                    i,
-                    read_length_table[i],
-                    read_length_table[i] * 100.0 / seq_count,
-                    100.0 * (seq_count - length_dist[i-1]) / seq_count);
+            {
+              fprintf(fp_log, "%2s%5" PRId64 "  %10" PRIu64 "   %5.1lf%%   %5.1lf%%\n",
+                      (i == len_max ? ">=" : "  "),
+                      i,
+                      read_length_table[i],
+                      read_length_table[i] * 100.0 / seq_count,
+                      100.0 * (seq_count - length_dist[i-1]) / seq_count);
+            }
         }
 
       fprintf(fp_log, "\n");
@@ -613,7 +688,9 @@ void fastq_stats()
           double read_percentage[4];
 
           for(int z=0; z<4; z++)
-            read_percentage[z] = 100.0 * q_length_table[4*(i-1)+z] / seq_count;
+            {
+              read_percentage[z] = 100.0 * q_length_table[4*(i-1)+z] / seq_count;
+            }
 
           fprintf(fp_log, "%5" PRId64 "  %5.1lf%%  %5.1lf%%  %5.1lf%%  %5.1lf%%\n",
                   i,
@@ -624,7 +701,10 @@ void fastq_stats()
       fprintf(fp_log, "\n");
       fprintf(fp_log, "%10" PRIu64 "  Recs (%.1lfM), 0 too long\n",
               seq_count, seq_count / 1.0e6);
-      fprintf(fp_log, "%10.1lf  Avg length\n", 1.0 * symbols / seq_count);
+      if (seq_count > 0)
+        {
+          fprintf(fp_log, "%10.1lf  Avg length\n", 1.0 * symbols / seq_count);
+        }
       fprintf(fp_log, "%9.1lfM  Bases\n", symbols / 1.0e6);
     }
 
@@ -645,7 +725,7 @@ void fastq_stats()
 
   if (!opt_quiet)
     {
-        fprintf(stderr, "Read %" PRIu64 " sequences.\n", seq_count);
+      fprintf(stderr, "Read %" PRIu64 " sequences.\n", seq_count);
     }
 }
 
@@ -658,38 +738,50 @@ void fastx_revcomp()
   fastx_handle h = fastx_open(opt_fastx_revcomp);
 
   if (!h)
-    fatal("Unrecognized file type (not proper FASTA or FASTQ format)");
+    {
+      fatal("Unrecognized file type (not proper FASTA or FASTQ format)");
+    }
 
-  if (opt_fastqout && ! h->is_fastq)
-    fatal("Cannot write FASTQ output with a FASTA input file, lacking quality scores");
+  if (opt_fastqout && ! (h->is_fastq || h->is_empty))
+    {
+      fatal("Cannot write FASTQ output with a FASTA input file, lacking quality scores");
+    }
 
   uint64_t filesize = fastx_get_size(h);
 
-  FILE * fp_fastaout = 0;
-  FILE * fp_fastqout = 0;
+  FILE * fp_fastaout = nullptr;
+  FILE * fp_fastqout = nullptr;
 
   if (opt_fastaout)
     {
       fp_fastaout = fopen_output(opt_fastaout);
       if (!fp_fastaout)
-        fatal("Unable to open FASTA output file for writing");
+        {
+          fatal("Unable to open FASTA output file for writing");
+        }
     }
 
   if (opt_fastqout)
     {
       fp_fastqout = fopen_output(opt_fastqout);
       if (!fp_fastqout)
-        fatal("Unable to open FASTQ output file for writing");
+        {
+          fatal("Unable to open FASTQ output file for writing");
+        }
     }
 
   if (h->is_fastq)
-    progress_init("Reading FASTQ file", filesize);
+    {
+      progress_init("Reading FASTQ file", filesize);
+    }
   else
-    progress_init("Reading FASTA file", filesize);
+    {
+      progress_init("Reading FASTA file", filesize);
+    }
 
   int count = 0;
 
-  while(fastx_next(h, 0, chrmap_no_change))
+  while(fastx_next(h, false, chrmap_no_change))
     {
       count++;
 
@@ -723,42 +815,52 @@ void fastx_revcomp()
         {
           /* reverse quality values */
           for(uint64_t i=0; i<length; i++)
-            qual_buffer[i] = q[length-1-i];
+            {
+              qual_buffer[i] = q[length-1-i];
+            }
           qual_buffer[length] = 0;
         }
 
       if (opt_fastaout)
-        fasta_print_general(fp_fastaout,
-                            0,
-                            seq_buffer,
-                            length,
-                            header,
-                            hlen,
-                            abundance,
-                            count,
-                            -1.0,
-                            -1, -1, 0, 0.0);
+        {
+          fasta_print_general(fp_fastaout,
+                              nullptr,
+                              seq_buffer,
+                              length,
+                              header,
+                              hlen,
+                              abundance,
+                              count,
+                              -1.0,
+                              -1, -1, nullptr, 0.0);
+        }
 
       if (opt_fastqout)
-        fastq_print_general(fp_fastqout,
-                            seq_buffer,
-                            length,
-                            header,
-                            hlen,
-                            qual_buffer,
-                            abundance,
-                            count,
-                            -1.0);
+        {
+          fastq_print_general(fp_fastqout,
+                              seq_buffer,
+                              length,
+                              header,
+                              hlen,
+                              qual_buffer,
+                              abundance,
+                              count,
+                              -1.0);
+        }
 
       progress_update(fastx_get_position(h));
     }
   progress_done();
 
   if (opt_fastaout)
-    fclose(fp_fastaout);
+    {
+      fclose(fp_fastaout);
+    }
 
   if (opt_fastqout)
-    fclose(fp_fastqout);
+    {
+      fclose(fp_fastqout);
+    }
 
   fastx_close(h);
 
@@ -771,20 +873,24 @@ void fastq_convert()
   fastx_handle h = fastq_open(opt_fastq_convert);
 
   if (!h)
-    fatal("Unable to open FASTQ file");
+    {
+      fatal("Unable to open FASTQ file");
+    }
 
   uint64_t filesize = fastq_get_size(h);
 
-  FILE * fp_fastqout = 0;
+  FILE * fp_fastqout = nullptr;
 
   fp_fastqout = fopen_output(opt_fastqout);
   if (!fp_fastqout)
-    fatal("Unable to open FASTQ output file for writing");
+    {
+      fatal("Unable to open FASTQ output file for writing");
+    }
 
   progress_init("Reading FASTQ file", filesize);
 
   int j = 1;
-  while(fastq_next(h, 0, chrmap_no_change))
+  while(fastq_next(h, false, chrmap_no_change))
     {
       /* header */
 
@@ -827,14 +933,22 @@ void fastq_convert()
               fatal("FASTQ quality score too high");
             }
           if (q < opt_fastq_qminout)
-            q = opt_fastq_qminout;
+            {
+              q = opt_fastq_qminout;
+            }
           if (q > opt_fastq_qmaxout)
-            q = opt_fastq_qmaxout;
+            {
+              q = opt_fastq_qmaxout;
+            }
           q += opt_fastq_asciiout;
           if (q < 33)
-            q = 33;
+            {
+              q = 33;
+            }
           if (q > 126)
-            q = 126;
+            {
+              q = 126;
+            }
           quality[i] = q;
         }
       quality[length] = 0;

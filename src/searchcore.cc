@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -70,36 +71,58 @@ inline int hit_compare_byid_typed(struct hit * x, struct hit * y)
   // early target, then late target
 
   if (x->rejected < y->rejected)
-    return -1;
+    {
+      return -1;
+    }
   else
     if (x->rejected > y->rejected)
-      return +1;
+      {
+        return +1;
+      }
     else
       if (x->rejected == 1)
-        return 0;
+        {
+          return 0;
+        }
       else
         if (x->aligned > y->aligned)
-          return -1;
+          {
+            return -1;
+          }
         else
           if (x->aligned < y->aligned)
-            return +1;
+            {
+              return +1;
+            }
           else
             if (x->aligned == 0)
-              return 0;
+              {
+                return 0;
+              }
             else
               if (x->id > y->id)
-                return -1;
+                {
+                  return -1;
+                }
               else
                 if (x->id < y->id)
-                  return +1;
+                  {
+                    return +1;
+                  }
                 else
                   if (x->target < y->target)
-                    return -1;
+                    {
+                      return -1;
+                    }
                   else
                     if (x->target > y->target)
-                      return +1;
+                      {
+                        return +1;
+                      }
                     else
-                      return 0;
+                      {
+                        return 0;
+                      }
 }
 
 inline int hit_compare_bysize_typed(struct hit * x, struct hit * y)
@@ -109,42 +132,68 @@ inline int hit_compare_bysize_typed(struct hit * x, struct hit * y)
   // early target, then late target
 
   if (x->rejected < y->rejected)
-    return -1;
+    {
+      return -1;
+    }
   else
     if (x->rejected > y->rejected)
-      return +1;
+      {
+        return +1;
+      }
     else
       if (x->rejected == 1)
-        return 0;
+        {
+          return 0;
+        }
       else
         if (x->aligned > y->aligned)
-          return -1;
+          {
+            return -1;
+          }
         else
           if (x->aligned < y->aligned)
-            return +1;
+            {
+              return +1;
+            }
           else
             if (x->aligned == 0)
-              return 0;
+              {
+                return 0;
+              }
             else
               if (db_getabundance(x->target) > db_getabundance(y->target))
-                return -1;
+                {
+                  return -1;
+                }
               else
                 if (db_getabundance(x->target) < db_getabundance(y->target))
-                  return +1;
+                  {
+                    return +1;
+                  }
                 else
                   if (x->id > y->id)
-                    return -1;
+                    {
+                      return -1;
+                    }
                   else
                     if (x->id < y->id)
-                      return +1;
+                      {
+                        return +1;
+                      }
                     else
                       if (x->target < y->target)
-                        return -1;
+                        {
+                          return -1;
+                        }
                       else
                         if (x->target > y->target)
-                          return +1;
+                          {
+                            return +1;
+                          }
                         else
-                          return 0;
+                          {
+                            return 0;
+                          }
 }
 
 int hit_compare_byid(const void * a, const void * b)
@@ -189,11 +238,15 @@ void search_topscores(struct searchinfo_s * si)
         {
 #ifdef __x86_64__
           if (ssse3_present)
-            increment_counters_from_bitmap_ssse3(si->kmers,
-                                                 bitmap, indexed_count);
+            {
+              increment_counters_from_bitmap_ssse3(si->kmers,
+                                                   bitmap, indexed_count);
+            }
           else
-            increment_counters_from_bitmap_sse2(si->kmers,
-                                                bitmap, indexed_count);
+            {
+              increment_counters_from_bitmap_sse2(si->kmers,
+                                                  bitmap, indexed_count);
+            }
 #else
           increment_counters_from_bitmap(si->kmers, bitmap, indexed_count);
 #endif
@@ -203,7 +256,9 @@ void search_topscores(struct searchinfo_s * si)
           unsigned int * list = dbindex_getmatchlist(kmer);
           unsigned int count = dbindex_getmatchcount(kmer);
           for(unsigned int j=0; j < count; j++)
-            si->kmers[list[j]]++;
+            {
+              si->kmers[list[j]]++;
+            }
         }
     }
 
@@ -236,9 +291,13 @@ int seqncmp(char * a, char * b, uint64_t n)
       int x = chrmap_4bit[(int)(a[i])];
       int y = chrmap_4bit[(int)(b[i])];
       if (x < y)
-        return -1;
+        {
+          return -1;
+        }
       else if (x > y)
-        return +1;
+        {
+          return +1;
+        }
     }
   return 0;
 }
@@ -273,9 +332,13 @@ void align_trim(struct hit * hit)
         {
           hit->trim_aln_left = 1 + scanlength;
           if (op == 'D')
-            hit->trim_q_left = run;
+            {
+              hit->trim_q_left = run;
+            }
           else
-            hit->trim_t_left = run;
+            {
+              hit->trim_t_left = run;
+            }
         }
     }
 
@@ -289,22 +352,32 @@ void align_trim(struct hit * hit)
       if (op != 'M')
         {
           while ((p > hit->nwalignment) && (*(p-1) <= '9'))
-            p--;
+            {
+              p--;
+            }
           run = 1;
           sscanf(p, "%" PRId64, &run);
           hit->trim_aln_right = e - p;
           if (op == 'D')
-            hit->trim_q_right = run;
+            {
+              hit->trim_q_right = run;
+            }
           else
-            hit->trim_t_right = run;
+            {
+              hit->trim_t_right = run;
+            }
         }
     }
 
   if (hit->trim_q_left >= hit->nwalignmentlength)
-    hit->trim_q_right = 0;
+    {
+      hit->trim_q_right = 0;
+    }
 
   if (hit->trim_t_left >= hit->nwalignmentlength)
-    hit->trim_t_right = 0;
+    {
+      hit->trim_t_right = 0;
+    }
 
   hit->internal_alignmentlength = hit->nwalignmentlength
     - hit->trim_q_left - hit->trim_t_left
@@ -403,8 +476,8 @@ int search_acceptable_unaligned(struct searchinfo_s * si,
       ((si->qseqlen >= opt_idsuffix) &&
        (dseqlen >= opt_idsuffix) &&
        (!seqncmp(qseq+si->qseqlen-opt_idsuffix,
-                dseq+dseqlen-opt_idsuffix,
-                opt_idsuffix)))
+                 dseq+dseqlen-opt_idsuffix,
+                 opt_idsuffix)))
       &&
       /* self */
       ((!opt_self) || (strcmp(si->query_head, dlabel)))
@@ -463,15 +536,15 @@ int search_acceptable_aligned(struct searchinfo_s * si,
           if (skew <= beta || d == 0)
             {
               /* accepted */
-              hit->accepted = 1;
-              hit->weak = 0;
+              hit->accepted = true;
+              hit->weak = false;
               return 1;
             }
           else
             {
               /* rejected, but weak hit */
-              hit->rejected = 1;
-              hit->weak = 1;
+              hit->rejected = true;
+              hit->weak = true;
               return 0;
             }
         }
@@ -480,15 +553,15 @@ int search_acceptable_aligned(struct searchinfo_s * si,
           if (hit->id >= 100.0 * opt_id)
             {
               /* accepted */
-              hit->accepted = 1;
-              hit->weak = 0;
+              hit->accepted = true;
+              hit->weak = false;
               return 1;
             }
           else
             {
               /* rejected, but weak hit */
-              hit->rejected = 1;
-              hit->weak = 1;
+              hit->rejected = true;
+              hit->weak = true;
               return 0;
             }
         }
@@ -496,8 +569,8 @@ int search_acceptable_aligned(struct searchinfo_s * si,
   else
     {
       /* rejected */
-      hit->rejected = 1;
-      hit->weak = 0;
+      hit->rejected = true;
+      hit->weak = false;
       return 0;
     }
 }
@@ -520,19 +593,23 @@ void align_delayed(struct searchinfo_s * si)
     {
       struct hit * hit = si->hits + x;
       if (! hit->rejected)
-        target_list[target_count++] = hit->target;
+        {
+          target_list[target_count++] = hit->target;
+        }
     }
 
   if (target_count)
-    search16(si->s,
-             target_count,
-             target_list,
-             nwscore_list,
-             nwalignmentlength_list,
-             nwmatches_list,
-             nwmismatches_list,
-             nwgaps_list,
-             nwcigar_list);
+    {
+      search16(si->s,
+               target_count,
+               target_list,
+               nwscore_list,
+               nwalignmentlength_list,
+               nwmatches_list,
+               nwmismatches_list,
+               nwgaps_list,
+               nwcigar_list);
+    }
 
   int i = 0;
 
@@ -569,12 +646,14 @@ void align_delayed(struct searchinfo_s * si)
                   char * dseq = db_getsequence(target);
 
                   if (nwcigar_list[i])
-                    xfree(nwcigar_list[i]);
+                    {
+                      xfree(nwcigar_list[i]);
+                    }
 
                   nwcigar = xstrdup(si->lma->align(si->qsequence,
-                                                  dseq,
-                                                  si->qseqlen,
-                                                  dseqlen));
+                                                   dseq,
+                                                   si->qseqlen,
+                                                   dseqlen));
 
                   si->lma->alignstats(nwcigar,
                                       si->qsequence,
@@ -594,7 +673,7 @@ void align_delayed(struct searchinfo_s * si)
                   nwcigar = nwcigar_list[i];
                 }
 
-              hit->aligned = 1;
+              hit->aligned = true;
               hit->shortest = MIN(si->qseqlen, dseqlen);
               hit->longest = MAX(si->qseqlen, dseqlen);
               hit->nwalignment = nwcigar;
@@ -613,9 +692,13 @@ void align_delayed(struct searchinfo_s * si)
 
               /* test accept/reject criteria after alignment */
               if (search_acceptable_aligned(si, hit))
-                si->accepts++;
+                {
+                  si->accepts++;
+                }
               else
-                si->rejects++;
+                {
+                  si->rejects++;
+                }
 
               i++;
             }
@@ -624,7 +707,9 @@ void align_delayed(struct searchinfo_s * si)
 
   /* free ignored alignments */
   while (i < target_count)
-    xfree(nwcigar_list[i++]);
+    {
+      xfree(nwcigar_list[i++]);
+    }
 
   si->finalized = si->hit_count;
 }
@@ -681,11 +766,11 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
       hit->target = e.seqno;
       hit->count = e.count;
       hit->strand = si->strand;
-      hit->rejected = 0;
-      hit->accepted = 0;
-      hit->aligned = 0;
-      hit->weak = 0;
-      hit->nwalignment = 0;
+      hit->rejected = false;
+      hit->accepted = false;
+      hit->aligned = false;
+      hit->weak = false;
+      hit->nwalignment = nullptr;
 
       /* Test some accept/reject criteria before alignment */
       if (search_acceptable_unaligned(si, e.seqno))
@@ -694,7 +779,7 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
         }
       else
         {
-          hit->rejected = 1;
+          hit->rejected = true;
         }
 
       si->hit_count++;
@@ -707,7 +792,9 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
       t++;
     }
   if (delayed > 0)
-    align_delayed(si);
+    {
+      align_delayed(si);
+    }
 
   delete si->lma;
   xfree(scorematrix);
@@ -716,19 +803,31 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
 struct hit * search_findbest2_byid(struct searchinfo_s * si_p,
                                    struct searchinfo_s * si_m)
 {
-  struct hit * best = 0;
+  struct hit * best = nullptr;
 
   for(int i=0; i < si_p->hit_count; i++)
-    if ((!best) || (hit_compare_byid_typed(si_p->hits + i, best) < 0))
-      best = si_p->hits + i;
+    {
+      if ((!best) || (hit_compare_byid_typed(si_p->hits + i, best) < 0))
+        {
+          best = si_p->hits + i;
+        }
+    }
 
   if (opt_strand>1)
-    for(int i=0; i < si_m->hit_count; i++)
-      if ((!best) || (hit_compare_byid_typed(si_m->hits + i, best) < 0))
-        best = si_m->hits + i;
+    {
+      for(int i=0; i < si_m->hit_count; i++)
+        {
+          if ((!best) || (hit_compare_byid_typed(si_m->hits + i, best) < 0))
+            {
+              best = si_m->hits + i;
+            }
+        }
+    }
 
   if (best && ! best->accepted)
-    best = 0;
+    {
+      best = nullptr;
+    }
 
   return best;
 }
@@ -736,19 +835,31 @@ struct hit * search_findbest2_byid(struct searchinfo_s * si_p,
 struct hit * search_findbest2_bysize(struct searchinfo_s * si_p,
                                      struct searchinfo_s * si_m)
 {
-  struct hit * best = 0;
+  struct hit * best = nullptr;
 
   for(int i=0; i < si_p->hit_count; i++)
-    if ((!best) || (hit_compare_bysize_typed(si_p->hits + i, best) < 0))
-      best = si_p->hits + i;
+    {
+      if ((!best) || (hit_compare_bysize_typed(si_p->hits + i, best) < 0))
+        {
+          best = si_p->hits + i;
+        }
+    }
 
   if (opt_strand>1)
-    for(int i=0; i < si_m->hit_count; i++)
-      if ((!best) || (hit_compare_bysize_typed(si_m->hits + i, best) < 0))
-        best = si_m->hits + i;
+    {
+      for(int i=0; i < si_m->hit_count; i++)
+        {
+          if ((!best) || (hit_compare_bysize_typed(si_m->hits + i, best) < 0))
+            {
+              best = si_m->hits + i;
+            }
+        }
+    }
 
   if (best && ! best->accepted)
-    best = 0;
+    {
+      best = nullptr;
+    }
 
   return best;
 }
@@ -766,11 +877,15 @@ void search_joinhits(struct searchinfo_s * si_p,
     {
       struct searchinfo_s * si = s ? si_m : si_p;
       for(int i=0; i<si->hit_count; i++)
-        if (si->hits[i].accepted)
-          a++;
+        {
+          if (si->hits[i].accepted)
+            {
+              a++;
+            }
+        }
     }
 
-  struct hit * hits = (struct hit *) xmalloc(a * sizeof(struct hit));
+  auto * hits = (struct hit *) xmalloc(a * sizeof(struct hit));
 
   a = 0;
 
@@ -781,9 +896,13 @@ void search_joinhits(struct searchinfo_s * si_p,
         {
           struct hit * h = si->hits + i;
           if (h->accepted)
-            hits[a++] = *h;
+            {
+              hits[a++] = *h;
+            }
           else if (h->aligned)
-            xfree(h->nwalignment);
+            {
+              xfree(h->nwalignment);
+            }
         }
     }
 

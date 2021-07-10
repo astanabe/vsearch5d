@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -86,7 +87,7 @@ char * xstrdup(const char *s);
 char * xstrchrnul(char *s, int c);
 int xsprintf(char * * ret, const char * format, ...);
 uint64_t hash_cityhash64(char * s, uint64_t n);
-int64_t getusec(void);
+int64_t getusec();
 void show_rusage();
 
 void progress_init(const char * prompt, uint64_t size);
@@ -115,86 +116,114 @@ FILE * fopen_output(const char * filename);
 void inline xpthread_attr_init(pthread_attr_t *attr)
 {
   if (pthread_attr_init(attr))
-    fatal("Unable to init thread attributes");
+    {
+      fatal("Unable to init thread attributes");
+    }
 }
 
 void inline xpthread_attr_destroy(pthread_attr_t *attr)
 {
   if (pthread_attr_destroy(attr))
-    fatal("Unable to destroy thread attributes");
+    {
+      fatal("Unable to destroy thread attributes");
+    }
 }
 
 void inline xpthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
 {
   if (pthread_attr_setdetachstate(attr, detachstate))
-    fatal("Unable to set thread attributes detach state");
+    {
+      fatal("Unable to set thread attributes detach state");
+    }
 }
 
 void inline xpthread_create(pthread_t *thread, const pthread_attr_t *attr,
                             void *(*start_routine)(void *), void *arg)
 {
   if (pthread_create(thread, attr, start_routine, arg))
-    fatal("Unable to create thread");
+    {
+      fatal("Unable to create thread");
+    }
 }
 
 void inline xpthread_join(pthread_t thread, void **value_ptr)
 {
   if (pthread_join(thread, value_ptr))
-    fatal("Unable to join thread");
+    {
+      fatal("Unable to join thread");
+    }
 }
 
 void inline xpthread_mutex_init(pthread_mutex_t *mutex,
                                 const pthread_mutexattr_t *attr)
 {
   if (pthread_mutex_init(mutex, attr))
-    fatal("Unable to init mutex");
+    {
+      fatal("Unable to init mutex");
+    }
 }
 
 void inline xpthread_mutex_destroy(pthread_mutex_t *mutex)
 {
   if (pthread_mutex_destroy(mutex))
-    fatal("Unable to destroy mutex");
+    {
+      fatal("Unable to destroy mutex");
+    }
 }
 
 void inline xpthread_mutex_lock(pthread_mutex_t *mutex)
 {
   if (pthread_mutex_lock(mutex))
-    fatal("Unable to lock mutex");
+    {
+      fatal("Unable to lock mutex");
+    }
 }
 
 void inline xpthread_mutex_unlock(pthread_mutex_t *mutex)
 {
   if (pthread_mutex_unlock(mutex))
-    fatal("Unable to unlock mutex");
+    {
+      fatal("Unable to unlock mutex");
+    }
 }
 
 void inline xpthread_cond_init(pthread_cond_t *cond,
                                const pthread_condattr_t *attr)
 {
   if (pthread_cond_init(cond, attr))
-    fatal("Unable to init condition variable");
+    {
+      fatal("Unable to init condition variable");
+    }
 }
 
 void inline xpthread_cond_destroy(pthread_cond_t *cond)
 {
   if (pthread_cond_destroy(cond))
-    fatal("Unable to destroy condition variable");
+    {
+      fatal("Unable to destroy condition variable");
+    }
 }
 
 void inline xpthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 {
   if (pthread_cond_wait(cond, mutex))
-    fatal("Unable to wait on condition variable");
+    {
+      fatal("Unable to wait on condition variable");
+    }
 }
 
 void inline xpthread_cond_signal(pthread_cond_t *cond)
 {
   if (pthread_cond_signal(cond))
-    fatal("Unable to signal condition variable");
+    {
+      fatal("Unable to signal condition variable");
+    }
 }
 
 void inline xpthread_cond_broadcast(pthread_cond_t *cond)
 {
   if (pthread_cond_broadcast(cond))
-    fatal("Unable to broadcast condition variable");
+    {
+      fatal("Unable to broadcast condition variable");
+    }
 }

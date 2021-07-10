@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -80,7 +81,9 @@ void fprint_kmer(FILE * f, unsigned int kk, uint64_t kmer)
 {
   uint64_t x = kmer;
   for(unsigned int i=0; i<kk; i++)
-    fprintf(f, "%c", sym_nt_2bit[(x >> (2*(kk-i-1))) & 3]);
+    {
+      fprintf(f, "%c", sym_nt_2bit[(x >> (2*(kk-i-1))) & 3]);
+    }
 }
 
 void dbindex_addsequence(unsigned int seqno, int seqmask)
@@ -104,7 +107,9 @@ void dbindex_addsequence(unsigned int seqno, int seqmask)
           bitmap_set(kmerbitmap[kmer], dbindex_count);
         }
       else
-        kmerindex[kmerhash[kmer]+(kmercount[kmer]++)] = dbindex_count;
+        {
+          kmerindex[kmerhash[kmer]+(kmercount[kmer]++)] = dbindex_count;
+        }
     }
   dbindex_count++;
 }
@@ -142,7 +147,9 @@ void dbindex_prepare(int use_bitmap, int seqmask)
                    db_getsequencelen(seqno), db_getsequence(seqno),
                    & uniquecount, & uniquelist, seqmask);
       for(unsigned int i=0; i<uniquecount; i++)
-        kmercount[uniquelist[i]]++;
+        {
+          kmercount[uniquelist[i]]++;
+        }
       progress_update(seqno);
     }
   progress_done();
@@ -160,9 +167,13 @@ void dbindex_prepare(int use_bitmap, int seqmask)
 
   /* determine minimum kmer count for bitmap usage */
   if (use_bitmap)
-    bitmap_mincount = seqcount / BITMAP_THRESHOLD;
+    {
+      bitmap_mincount = seqcount / BITMAP_THRESHOLD;
+    }
   else
-    bitmap_mincount = seqcount + 1;
+    {
+      bitmap_mincount = seqcount + 1;
+    }
 
   /* allocate and zero bitmap pointers */
   kmerbitmap = (bitmap_t **) xmalloc(kmerhashsize * sizeof(bitmap_t *));
@@ -181,7 +192,9 @@ void dbindex_prepare(int use_bitmap, int seqmask)
           bitmap_reset_all(kmerbitmap[i]);
         }
       else
-        sum += kmercount[i];
+        {
+          sum += kmercount[i];
+        }
     }
   kmerindexsize = sum;
   kmerhash[kmerhashsize] = sum;
@@ -213,8 +226,12 @@ void dbindex_free()
   xfree(dbindex_map);
 
   for(unsigned int kmer=0; kmer<kmerhashsize; kmer++)
-    if (kmerbitmap[kmer])
-      bitmap_free(kmerbitmap[kmer]);
+    {
+      if (kmerbitmap[kmer])
+        {
+          bitmap_free(kmerbitmap[kmer]);
+        }
+    }
   xfree(kmerbitmap);
   unique_exit(dbindex_uh);
 }

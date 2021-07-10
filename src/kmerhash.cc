@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -81,7 +82,7 @@ struct kh_handle_s
 
 struct kh_handle_s * kh_init()
 {
-  kh_handle_s * kh =
+  auto * kh =
     (struct kh_handle_s *) xmalloc(sizeof(struct kh_handle_s));
 
   kh->maxpos = 0;
@@ -97,7 +98,9 @@ struct kh_handle_s * kh_init()
 void kh_exit(struct kh_handle_s * kh)
 {
   if (kh->hash)
-    xfree(kh->hash);
+    {
+      xfree(kh->hash);
+    }
   xfree(kh);
 }
 
@@ -109,7 +112,9 @@ inline void kh_insert_kmer(struct kh_handle_s * kh,
   /* find free bucket in hash */
   unsigned int j = HASH((char*)&kmer, (k+3)/4) & kh->hash_mask;
   while(kh->hash[j].pos)
-    j = (j + 1) & kh->hash_mask;
+    {
+      j = (j + 1) & kh->hash_mask;
+    }
 
   kh->hash[j].kmer = kmer;
   kh->hash[j].pos = pos;
@@ -125,14 +130,18 @@ void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
   if (kh->alloc < 2 * len)
     {
       while (kh->alloc < 2 * len)
-        kh->alloc *= 2;
+        {
+          kh->alloc *= 2;
+        }
       kh->hash = (struct kh_bucket_s *)
         xrealloc(kh->hash, kh->alloc * sizeof(struct kh_bucket_s));
     }
 
   kh->size = 1;
   while(kh->size < 2 * len)
-    kh->size *= 2;
+    {
+      kh->size *= 2;
+    }
   kh->hash_mask = kh->size - 1;
 
   kh->maxpos = len;
@@ -203,7 +212,9 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
                   int fpos = kh->hash[j].pos - 1;
                   int diag = fpos - (pos - k + 1);
                   if (diag >= 0)
-                    diag_counts[diag]++;
+                    {
+                      diag_counts[diag]++;
+                    }
                 }
               j = (j + 1) & kh->hash_mask;
             }
@@ -221,7 +232,9 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
       int c = diag_counts[d];
 
       if (c >= minmatch)
-        good_diags++;
+        {
+          good_diags++;
+        }
 
       if (c > best_diag_count)
         {
@@ -231,9 +244,13 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
     }
 
   if (good_diags == 1)
-    return best_diag;
+    {
+      return best_diag;
+    }
   else
-    return -1;
+    {
+      return -1;
+    }
 }
 
 void kh_find_diagonals(struct kh_handle_s * kh,
@@ -274,7 +291,9 @@ void kh_find_diagonals(struct kh_handle_s * kh,
                   int fpos = kh->hash[j].pos - 1;
                   int diag = len + fpos - (pos - k + 1);
                   if (diag >= 0)
-                    diags[diag]++;
+                    {
+                      diags[diag]++;
+                    }
                 }
               j = (j + 1) & kh->hash_mask;
             }

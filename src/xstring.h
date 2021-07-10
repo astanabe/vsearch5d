@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -74,17 +75,19 @@ class xstring
     {
       length = 0;
       alloc = 0;
-      string = 0;
+      string = nullptr;
     }
 
   ~xstring()
-    {
-      if (alloc > 0)
+  {
+    if (alloc > 0)
+      {
         xfree(string);
-      alloc = 0;
-      string = 0;
-      length = 0;
-    }
+      }
+    alloc = 0;
+    string = nullptr;
+    length = 0;
+  }
 
   void empty()
   {
@@ -94,9 +97,13 @@ class xstring
   char * get_string()
   {
     if (length > 0)
-      return string;
+      {
+        return string;
+      }
     else
-      return empty_string;
+      {
+        return empty_string;
+      }
   }
 
   size_t get_length()
@@ -119,9 +126,12 @@ class xstring
 
   void add_d(int d)
   {
-    int needed = snprintf(0, 0, "%d", d);
+    int needed = snprintf(nullptr, 0, "%d", d);
     if (needed < 0)
-      fatal("snprintf failed");
+      {
+        fatal("snprintf failed");
+      }
+
     if (length + needed + 1 > alloc)
       {
         alloc = length + needed + 1;

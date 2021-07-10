@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -78,20 +79,22 @@ static const char maskextleft =  8;
 inline void pushop(char newop, char ** cigarendp, char * op, int * count)
 {
   if (newop == *op)
-    (*count)++;
-  else
-  {
-    *--*cigarendp = *op;
-    if (*count > 1)
     {
-      char buf[25];
-      int len = sprintf(buf, "%d", *count);
-      *cigarendp -= len;
-      memcpy(*cigarendp, buf, (size_t)len);
+      (*count)++;
     }
-    *op = newop;
-    *count = 1;
-  }
+  else
+    {
+      *--*cigarendp = *op;
+      if (*count > 1)
+        {
+          char buf[25];
+          int len = sprintf(buf, "%d", *count);
+          *cigarendp -= len;
+          memcpy(*cigarendp, buf, (size_t)len);
+        }
+      *op = newop;
+      *count = 1;
+    }
 }
 
 inline void finishop(char ** cigarendp, char * op, int * count)
@@ -154,10 +157,10 @@ inline void finishop(char ** cigarendp, char * op, int * count)
 
 struct nwinfo_s * nw_init()
 {
-  struct nwinfo_s * nw = (struct nwinfo_s *) xmalloc(sizeof(struct nwinfo_s));
-  nw->dir = 0;
+  auto * nw = (struct nwinfo_s *) xmalloc(sizeof(struct nwinfo_s));
+  nw->dir = nullptr;
   nw->dir_alloc = 0;
-  nw->hearray = 0;
+  nw->hearray = nullptr;
   nw->hearray_alloc = 0;
   return nw;
 }
@@ -165,9 +168,13 @@ struct nwinfo_s * nw_init()
 void nw_exit(struct nwinfo_s * nw)
 {
   if (nw->dir)
-    xfree(nw->dir);
+    {
+      xfree(nw->dir);
+    }
   if (nw->hearray)
-    xfree(nw->hearray);
+    {
+      xfree(nw->hearray);
+    }
   xfree(nw);
 }
 
@@ -231,13 +238,17 @@ void nw_align(char * dseq,
   {
     nw->hearray[2*i] = -gapopen_t_left - (i+1) * gapextend_t_left;
     if (i < qlen-1)
-      nw->hearray[2*i+1] =
-        - gapopen_t_left - (i+1) * gapextend_t_left
-        - gapopen_q_interior - gapextend_q_interior;
+      {
+        nw->hearray[2*i+1] =
+          - gapopen_t_left - (i+1) * gapextend_t_left
+          - gapopen_q_interior - gapextend_q_interior;
+      }
     else
-      nw->hearray[2*i+1] =
-        - gapopen_t_left - (i+1) * gapextend_t_left
-        - gapopen_q_right - gapextend_q_right;
+      {
+        nw->hearray[2*i+1] =
+          - gapopen_t_left - (i+1) * gapextend_t_left
+          - gapopen_q_right - gapextend_q_right;
+      }
   }
 
   for(j=0; j<dlen; j++)
@@ -245,16 +256,24 @@ void nw_align(char * dseq,
     hep = nw->hearray;
 
     if (j == 0)
-      h = 0;
+      {
+        h = 0;
+      }
     else
-      h = - gapopen_q_left - j * gapextend_q_left;
+      {
+        h = - gapopen_q_left - j * gapextend_q_left;
+      }
 
     if (j < dlen-1)
-      f = - gapopen_q_left - (j+1) * gapextend_q_left
-        - gapopen_t_interior - gapextend_t_interior;
+      {
+        f = - gapopen_q_left - (j+1) * gapextend_q_left
+          - gapopen_t_interior - gapextend_t_interior;
+      }
     else
-      f = - gapopen_q_left - (j+1) * gapextend_q_left
-        - gapopen_t_right - gapextend_t_right;
+      {
+        f = - gapopen_q_left - (j+1) * gapextend_q_left
+          - gapopen_t_right - gapextend_t_right;
+      }
 
     for(i=0; i<qlen; i++)
     {
@@ -301,14 +320,22 @@ void nw_align(char * dseq,
         }
 
       if (f > h_f)
-        *d |= maskextup;
+        {
+          *d |= maskextup;
+        }
       else
-        f = h_f;
+        {
+          f = h_f;
+        }
 
       if (e > h_e)
-        *d |= maskextleft;
+        {
+          *d |= maskextleft;
+        }
       else
-        e = h_e;
+        {
+          e = h_e;
+        }
 
       *(hep+1) = e;
       h = n;
@@ -389,7 +416,9 @@ void nw_align(char * dseq,
     {
       score += getscore(score_matrix, dseq[j-1], qseq[i-1]);
       if (chrmap_4bit[(int)(dseq[j-1])] & chrmap_4bit[(int)(qseq[i-1])])
-        matches++;
+        {
+          matches++;
+        }
       i--;
       j--;
       pushop('M', &cigarend, &op, &count);

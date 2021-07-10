@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -91,7 +92,7 @@ struct uhandle_s
 
 struct uhandle_s * unique_init()
 {
-  uhandle_s * uh = (struct uhandle_s *) xmalloc(sizeof(struct uhandle_s));
+  auto * uh = (struct uhandle_s *) xmalloc(sizeof(struct uhandle_s));
 
   uh->alloc = 2048;
   uh->size = 0;
@@ -100,7 +101,7 @@ struct uhandle_s * unique_init()
   uh->list = (unsigned int *) xmalloc(sizeof(unsigned int) * uh->alloc);
 
   uh->bitmap_size = 0;
-  uh->bitmap = 0;
+  uh->bitmap = nullptr;
 
   return uh;
 }
@@ -108,26 +109,38 @@ struct uhandle_s * unique_init()
 void unique_exit(struct uhandle_s * uh)
 {
   if (uh->bitmap)
-    xfree(uh->bitmap);
+    {
+      xfree(uh->bitmap);
+    }
   if (uh->hash)
-    xfree(uh->hash);
+    {
+      xfree(uh->hash);
+    }
   if (uh->list)
-    xfree(uh->list);
+    {
+      xfree(uh->list);
+    }
   xfree(uh);
 }
 
 int unique_compare(const void * a, const void * b)
 {
-  unsigned int * x = (unsigned int*) a;
-  unsigned int * y = (unsigned int*) b;
+  auto * x = (unsigned int*) a;
+  auto * y = (unsigned int*) b;
 
   if (x<y)
-    return -1;
+    {
+      return -1;
+    }
   else
     if (x>y)
-      return +1;
+      {
+        return +1;
+      }
     else
-      return 0;
+      {
+        return 0;
+      }
 }
 
 
@@ -144,7 +157,9 @@ void unique_count_bitmap(struct uhandle_s * uh,
   if (uh->alloc < seqlen)
     {
       while (uh->alloc < seqlen)
-        uh->alloc *= 2;
+        {
+          uh->alloc *= 2;
+        }
       uh->list = (unsigned int *)
         xrealloc(uh->list, sizeof(unsigned int) * uh->alloc);
     }
@@ -168,7 +183,9 @@ void unique_count_bitmap(struct uhandle_s * uh,
   char * e1 = s + k-1;
   char * e2 = s + seqlen;
   if (e2 < e1)
-    e1 = e2;
+    {
+      e1 = e2;
+    }
 
   unsigned int * maskmap = (seqmask != MASK_NONE) ?
     chrmap_mask_lower : chrmap_mask_ambig;
@@ -224,7 +241,9 @@ void unique_count_hash(struct uhandle_s * uh,
   if (uh->alloc < 2*seqlen)
     {
       while (uh->alloc < 2*seqlen)
-        uh->alloc *= 2;
+        {
+          uh->alloc *= 2;
+        }
       uh->hash = (struct bucket_s *)
         xrealloc(uh->hash, sizeof(struct bucket_s) * uh->alloc);
       uh->list = (unsigned int *)
@@ -235,7 +254,9 @@ void unique_count_hash(struct uhandle_s * uh,
 
   uh->size = 1;
   while (uh->size < 2*seqlen)
-    uh->size *= 2;
+    {
+      uh->size *= 2;
+    }
   uh->hash_mask = uh->size - 1;
 
   memset(uh->hash, 0, sizeof(struct bucket_s) * uh->size);
@@ -248,7 +269,9 @@ void unique_count_hash(struct uhandle_s * uh,
   char * e1 = s + k-1;
   char * e2 = s + seqlen;
   if (e2 < e1)
-    e1 = e2;
+    {
+      e1 = e2;
+    }
 
   unsigned int * maskmap = (seqmask != MASK_NONE) ?
     chrmap_mask_lower : chrmap_mask_ambig;
@@ -279,7 +302,9 @@ void unique_count_hash(struct uhandle_s * uh,
           /* find free appropriate bucket in hash */
           j = HASH((char*)&kmer, (k+3)/4) & uh->hash_mask;
           while((uh->hash[j].count) && (uh->hash[j].kmer != kmer))
-            j = (j + 1) & uh->hash_mask;
+            {
+              j = (j + 1) & uh->hash_mask;
+            }
 
           if (!(uh->hash[j].count))
             {
@@ -304,9 +329,13 @@ void unique_count(struct uhandle_s * uh,
                   int seqmask)
 {
   if (k<10)
-    unique_count_bitmap(uh, k, seqlen, seq, listlen, list, seqmask);
+    {
+      unique_count_bitmap(uh, k, seqlen, seq, listlen, list, seqmask);
+    }
   else
-    unique_count_hash(uh, k, seqlen, seq, listlen, list, seqmask);
+    {
+      unique_count_hash(uh, k, seqlen, seq, listlen, list, seqmask);
+    }
 }
 
 int unique_count_shared(struct uhandle_s * uh,
@@ -326,7 +355,9 @@ int unique_count_shared(struct uhandle_s * uh,
           uint64_t x = kmer >> 6ULL;
           uint64_t y = 1ULL << (kmer & 63ULL);
           if (uh->bitmap[x] & y)
-            count++;
+            {
+              count++;
+            }
         }
     }
   else
@@ -336,9 +367,13 @@ int unique_count_shared(struct uhandle_s * uh,
           unsigned int kmer = list[i];
           uint64_t j = HASH((char*)&kmer, (k+3)/4) & uh->hash_mask;
           while((uh->hash[j].count) && (uh->hash[j].kmer != kmer))
-            j = (j + 1) & uh->hash_mask;
+            {
+              j = (j + 1) & uh->hash_mask;
+            }
           if (uh->hash[j].count)
-            count++;
+            {
+              count++;
+            }
         }
     }
   return count;

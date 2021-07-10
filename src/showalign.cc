@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -121,11 +122,17 @@ inline void putop(char c, int64_t len)
           qs4 = chrmap_4bit[(int)qs];
           ds4 = chrmap_4bit[(int)ds];
           if ((qs4 == ds4) && (! ambiguous_4bit[qs4]))
-            a_line[line_pos] = '|';
+            {
+              a_line[line_pos] = '|';
+            }
           else if (qs4 & ds4)
-            a_line[line_pos] = '+';
+            {
+              a_line[line_pos] = '+';
+            }
           else
-            a_line[line_pos] = ' ';
+            {
+              a_line[line_pos] = ' ';
+            }
 
           d_line[line_pos] = ds;
           line_pos++;
@@ -158,13 +165,17 @@ inline void putop(char c, int64_t len)
 
           int64_t q1 = q_start + 1;
           if (q1 > q_len)
-            q1 = q_len;
+            {
+              q1 = q_len;
+            }
 
           int64_t q2 = q_strand ? q_pos +2 : q_pos;
 
           int64_t d1 = d_start + 1;
           if (d1 > d_len)
-            d1 = d_len;
+            {
+              d1 = d_len;
+            }
 
           int64_t d2 = d_pos;
 
@@ -277,7 +288,9 @@ char * align_getrow(char * seq, char * cigar, int alen, int origin)
         {
           /* insert len gap symbols */
           for(int64_t i = 0; i < len; i++)
-            *r++ = '-';
+            {
+              *r++ = '-';
+            }
         }
     }
 
@@ -291,7 +304,9 @@ void align_fprint_uncompressed_alignment(FILE * f, char * cigar)
   while(*p)
     {
       if (*p > '9')
-        fprintf(f, "%c", *p++);
+        {
+          fprintf(f, "%c", *p++);
+        }
       else
         {
           int n = 0;
@@ -300,11 +315,15 @@ void align_fprint_uncompressed_alignment(FILE * f, char * cigar)
           if (sscanf(p, "%d%c%n", &n, &c, &x) == 2)
             {
               for(int i = 0; i<n; i++)
-                fprintf(f, "%c", c);
+                {
+                  fprintf(f, "%c", c);
+                }
               p += x;
             }
           else
-            fatal("bad alignment string");
+            {
+              fatal("bad alignment string");
+            }
         }
     }
 }

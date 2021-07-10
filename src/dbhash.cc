@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -74,12 +75,16 @@ int dbhash_seqcmp(char * a, char * b, uint64_t n)
   char * q = b;
 
   if (n <= 0)
-    return 0;
+    {
+      return 0;
+    }
 
   while ((n-- > 0) && (chrmap_4bit[(int)(*p)] == chrmap_4bit[(int)(*q)]))
     {
       if ((n == 0) || (*p == 0) || (*q == 0))
-        break;
+        {
+          break;
+        }
       p++;
       q++;
     }
@@ -112,14 +117,14 @@ void dbhash_open(uint64_t maxelements)
 void dbhash_close()
 {
   bitmap_free(dbhash_bitmap);
-  dbhash_bitmap = 0;
+  dbhash_bitmap = nullptr;
   xfree(dbhash_table);
-  dbhash_table = 0;
+  dbhash_table = nullptr;
 }
 
 int64_t dbhash_search_first(char * seq,
-                        uint64_t seqlen,
-                        struct dbhash_search_info_s * info)
+                            uint64_t seqlen,
+                            struct dbhash_search_info_s * info)
 {
 
   uint64_t hash = hash_cityhash64(seq, seqlen);
@@ -142,9 +147,13 @@ int64_t dbhash_search_first(char * seq,
   info->index = index;
 
   if (bitmap_get(dbhash_bitmap, index))
-    return bp->seqno;
+    {
+      return bp->seqno;
+    }
   else
-    return -1;
+    {
+      return -1;
+    }
 }
 
 int64_t dbhash_search_next(struct dbhash_search_info_s * info)
@@ -168,9 +177,13 @@ int64_t dbhash_search_next(struct dbhash_search_info_s * info)
   info->index = index;
 
   if (bitmap_get(dbhash_bitmap, index))
-    return bp->seqno;
+    {
+      return bp->seqno;
+    }
   else
-    return -1;
+    {
+      return -1;
+    }
 }
 
 void dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno)
@@ -179,7 +192,9 @@ void dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno)
 
   int64_t ret = dbhash_search_first(seq, seqlen, & info);
   while (ret >= 0)
-    ret = dbhash_search_next(&info);
+    {
+      ret = dbhash_search_next(&info);
+    }
 
   bitmap_set(dbhash_bitmap, info.index);
   struct dbhash_bucket_s * bp = dbhash_table + info.index;

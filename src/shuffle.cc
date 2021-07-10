@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -66,7 +67,9 @@ void shuffle()
 {
   FILE * fp_output = fopen_output(opt_output);
   if (!fp_output)
-    fatal("Unable to open shuffle output file for writing");
+    {
+      fatal("Unable to open shuffle output file for writing");
+    }
 
   db_read(opt_shuffle, 0);
   show_rusage();
@@ -75,7 +78,9 @@ void shuffle()
   int * deck = (int*) xmalloc(dbsequencecount * sizeof(int));
 
   for(int i=0; i<dbsequencecount; i++)
-    deck[i] = i;
+    {
+      deck[i] = i;
+    }
 
   int passed = 0;
   progress_init("Shuffling", dbsequencecount-1);

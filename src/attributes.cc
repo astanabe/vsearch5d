@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -79,7 +80,9 @@ bool header_find_attribute(const char * header,
   const char * digit_chars_decimal = "0123456789.";
 
   if ((! header) || (! attribute))
-    return false;
+    {
+      return false;
+    }
 
   int hlen = header_length;
   int alen = strlen(attribute);
@@ -91,8 +94,10 @@ bool header_find_attribute(const char * header,
       char * r = (char *) strstr(header + i, attribute);
 
       /* no match */
-      if (r == NULL)
-        break;
+      if (r == nullptr)
+        {
+          break;
+        }
 
       i = r - header;
 
@@ -144,9 +149,13 @@ int64_t header_get_size(char * header, int header_length)
     {
       int64_t number = atol(header + start + 5);
       if (number > 0)
-        abundance = number;
+        {
+          abundance = number;
+        }
       else
-        fatal("Invalid (zero) abundance annotation in FASTA file header");
+        {
+          fatal("Invalid (zero) abundance annotation in FASTA file header");
+        }
     }
   return abundance;
 }
@@ -167,12 +176,14 @@ void header_fprint_strip_size_ee(FILE * fp,
   int size_end = 0;
   bool size_found = false;
   if (strip_size)
-    size_found = header_find_attribute(header,
-                                       header_length,
-                                       "size=",
-                                       & size_start,
-                                       & size_end,
-                                       false);
+    {
+      size_found = header_find_attribute(header,
+                                         header_length,
+                                         "size=",
+                                         & size_start,
+                                         & size_end,
+                                         false);
+    }
   if (size_found)
     {
       attribute_start[attributes] = size_start;
@@ -186,12 +197,14 @@ void header_fprint_strip_size_ee(FILE * fp,
   int ee_end = 0;
   bool ee_found = false;
   if (strip_ee)
-    ee_found = header_find_attribute(header,
-                                     header_length,
-                                     "ee=",
-                                     & ee_start,
-                                     & ee_end,
-                                     true);
+    {
+      ee_found = header_find_attribute(header,
+                                       header_length,
+                                       "ee=",
+                                       & ee_start,
+                                       & ee_end,
+                                       true);
+    }
   if (ee_found)
     {
       attribute_start[attributes] = ee_start;

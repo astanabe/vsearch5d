@@ -2,14 +2,15 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2020, Akifumi S. Tanabe
+  Copyright (C) 2016-2021, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2020, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
+
 
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
@@ -109,7 +110,9 @@ bool sintax_parse_tax(const char * header,
   */
 
   if (! header)
-    return false;
+    {
+      return false;
+    }
 
   const char * attribute = "tax=";
 
@@ -123,8 +126,10 @@ bool sintax_parse_tax(const char * header,
       char * r = (char *) strstr(header + i, attribute);
 
       /* no match */
-      if (r == NULL)
-        break;
+      if (r == nullptr)
+        {
+          break;
+        }
 
       i = r - header;
 
@@ -139,10 +144,14 @@ bool sintax_parse_tax(const char * header,
 
       /* find end (semicolon or end of header) */
       const char * s = strchr(header+i+alen, ';');
-      if (s == 0)
-        * tax_end = hlen;
+      if (s == nullptr)
+        {
+          * tax_end = hlen;
+        }
       else
-        * tax_end = s - header;
+        {
+          * tax_end = s - header;
+        }
 
       return true;
     }
@@ -190,18 +199,26 @@ void sintax_split(int seqno, int * level_start, int * level_len)
 
                   char * z = strchr(h + t + 2, ',');
                   if (z)
-                    level_len[level] = z - h - t - 2;
+                    {
+                      level_len[level] = z - h - t - 2;
+                    }
                   else
-                    level_len[level] = tax_end - t - 2;
+                    {
+                      level_len[level] = tax_end - t - 2;
+                    }
                 }
             }
 
           /* skip past next comma */
           char * x = strchr(h + t, ',');
           if (x)
-            t = x - h + 1;
+            {
+              t = x - h + 1;
+            }
           else
-            t = tax_end;
+            {
+              t = tax_end;
+            }
         }
     }
 }
@@ -224,8 +241,11 @@ void sintax_analyse(char * query_head,
 
       sintax_split(best_seqno, best_level_start, best_level_len);
 
-      for (int j = 0; j < tax_levels; j++)
-        level_match[j] = 0;
+      for (int & j :
+             level_match)
+        {
+          j = 0;
+        }
 
       for (int i = 0; i < count; i++)
         {
@@ -305,9 +325,13 @@ void sintax_analyse(char * query_head,
   else
     {
       if (opt_sintax_cutoff > 0.0)
-        fprintf(fp_tabbedout, "\t\t\t");
+        {
+          fprintf(fp_tabbedout, "\t\t\t");
+        }
       else
-        fprintf(fp_tabbedout, "\t\t");
+        {
+          fprintf(fp_tabbedout, "\t\t");
+        }
     }
 
 #if 0
@@ -321,17 +345,9 @@ void sintax_analyse(char * query_head,
 void sintax_query(int64_t t)
 {
   int all_seqno[2][bootstrap_count];
-  int best_seqno[2];
-  int boot_count[2];
-  unsigned int best_count[2];
-
-  best_count[0] = 0;
-  best_count[1] = 0;
-  best_seqno[0] = 0;
-  best_seqno[1] = 0;
-  boot_count[0] = 0;
-  boot_count[1] = 0;
-
+  int best_seqno[2] = {0, 0};
+  int boot_count[2] = {0, 0};
+  unsigned int best_count[2] = {0, 0};
   int qseqlen = si_plus[t].qseqlen;
   char * query_head = si_plus[t].query_head;
 
@@ -395,19 +411,29 @@ void sintax_query(int64_t t)
   int best_strand;
 
   if (opt_strand == 1)
-    best_strand = 0;
+    {
+      best_strand = 0;
+    }
   else
     {
       if (best_count[0] > best_count[1])
-        best_strand = 0;
+        {
+          best_strand = 0;
+        }
       else if (best_count[1] > best_count[0])
-        best_strand = 1;
+        {
+          best_strand = 1;
+        }
       else
         {
           if (boot_count[0] >= boot_count[1])
-            best_strand = 0;
+            {
+              best_strand = 0;
+            }
           else
-            best_strand = 1;
+            {
+              best_strand = 1;
+            }
         }
     }
 
@@ -423,7 +449,7 @@ void sintax_query(int64_t t)
 
 void sintax_thread_run(int64_t t)
 {
-  while (1)
+  while (true)
     {
       xpthread_mutex_lock(&mutex_input);
 
@@ -508,14 +534,14 @@ void sintax_thread_init(struct searchinfo_s * si)
   si->uh = unique_init();
   si->kmers = (count_t *) xmalloc(seqcount * sizeof(count_t) + 32);
   si->m = minheap_init(tophits);
-  si->hits = 0;
+  si->hits = nullptr;
   si->qsize = 1;
   si->query_head_alloc = 0;
-  si->query_head = 0;
+  si->query_head = nullptr;
   si->seq_alloc = 0;
-  si->qsequence = 0;
-  si->nw = 0;
-  si->s = 0;
+  si->qsequence = nullptr;
+  si->nw = nullptr;
+  si->s = nullptr;
 }
 
 void sintax_thread_exit(struct searchinfo_s * si)
@@ -525,16 +551,20 @@ void sintax_thread_exit(struct searchinfo_s * si)
   minheap_exit(si->m);
   xfree(si->kmers);
   if (si->query_head)
-    xfree(si->query_head);
+    {
+      xfree(si->query_head);
+    }
   if (si->qsequence)
-    xfree(si->qsequence);
+    {
+      xfree(si->qsequence);
+    }
 }
 
 void * sintax_thread_worker(void * vp)
 {
-  int64_t t = (int64_t) vp;
+  auto t = (int64_t) vp;
   sintax_thread_run(t);
-  return 0;
+  return nullptr;
 }
 
 void sintax_thread_worker_run()
@@ -549,7 +579,9 @@ void sintax_thread_worker_run()
     {
       sintax_thread_init(si_plus+t);
       if (si_minus)
-        sintax_thread_init(si_minus+t);
+        {
+          sintax_thread_init(si_minus+t);
+        }
       xpthread_create(pthread+t, &attr,
                       sintax_thread_worker, (void*)(int64_t)t);
     }
@@ -557,10 +589,12 @@ void sintax_thread_worker_run()
   /* finish and clean up worker threads */
   for(int t=0; t<opt_threads; t++)
     {
-      xpthread_join(pthread[t], NULL);
+      xpthread_join(pthread[t], nullptr);
       sintax_thread_exit(si_plus+t);
       if (si_minus)
-        sintax_thread_exit(si_minus+t);
+        {
+          sintax_thread_exit(si_minus+t);
+        }
     }
 
   xpthread_attr_destroy(&attr);
@@ -575,25 +609,35 @@ void sintax()
   /* open output files */
 
   if (! opt_db)
-    fatal("No database file specified with --db");
+    {
+      fatal("No database file specified with --db");
+    }
 
   if (opt_tabbedout)
     {
       fp_tabbedout = fopen_output(opt_tabbedout);
       if (! fp_tabbedout)
-        fatal("Unable to open tabbedout output file for writing");
+        {
+          fatal("Unable to open tabbedout output file for writing");
+        }
     }
   else
-    fatal("No output file specified with --tabbedout");
+    {
+      fatal("No output file specified with --tabbedout");
+    }
 
   /* check if db may be an UDB file */
 
   bool is_udb = udb_detect_isudb(opt_db);
 
   if (is_udb)
-    udb_read(opt_db, 1, 1);
+    {
+      udb_read(opt_db, true, true);
+    }
   else
-    db_read(opt_db, 0);
+    {
+      db_read(opt_db, 0);
+    }
 
   seqcount = db_getsequencecount();
 
@@ -612,16 +656,20 @@ void sintax()
   si_plus = (struct searchinfo_s *) xmalloc(opt_threads *
                                             sizeof(struct searchinfo_s));
   if (opt_strand > 1)
-    si_minus = (struct searchinfo_s *) xmalloc(opt_threads *
-                                               sizeof(struct searchinfo_s));
+    {
+      si_minus = (struct searchinfo_s *) xmalloc(opt_threads *
+                                                 sizeof(struct searchinfo_s));
+    }
   else
-    si_minus = 0;
+    {
+      si_minus = nullptr;
+    }
 
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
   /* init mutexes for input and output */
-  xpthread_mutex_init(&mutex_input, NULL);
-  xpthread_mutex_init(&mutex_output, NULL);
+  xpthread_mutex_init(&mutex_input, nullptr);
+  xpthread_mutex_init(&mutex_output, nullptr);
 
   /* run */
 
@@ -630,12 +678,24 @@ void sintax()
   progress_done();
 
   if (! opt_quiet)
-    fprintf(stderr, "Classified %d of %d sequences (%.2f%%)\n",
-            classified, queries, 100.0 * classified / queries);
+    {
+      fprintf(stderr, "Classified %d of %d sequences", classified, queries);
+      if (queries > 0)
+        {
+          fprintf(stderr, " (%.2f%%)", 100.0 * classified / queries);
+        }
+      fprintf(stderr, "\n");
+    }
 
   if (opt_log)
-    fprintf(fp_log, "Classified %d of %d sequences (%.2f%%)\n",
-            classified, queries, 100.0 * classified / queries);
+    {
+      fprintf(fp_log, "Classified %d of %d sequences", classified, queries);
+      if (queries > 0)
+        {
+          fprintf(fp_log, " (%.2f%%)", 100.0 * classified / queries);
+        }
+      fprintf(fp_log, "\n");
+    }
 
   /* clean up */
 
@@ -645,7 +705,9 @@ void sintax()
   xfree(pthread);
   xfree(si_plus);
   if (si_minus)
-    xfree(si_minus);
+    {
+      xfree(si_minus);
+    }
 
   fastx_close(query_fastx_h);
   fclose(fp_tabbedout);
