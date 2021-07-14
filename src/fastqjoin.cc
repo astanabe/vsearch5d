@@ -294,33 +294,47 @@ void fastq_join2()
   /* check input and options */
 
   if (!opt_reverse)
-    fatal("No reverse reads file specified with --reverse");
+    {
+      fatal("No reverse reads file specified with --reverse");
+    }
 
   if ((!opt_fastqout) && (!opt_fastaout))
-    fatal("No output files specified");
+    {
+      fatal("No output files specified");
+    }
 
   char * padgap = 0;
   char * padgapq = 0;
 
   if (opt_join_padgap)
-    padgap = xstrdup(opt_join_padgap);
+    {
+      padgap = xstrdup(opt_join_padgap);
+    }
   else
-    padgap = xstrdup("NNNNNNNN");
+    {
+      padgap = xstrdup("NNNNNNNN");
+    }
 
   uint64_t padlen = strlen(padgap);
 
   if (opt_join_padgapq)
-    padgapq = xstrdup(opt_join_padgapq);
+    {
+      padgapq = xstrdup(opt_join_padgapq);
+    }
   else
     {
       padgapq = (char *) xmalloc(padlen + 1);
       for(uint64_t i = 0; i < padlen; i++)
-        padgapq[i] = 'I';
+        {
+          padgapq[i] = 'I';
+        }
       padgapq[padlen] = 0;
     }
 
   if (padlen != strlen(padgapq))
-    fatal("Strings given by --join_padgap and --join_padgapq differ in length");
+    {
+      fatal("Strings given by --join_padgap and --join_padgapq differ in length");
+    }
 
   /* open input files */
 
@@ -330,9 +344,13 @@ void fastq_join2()
   /* open output files */
 
   if (opt_fastqout)
-    fp_fastqout = join_fileopenw(opt_fastqout);
+    {
+      fp_fastqout = join_fileopenw(opt_fastqout);
+    }
   if (opt_fastaout)
-    fp_fastaout = join_fileopenw(opt_fastaout);
+    {
+      fp_fastaout = join_fileopenw(opt_fastaout);
+    }
 
   /* main */
 
@@ -351,7 +369,9 @@ void fastq_join2()
   while(fastq_next(fastq_fwd, 0, chrmap_no_change))
     {
       if (! fastq_next(fastq_rev, 0, chrmap_no_change))
-        fatal("More forward reads than reverse reads");
+        {
+          fatal("More forward reads than reverse reads");
+        }
 
       uint64_t fwd_seq_length = fastq_get_sequence_length(fastq_fwd);
       uint64_t rev_seq_length = fastq_get_sequence_length(fastq_rev);
@@ -437,7 +457,9 @@ void fastq_join2()
   progress_done();
 
   if (fastq_next(fastq_rev, 0, chrmap_no_change))
-    fatal("More reverse reads than forward reads");
+    {
+      fatal("More reverse reads than forward reads");
+    }
 
   fprintf(stderr,
           "%" PRIu64 " pairs joined\n",
@@ -446,9 +468,13 @@ void fastq_join2()
   /* clean up */
 
   if (opt_fastaout)
-    fclose(fp_fastaout);
+    {
+      fclose(fp_fastaout);
+    }
   if (opt_fastqout)
-    fclose(fp_fastqout);
+    {
+      fclose(fp_fastqout);
+    }
 
   fastq_close(fastq_rev);
   fastq_rev = 0;
