@@ -154,12 +154,15 @@ uint64_t largewrite(int fd, void * buf, uint64_t nbyte, uint64_t offset)
   return nbyte;
 }
 
-bool udb_detect_isudb(const char * filename)
+auto udb_detect_isudb(const char * filename) -> bool
 {
   /*
     Detect whether the given filename seems to refer to an UDB file.
     It must be an uncompressed regular file, not a pipe.
   */
+
+  constexpr uint32_t udb_file_signature {0x55444246};
+  constexpr uint64_t expected_n_bytes {sizeof(uint32_t)};
 
   xstat_t fs;
 
@@ -182,10 +185,10 @@ bool udb_detect_isudb(const char * filename)
     }
 
   unsigned int magic = 0;
-  uint64_t bytesread = read(fd, & magic, 4);
+  uint64_t bytesread = read(fd, & magic, expected_n_bytes);
   close(fd);
 
-  if ((bytesread == 4) && (magic == 0x55444246))
+  if ((bytesread == expected_n_bytes) && (magic == udb_file_signature))
     {
       return true;
     }
@@ -605,6 +608,9 @@ void udb_read(const char * filename,
 
 void udb_fasta()
 {
+  if (!opt_output)
+    fatal("FASTA output file must be specified with --output");
+
   /* open FASTA file for writing */
 
   FILE * fp_output = fopen_output(opt_output);
@@ -867,6 +873,9 @@ void udb_stats()
 
 void udb_make()
 {
+  if (!opt_output)
+    fatal("UDB output file must be specified with --output");
+
   int fd_output = 0;
 
   fd_output = xopen_write(opt_output);

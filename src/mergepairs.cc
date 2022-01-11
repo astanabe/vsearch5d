@@ -1128,6 +1128,10 @@ inline void chunk_perform_read()
       if (r < chunk_size)
         {
           finished_reading = true;
+          if (pairs_written >= pairs_read)
+            {
+              finished_all = true;
+            }
         }
       xpthread_cond_broadcast(&cond_chunks);
     }

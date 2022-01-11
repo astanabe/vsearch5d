@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.18.0], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
+AC_INIT([vsearch5d], [2.20.1], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])
@@ -11,11 +11,6 @@ AC_CONFIG_HEADERS([config.h])
 
 AC_SUBST(MACOSX_DEPLOYMENT_TARGET)
 MACOSX_DEPLOYMENT_TARGET="10.9"
-
-# Set default gcc and g++ options
-
-CFLAGS='-g'
-CXXFLAGS='-g -std=c++11'
 
 # Checks for programs.
 AC_PROG_CXX

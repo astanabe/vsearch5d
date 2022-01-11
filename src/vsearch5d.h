@@ -253,6 +253,7 @@
 #include "otutable.h"
 #include "udb.h"
 #include "kmerhash.h"
+#include "tax.h"
 #include "sintax.h"
 #include "fastqjoin.h"
 #include "sffconvert.h"
@@ -274,6 +275,7 @@ extern bool opt_fastq_nostagger;
 extern bool opt_gzip_decompress;
 extern bool opt_label_substr_match;
 extern bool opt_no_progress;
+extern bool opt_fastq_qout_max;
 extern bool opt_quiet;
 extern bool opt_relabel_keep;
 extern bool opt_relabel_md5;
@@ -336,6 +338,7 @@ extern char * opt_fastx_getsubseq;
 extern char * opt_fastx_mask;
 extern char * opt_fastx_revcomp;
 extern char * opt_fastx_subsample;
+extern char * opt_fastx_uniques;
 extern char * opt_join_padgap;
 extern char * opt_join_padgapq;
 extern char * opt_label;
@@ -344,6 +347,7 @@ extern char * opt_labels;
 extern char * opt_label_word;
 extern char * opt_label_words;
 extern char * opt_label_field;
+extern char * opt_lcaout;
 extern char * opt_log;
 extern char * opt_makeudb_usearch;
 extern char * opt_maskfasta;
@@ -389,6 +393,7 @@ extern double opt_fastq_maxee;
 extern double opt_fastq_maxee_rate;
 extern double opt_fastq_truncee;
 extern double opt_id;
+extern double opt_lca_cutoff;
 extern double opt_max_unmasked_pct;
 extern double opt_maxid;
 extern double opt_maxqt;

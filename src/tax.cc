@@ -63,135 +63,127 @@
 
 #include "vsearch5d.h"
 
-static struct sortinfo_size_s
+const char * tax_letters = "dkpcofgs";
+
+bool tax_parse(const char * header,
+               int header_length,
+               int * tax_start,
+               int * tax_end)
 {
-  unsigned int size;
-  unsigned int seqno;
-} * sortinfo;
+  /*
+    Identify the first occurence of the pattern (^|;)tax=([^;]*)(;|$)
+  */
 
-int sortbysize_compare(const void * a, const void * b)
-{
-  auto * x = (struct sortinfo_size_s *) a;
-  auto * y = (struct sortinfo_size_s *) b;
-
-  /* highest abundance first, then by label, otherwise keep order */
-
-  if (x->size < y->size)
+  if (! header)
     {
-      return +1;
+      return false;
     }
-  else if (x->size > y->size)
+
+  const char * attribute = "tax=";
+
+  int hlen = header_length;
+  int alen = strlen(attribute);
+
+  int i = 0;
+
+  while (i < hlen - alen)
     {
-      return -1;
-    }
-  else
-    {
-      int r = strcmp(db_getheader(x->seqno), db_getheader(y->seqno));
-      if (r != 0)
+      char * r = (char *) strstr(header + i, attribute);
+
+      /* no match */
+      if (r == nullptr)
         {
-          return r;
+          break;
+        }
+
+      i = r - header;
+
+      /* check for ';' in front */
+      if ((i > 0) && (header[i-1] != ';'))
+        {
+          i += alen + 1;
+          continue;
+        }
+
+      * tax_start = i;
+
+      /* find end (semicolon or end of header) */
+      const char * s = strchr(header+i+alen, ';');
+      if (s == nullptr)
+        {
+          * tax_end = hlen;
         }
       else
         {
-          if (x->seqno < y->seqno)
+          * tax_end = s - header;
+        }
+
+      return true;
+    }
+  return false;
+}
+
+void tax_split(int seqno, int * level_start, int * level_len)
+{
+  /* Parse taxonomy string into the following parts
+     d domain
+     k kingdom
+     p phylum
+     c class
+     o order
+     f family
+     g genus
+     s species
+  */
+
+  for (int i = 0; i < tax_levels; i++)
+    {
+      level_start[i] = 0;
+      level_len[i] = 0;
+    }
+
+  int tax_start, tax_end;
+  char * h = db_getheader(seqno);
+  int hlen = db_getheaderlen(seqno);
+  if (tax_parse(h, hlen, & tax_start, & tax_end))
+    {
+      int t = tax_start + 4;
+
+      while (t < tax_end)
+        {
+          /* Is the next char a recogized tax level letter? */
+          const char * r = strchr(tax_letters, tolower(h[t]));
+          if (r)
             {
-              return -1;
+              int level = r - tax_letters;
+
+              /* Is there a colon after it? */
+              if (h[t + 1] == ':')
+                {
+                  level_start[level] = t + 2;
+
+                  char * z = strchr(h + t + 2, ',');
+                  if (z)
+                    {
+                      level_len[level] = z - h - t - 2;
+                    }
+                  else
+                    {
+                      level_len[level] = tax_end - t - 2;
+                    }
+                }
             }
-          else if (x->seqno > y->seqno)
+
+          /* skip past next comma */
+          char * x = strchr(h + t, ',');
+          if (x)
             {
-              return +1;
+              t = x - h + 1;
             }
           else
             {
-              return 0;
+              t = tax_end;
             }
         }
     }
-}
-
-void sortbysize()
-{
-  if (!opt_output)
-    fatal("FASTA output file for sortbysize must be specified with --output");
-
-  FILE * fp_output = fopen_output(opt_output);
-  if (!fp_output)
-    {
-      fatal("Unable to open sortbysize output file for writing");
-    }
-
-  db_read(opt_sortbysize, 0);
-
-  show_rusage();
-
-  int dbsequencecount = db_getsequencecount();
-
-  progress_init("Getting sizes", dbsequencecount);
-
-  sortinfo = (struct sortinfo_size_s*)
-    xmalloc(dbsequencecount * sizeof(sortinfo_size_s));
-
-  int passed = 0;
-
-  for(int i=0; i<dbsequencecount; i++)
-    {
-      int64_t size = db_getabundance(i);
-
-      if((size >= opt_minsize) && (size <= opt_maxsize))
-        {
-          sortinfo[passed].seqno = i;
-          sortinfo[passed].size = (unsigned int) size;
-          passed++;
-        }
-      progress_update(i);
-    }
-
-  progress_done();
-
-  show_rusage();
-
-  progress_init("Sorting", 100);
-  qsort(sortinfo, passed, sizeof(sortinfo_size_s), sortbysize_compare);
-  progress_done();
-
-  double median = 0.0;
-  if (passed > 0)
-    {
-      if (passed % 2)
-        {
-          median = sortinfo[(passed-1)/2].size;
-        }
-      else
-        {
-          median = (sortinfo[(passed/2)-1].size +
-                    sortinfo[passed/2].size) / 2.0;
-        }
-    }
-
-  if (! opt_quiet)
-    {
-      fprintf(stderr, "Median abundance: %.0f\n", median);
-    }
-
-  if (opt_log)
-    {
-      fprintf(fp_log, "Median abundance: %.0f\n", median);
-    }
-
-  show_rusage();
-
-  passed = MIN(passed, opt_topn);
-
-  progress_init("Writing output", passed);
-  for(int i=0; i<passed; i++)
-    {
-      fasta_print_db_relabel(fp_output, sortinfo[i].seqno, i+1);
-      progress_update(i);
-    }
-  progress_done();
-  show_rusage();
-
-  xfree(sortinfo);
-  db_free();
-  fclose(fp_output);
 }
