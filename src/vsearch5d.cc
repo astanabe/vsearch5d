@@ -163,10 +163,12 @@ char * opt_otutabout;
 char * opt_output;
 char * opt_pattern;
 char * opt_profile;
+char * opt_qsegout;
 char * opt_relabel;
 char * opt_rereplicate;
 char * opt_reverse;
 char * opt_samout;
+char * opt_sample;
 char * opt_search_exact;
 char * opt_sff_convert;
 char * opt_shuffle;
@@ -174,6 +176,7 @@ char * opt_sintax;
 char * opt_sortbylength;
 char * opt_sortbysize;
 char * opt_tabbedout;
+char * opt_tsegout;
 char * opt_udb2fasta;
 char * opt_udbinfo;
 char * opt_udbstats;
@@ -918,6 +921,7 @@ void args_init(int argc, char **argv)
   opt_pattern = nullptr;
   opt_profile = nullptr;
   opt_qmask = MASK_DUST;
+  opt_qsegout = nullptr;
   opt_query_cov = 0.0;
   opt_quiet = false;
   opt_randseed = 0;
@@ -932,6 +936,7 @@ void args_init(int argc, char **argv)
   opt_rowlen = 64;
   opt_samheader = false;
   opt_samout = nullptr;
+  opt_sample = nullptr;
   opt_sample_pct = 0;
   opt_sample_size = 0;
   opt_search_exact = nullptr;
@@ -956,6 +961,7 @@ void args_init(int argc, char **argv)
   opt_threads = 0;
   opt_top_hits_only = 0;
   opt_topn = LONG_MAX;
+  opt_tsegout = nullptr;
   opt_udb2fasta = nullptr;
   opt_udbinfo = nullptr;
   opt_udbstats = nullptr;
@@ -1152,6 +1158,7 @@ void args_init(int argc, char **argv)
       option_pattern,
       option_profile,
       option_qmask,
+      option_qsegout,
       option_query_cov,
       option_quiet,
       option_randseed,
@@ -1166,6 +1173,7 @@ void args_init(int argc, char **argv)
       option_rowlen,
       option_samheader,
       option_samout,
+      option_sample,
       option_sample_pct,
       option_sample_size,
       option_search_exact,
@@ -1190,6 +1198,7 @@ void args_init(int argc, char **argv)
       option_threads,
       option_top_hits_only,
       option_topn,
+      option_tsegout,
       option_uc,
       option_uc_allhits,
       option_uchime2_denovo,
@@ -1389,6 +1398,7 @@ void args_init(int argc, char **argv)
       {"pattern",               required_argument, nullptr, 0 },
       {"profile",               required_argument, nullptr, 0 },
       {"qmask",                 required_argument, nullptr, 0 },
+      {"qsegout",               required_argument, nullptr, 0 },
       {"query_cov",             required_argument, nullptr, 0 },
       {"quiet",                 no_argument,       nullptr, 0 },
       {"randseed",              required_argument, nullptr, 0 },
@@ -1403,6 +1413,7 @@ void args_init(int argc, char **argv)
       {"rowlen",                required_argument, nullptr, 0 },
       {"samheader",             no_argument,       nullptr, 0 },
       {"samout",                required_argument, nullptr, 0 },
+      {"sample",                required_argument, nullptr, 0 },
       {"sample_pct",            required_argument, nullptr, 0 },
       {"sample_size",           required_argument, nullptr, 0 },
       {"search_exact",          required_argument, nullptr, 0 },
@@ -1427,6 +1438,7 @@ void args_init(int argc, char **argv)
       {"threads",               required_argument, nullptr, 0 },
       {"top_hits_only",         no_argument,       nullptr, 0 },
       {"topn",                  required_argument, nullptr, 0 },
+      {"tsegout",               required_argument, nullptr, 0 },
       {"uc",                    required_argument, nullptr, 0 },
       {"uc_allhits",            no_argument,       nullptr, 0 },
       {"uchime2_denovo",        required_argument, nullptr, 0 },
@@ -2466,6 +2478,18 @@ void args_init(int argc, char **argv)
           opt_fastq_qout_max = true;
           break;
 
+        case option_sample:
+          opt_sample = optarg;
+          break;
+
+        case option_qsegout:
+          opt_qsegout = optarg;
+          break;
+
+        case option_tsegout:
+          opt_tsegout = optarg;
+          break;
+
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
@@ -2550,7 +2574,7 @@ void args_init(int argc, char **argv)
     The first line is the command and the lines below are the valid options.
   */
 
-  const int valid_options[][93] =
+  const int valid_options[][97] =
     {
       {
         option_allpairs_global,
@@ -2572,6 +2596,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_leftjust,
         option_log,
         option_match,
@@ -2604,6 +2629,7 @@ void args_init(int argc, char **argv)
         option_output_no_hits,
         option_pattern,
         option_qmask,
+        option_qsegout,
         option_query_cov,
         option_quiet,
         option_relabel,
@@ -2615,6 +2641,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -2623,6 +2650,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_userfields,
         option_userout,
@@ -2658,6 +2686,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_leftjust,
         option_log,
         option_match,
@@ -2694,6 +2723,7 @@ void args_init(int argc, char **argv)
         option_pattern,
         option_profile,
         option_qmask,
+        option_qsegout,
         option_query_cov,
         option_quiet,
         option_relabel,
@@ -2705,6 +2735,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -2715,6 +2746,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_userfields,
         option_userout,
@@ -2750,6 +2782,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_leftjust,
         option_log,
         option_match,
@@ -2786,6 +2819,7 @@ void args_init(int argc, char **argv)
         option_pattern,
         option_profile,
         option_qmask,
+        option_qsegout,
         option_query_cov,
         option_quiet,
         option_relabel,
@@ -2797,6 +2831,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -2807,6 +2842,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_userfields,
         option_userout,
@@ -2842,6 +2878,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_leftjust,
         option_log,
         option_match,
@@ -2878,6 +2915,7 @@ void args_init(int argc, char **argv)
         option_pattern,
         option_profile,
         option_qmask,
+        option_qsegout,
         option_query_cov,
         option_quiet,
         option_relabel,
@@ -2889,6 +2927,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -2899,6 +2938,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_userfields,
         option_userout,
@@ -2935,6 +2975,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_leftjust,
         option_log,
         option_match,
@@ -2969,6 +3010,7 @@ void args_init(int argc, char **argv)
         option_notrunclabels,
         option_otutabout,
         option_output_no_hits,
+        option_qsegout,
         option_pattern,
         option_profile,
         option_qmask,
@@ -2983,6 +3025,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -2993,6 +3036,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_unoise_alpha,
         option_userfields,
@@ -3013,6 +3057,7 @@ void args_init(int argc, char **argv)
         option_fastaout_discarded_rev,
         option_fastaout_rev,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3022,6 +3067,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_xee,
@@ -3046,6 +3092,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_strand,
@@ -3060,6 +3107,7 @@ void args_init(int argc, char **argv)
         option_bzip2_decompress,
         option_fasta_width,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3074,6 +3122,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_strand,
@@ -3088,6 +3137,7 @@ void args_init(int argc, char **argv)
         option_bzip2_decompress,
         option_fasta_width,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3102,6 +3152,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_strand,
@@ -3118,6 +3169,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmaxout,
         option_fastqout,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3126,6 +3178,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3153,6 +3206,7 @@ void args_init(int argc, char **argv)
         option_fastq_qminout,
         option_fastqout,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3161,6 +3215,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3224,6 +3279,7 @@ void args_init(int argc, char **argv)
         option_fastqout_discarded_rev,
         option_fastqout_rev,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxsize,
         option_minsize,
@@ -3235,6 +3291,7 @@ void args_init(int argc, char **argv)
         option_relabel_self,
         option_relabel_sha1,
         option_reverse,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3253,6 +3310,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_join_padgap,
         option_join_padgapq,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3280,6 +3338,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_join_padgap,
         option_join_padgapq,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3336,6 +3395,7 @@ void args_init(int argc, char **argv)
         option_relabel_self,
         option_relabel_sha1,
         option_reverse,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3384,6 +3444,7 @@ void args_init(int argc, char **argv)
         option_fastqout_discarded_rev,
         option_fastqout_rev,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxsize,
         option_minsize,
@@ -3396,6 +3457,7 @@ void args_init(int argc, char **argv)
         option_relabel_self,
         option_relabel_sha1,
         option_reverse,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3414,6 +3476,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_label,
         option_label_substr_match,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3425,6 +3488,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3444,6 +3508,7 @@ void args_init(int argc, char **argv)
         option_label,
         option_label_field,
         option_label_substr_match,
+        option_label_suffix,
         option_label_word,
         option_label_words,
         option_labels,
@@ -3458,6 +3523,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3476,6 +3542,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_label,
         option_label_substr_match,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3487,6 +3554,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_subseq_end,
@@ -3506,6 +3574,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_max_unmasked_pct,
         option_min_unmasked_pct,
@@ -3518,6 +3587,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3544,6 +3614,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3562,6 +3633,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_fastqout_discarded,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3572,6 +3644,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sample_pct,
         option_sample_size,
         option_sizein,
@@ -3594,6 +3667,7 @@ void args_init(int argc, char **argv)
         option_fastq_qout_max,
         option_fastqout,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3607,6 +3681,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_strand,
@@ -3650,6 +3725,7 @@ void args_init(int argc, char **argv)
         option_fasta_width,
         option_gzip_decompress,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_max_unmasked_pct,
         option_maxseqlength,
@@ -3665,6 +3741,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3680,6 +3757,7 @@ void args_init(int argc, char **argv)
         option_fastaout,
         option_fastqout,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3691,6 +3769,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_tabbedout,
@@ -3704,6 +3783,7 @@ void args_init(int argc, char **argv)
         option_bzip2_decompress,
         option_fasta_width,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3714,6 +3794,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3734,6 +3815,7 @@ void args_init(int argc, char **argv)
         option_fastapairs,
         option_gzip_decompress,
         option_hardmask,
+        option_label_suffix,
         option_lca_cutoff,
         option_lcaout,
         option_log,
@@ -3759,6 +3841,7 @@ void args_init(int argc, char **argv)
         option_otutabout,
         option_output_no_hits,
         option_qmask,
+        option_qsegout,
         option_quiet,
         option_relabel,
         option_relabel_keep,
@@ -3768,12 +3851,14 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_sizein,
         option_sizeout,
         option_strand,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_uc_allhits,
         option_userfields,
@@ -3787,6 +3872,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmaxout,
         option_fastq_qminout,
         option_fastqout,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3795,6 +3881,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sff_clip,
         option_sizeout,
         option_threads,
@@ -3807,6 +3894,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmax,
         option_fastq_qmin,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_minseqlength,
@@ -3820,6 +3908,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3836,6 +3925,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmax,
         option_fastq_qmin,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3855,6 +3945,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmax,
         option_fastq_qmin,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_minseqlength,
@@ -3867,6 +3958,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3882,6 +3974,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmax,
         option_fastq_qmin,
         option_gzip_decompress,
+        option_label_suffix,
         option_log,
         option_maxseqlength,
         option_maxsize,
@@ -3896,6 +3989,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3915,6 +4009,7 @@ void args_init(int argc, char **argv)
         option_gapext,
         option_gapopen,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_match,
         option_mindiffs,
@@ -3931,6 +4026,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3953,6 +4049,7 @@ void args_init(int argc, char **argv)
         option_gapext,
         option_gapopen,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_match,
         option_mindiffs,
@@ -3969,6 +4066,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -3991,6 +4089,7 @@ void args_init(int argc, char **argv)
         option_gapext,
         option_gapopen,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_match,
         option_mindiffs,
@@ -4007,6 +4106,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -4031,6 +4131,7 @@ void args_init(int argc, char **argv)
         option_gapext,
         option_gapopen,
         option_hardmask,
+        option_label_suffix,
         option_log,
         option_match,
         option_mindiffs,
@@ -4047,6 +4148,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -4063,6 +4165,7 @@ void args_init(int argc, char **argv)
 
       { option_udb2fasta,
         option_fasta_width,
+        option_label_suffix,
         option_log,
         option_no_progress,
         option_output,
@@ -4072,6 +4175,7 @@ void args_init(int argc, char **argv)
         option_relabel_md5,
         option_relabel_self,
         option_relabel_sha1,
+        option_sample,
         option_sizein,
         option_sizeout,
         option_threads,
@@ -4115,6 +4219,7 @@ void args_init(int argc, char **argv)
         option_idprefix,
         option_idsuffix,
         option_idoffset,
+        option_label_suffix,
         option_lca_cutoff,
         option_lcaout,
         option_leftjust,
@@ -4151,6 +4256,7 @@ void args_init(int argc, char **argv)
         option_output_no_hits,
         option_pattern,
         option_qmask,
+        option_qsegout,
         option_query_cov,
         option_quiet,
         option_relabel,
@@ -4162,6 +4268,7 @@ void args_init(int argc, char **argv)
         option_rowlen,
         option_samheader,
         option_samout,
+        option_sample,
         option_self,
         option_selfid,
         option_sizein,
@@ -4171,6 +4278,7 @@ void args_init(int argc, char **argv)
         option_target_cov,
         option_threads,
         option_top_hits_only,
+        option_tsegout,
         option_uc,
         option_uc_allhits,
         option_userfields,
