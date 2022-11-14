@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -378,13 +378,15 @@ char * relabel_otu(int clusterno, char * sequence, int seqlen)
   char * label = nullptr;
   if (opt_relabel)
     {
-      label = (char*) xmalloc(strlen(opt_relabel) + 21);
-      sprintf(label, "%s%d", opt_relabel, clusterno+1);
+      int size = strlen(opt_relabel) + 21;
+      label = (char*) xmalloc(size);
+      snprintf(label, size, "%s%d", opt_relabel, clusterno + 1);
     }
   else if (opt_relabel_self)
     {
-      label = (char*) xmalloc(seqlen + 1);
-      sprintf(label, "%.*s", seqlen, sequence);
+      int size = seqlen + 1;
+      label = (char*) xmalloc(size);
+      snprintf(label, size, "%.*s", seqlen, sequence);
     }
   else if (opt_relabel_sha1)
     {
@@ -635,8 +637,6 @@ void cluster_core_parallel()
                      opt_gap_extension_query_right,
                      opt_gap_extension_target_right);
 
-  int aligncount = 0;
-
   int lastlength = INT_MAX;
 
   int seqno = 0;
@@ -802,8 +802,6 @@ void cluster_core_parallel()
                           unsigned int target = hit->target;
                           if (search_acceptable_unaligned(si, target))
                             {
-                              aligncount++;
-
                               /* perform vectorized alignment */
                               /* but only using 1 sequence ! */
 
@@ -1019,11 +1017,6 @@ void cluster_core_parallel()
       progress_update(sum_nucleotides);
     }
   progress_done();
-
-#if 0
-  if (!opt_quiet)
-    fprintf(stderr, "Extra alignments computed: %d\n", aligncount);
-#endif
 
   /* clean up search info */
   for(int i = 0; i < max_queries; i++)
@@ -1435,9 +1428,10 @@ void cluster(char * dbname,
   /* allocate memory for full file name of the clusters files */
   FILE * fp_clusters = nullptr;
   char * fn_clusters = nullptr;
+  int fn_clusters_size = strlen(opt_clusters) + 25;
   if (opt_clusters)
     {
-      fn_clusters = (char *) xmalloc(strlen(opt_clusters) + 25);
+      fn_clusters = (char *) xmalloc(fn_clusters_size);
     }
 
   int lastcluster = -1;
@@ -1492,7 +1486,11 @@ void cluster(char * dbname,
                 }
 
               ordinal = 0;
-              sprintf(fn_clusters, "%s%d", opt_clusters, clusterno);
+              snprintf(fn_clusters,
+                       fn_clusters_size,
+                       "%s%d",
+                       opt_clusters,
+                       clusterno);
               fp_clusters = fopen_output(fn_clusters);
               if (!fp_clusters)
                 {

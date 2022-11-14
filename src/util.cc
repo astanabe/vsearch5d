@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -195,6 +195,11 @@ int xsprintf(char * * ret, const char * format, ...)
 uint64_t hash_cityhash64(char * s, uint64_t n)
 {
   return CityHash64((const char*)s, n);
+}
+
+uint128 hash_cityhash128(char * s, uint64_t n)
+{
+  return CityHash128((const char*)s, n);
 }
 
 int64_t getusec()

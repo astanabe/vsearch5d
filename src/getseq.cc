@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -177,7 +177,7 @@ bool test_label_match(fastx_handle h)
           field_buffer_size += labels_longest;
         }
       field_buffer = (char *) xmalloc(field_buffer_size);
-      sprintf(field_buffer, "%s=", opt_label_field);
+      snprintf(field_buffer, field_buffer_size, "%s=", opt_label_field);
     }
 
   if (opt_label)

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -137,7 +137,7 @@ class xstring
         alloc = length + needed + 1;
         string = (char*) xrealloc(string, alloc);
       }
-    sprintf(string + length, "%d", d);
+    snprintf(string + length, needed + 1, "%d", d);
     length += needed;
   }
 

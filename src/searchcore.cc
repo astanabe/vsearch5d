@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -753,7 +753,6 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
 
   int delayed = 0;
 
-  int t = 0;
   while ((si->finalized + delayed < opt_maxaccepts + opt_maxrejects - 1) &&
          (si->rejects < opt_maxrejects) &&
          (si->accepts < opt_maxaccepts) &&
@@ -789,7 +788,6 @@ void search_onequery(struct searchinfo_s * si, int seqmask)
           align_delayed(si);
           delayed = 0;
         }
-      t++;
     }
   if (delayed > 0)
     {

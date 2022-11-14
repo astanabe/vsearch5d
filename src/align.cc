@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -87,8 +87,9 @@ inline void pushop(char newop, char ** cigarendp, char * op, int * count)
       *--*cigarendp = *op;
       if (*count > 1)
         {
-          char buf[25];
-          int len = sprintf(buf, "%d", *count);
+          const int size = 25;
+          char buf[size];
+          int len = snprintf(buf, size, "%d", *count);
           *cigarendp -= len;
           memcpy(*cigarendp, buf, (size_t)len);
         }
@@ -104,8 +105,9 @@ inline void finishop(char ** cigarendp, char * op, int * count)
     *--*cigarendp = *op;
     if (*count > 1)
     {
-      char buf[25];
-      int len = sprintf(buf, "%d", *count);
+      const int size = 25;
+      char buf[size];
+      int len = snprintf(buf, size, "%d", *count);
       *cigarendp -= len;
       memcpy(*cigarendp, buf, (size_t)len);
     }

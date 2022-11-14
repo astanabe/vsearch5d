@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -108,6 +108,7 @@ char * opt_dbnotmatched;
 char * opt_derep_fulllength;
 char * opt_derep_id;
 char * opt_derep_prefix;
+char * opt_derep_smallmem;
 char * opt_eetabbedout;
 char * opt_fasta2fastq;
 char * opt_fastaout;
@@ -769,6 +770,7 @@ void args_init(int argc, char **argv)
   opt_derep_fulllength = nullptr;
   opt_derep_id = nullptr;
   opt_derep_prefix = nullptr;
+  opt_derep_smallmem = nullptr;
   opt_dn = 1.4;
   opt_ee_cutoffs_count = 3;
   opt_ee_cutoffs_values = (double*) xmalloc(opt_ee_cutoffs_count * sizeof(double));
@@ -1019,6 +1021,7 @@ void args_init(int argc, char **argv)
       option_derep_fulllength,
       option_derep_id,
       option_derep_prefix,
+      option_derep_smallmem,
       option_dn,
       option_ee_cutoffs,
       option_eeout,
@@ -1259,6 +1262,7 @@ void args_init(int argc, char **argv)
       {"derep_fulllength",      required_argument, nullptr, 0 },
       {"derep_id",              required_argument, nullptr, 0 },
       {"derep_prefix",          required_argument, nullptr, 0 },
+      {"derep_smallmem",        required_argument, nullptr, 0 },
       {"dn",                    required_argument, nullptr, 0 },
       {"ee_cutoffs",            required_argument, nullptr, 0 },
       {"eeout",                 no_argument,       nullptr, 0 },
@@ -2490,6 +2494,10 @@ void args_init(int argc, char **argv)
           opt_tsegout = optarg;
           break;
 
+        case option_derep_smallmem:
+          opt_derep_smallmem = optarg;
+          break;
+
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
@@ -2525,6 +2533,7 @@ void args_init(int argc, char **argv)
       option_derep_fulllength,
       option_derep_id,
       option_derep_prefix,
+      option_derep_smallmem,
       option_fasta2fastq,
       option_fastq_chars,
       option_fastq_convert,
@@ -3159,6 +3168,37 @@ void args_init(int argc, char **argv)
         option_threads,
         option_topn,
         option_uc,
+        option_xee,
+        option_xsize,
+        -1 },
+
+      { option_derep_smallmem,
+        option_bzip2_decompress,
+        option_fasta_width,
+        option_fastaout,
+        option_fastq_ascii,
+        option_fastq_qmax,
+        option_fastq_qmin,
+        option_gzip_decompress,
+        option_label_suffix,
+        option_log,
+        option_maxseqlength,
+        option_maxuniquesize,
+        option_minseqlength,
+        option_minuniquesize,
+        option_no_progress,
+        option_notrunclabels,
+        option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
+        option_sample,
+        option_sizein,
+        option_sizeout,
+        option_strand,
+        option_threads,
         option_xee,
         option_xsize,
         -1 },
@@ -3927,6 +3967,8 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_label_suffix,
         option_log,
+        option_maxseqlength,
+        option_minseqlength,
         option_no_progress,
         option_notrunclabels,
         option_quiet,
@@ -4476,6 +4518,7 @@ void args_init(int argc, char **argv)
 
   if ((opt_idoffset < 0) || (opt_idoffset > 16))
     fatal("The argument to --idoffset must in the range 0 to 16");
+
 #if 0
 
   if (opt_match <= 0)
@@ -4892,6 +4935,7 @@ void cmd_help()
               "  --derep_fulllength FILENAME dereplicate sequences in the given FASTA file\n"
               "  --derep_id FILENAME         dereplicate using both identifiers and sequences\n"
               "  --derep_prefix FILENAME     dereplicate sequences in file based on prefixes\n"
+              "  --derep_smallmem FILENAME   dereplicate sequences in file using less memory\n"
               "  --fastx_uniques FILENAME    dereplicate sequences in the FASTA/FASTQ file\n"
               "  --rereplicate FILENAME      rereplicate sequences in the given FASTA file\n"
               " Parameters\n"
@@ -5334,7 +5378,7 @@ void cmd_none()
   if (! opt_quiet)
     {
       fprintf(stderr,
-              "For help, please enter: %s --help | more\n"
+              "For more help, please enter: %s --help\n"
               "For further details, please consult the manual by entering: man vsearch\n"
               "\n"
               "Selected command examples:\n"
@@ -5366,9 +5410,9 @@ void cmd_none()
               "vsearch --usearch_global FILENAME --db FILENAME --id 0.97 --alnout FILENAME\n"
               "\n"
               "Other commands: cluster_fast, cluster_smallmem, cluster_unoise, cut,\n"
-              "                derep_id, derep_fulllength, derep_prefix, fasta2fastq,\n"
-              "                fastq_filter, fastq_join, fastq_join2, fastx_getseqs,\n"
-              "                fastx_getsubseqs, maskfasta, orient, rereplicate,\n"
+              "                derep_id, derep_fulllength, derep_prefix, derep_smallmem,\n"
+              "                fasta2fastq, fastq_filter, fastq_join, fastq_join2,\n"
+              "                fastx_getseqs, fastx_getsubseq, maskfasta, orient, rereplicate,\n"
               "                uchime2_denovo, uchime3_denovo, udb2fasta, udbinfo, udbstats,\n"
               "                version\n"
               "\n",
@@ -5594,6 +5638,10 @@ int main(int argc, char** argv)
   else if (opt_derep_prefix)
     {
       derep_prefix();
+    }
+  else if (opt_derep_smallmem)
+    {
+      derep_smallmem(opt_derep_smallmem);
     }
   else if (opt_derep_id)
     {

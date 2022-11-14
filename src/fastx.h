@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -119,6 +119,7 @@ typedef struct fastx_s * fastx_handle;
 
 bool fastx_is_fastq(fastx_handle h);
 bool fastx_is_empty(fastx_handle h);
+bool fastx_is_pipe(fastx_handle h);
 void fastx_filter_header(fastx_handle h, bool truncateatspace);
 fastx_handle fastx_open(const char * filename);
 void fastx_close(fastx_handle h);

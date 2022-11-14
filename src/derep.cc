@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -1106,11 +1106,9 @@ void derep_prefix()
   /* adjust size of hash table for 2/3 fill rate */
 
   int64_t hashtablesize = 1;
-  int hash_shift = 0;
   while (3 * dbsequencecount > 2 * hashtablesize)
     {
       hashtablesize <<= 1;
-      hash_shift++;
     }
   int hash_mask = hashtablesize - 1;
 

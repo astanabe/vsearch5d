@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -528,63 +528,131 @@ void results_show_lcaout(FILE * fp,
   /* Output last common ancestor (LCA) of the hits,
      in a similar way to the Sintax command */
 
-  int first_level_start[tax_levels];
-  int first_level_len[tax_levels];
-  int level_match[tax_levels];
-  char * first_h = nullptr;
+  /* Use a modified Boyer-Moore majority voting algorithm at each taxonomic
+     level to find the most common name at each level */
 
   fprintf(fp, "%s\t", query_head);
 
-  if (hitcount > 0)
+  int votes[tax_levels];
+  int cand[tax_levels];
+  int cand_level_start[tax_levels][tax_levels];
+  int cand_level_len[tax_levels][tax_levels];
+  int level_match[tax_levels];
+
+  for (int k = 0; k < tax_levels; k++)
     {
-      for (int t = 0; t < hitcount; t++)
+      votes[k] = 0;
+      cand[k] = -1;
+      level_match[k] = 0;
+    }
+
+  double top_hit_id = hits[0].id;
+  int tophitcount = 0;
+
+  for (int t = 0; t < hitcount; t++)
+    {
+      struct hit * hp = hits + t;
+
+      if (opt_top_hits_only && (hp->id < top_hit_id))
         {
-          int seqno = hits[t].target;
-          if (t == 0)
+          break;
+        }
+
+      tophitcount++;
+
+      int seqno = hp->target;
+      int new_level_start[tax_levels];
+      int new_level_len[tax_levels];
+      tax_split(seqno, new_level_start, new_level_len);
+
+      for (int k = 0; k < tax_levels; k++)
+        {
+          if (votes[k] == 0)
             {
-              tax_split(seqno, first_level_start, first_level_len);
-              first_h = db_getheader(seqno);
+              cand[k] = seqno;
+              votes[k] = 1;
               for (int j = 0; j < tax_levels; j++)
                 {
-                  level_match[j] = 1;
+                  cand_level_start[k][j] = new_level_start[j];
+                  cand_level_len[k][j] = new_level_len[j];
                 }
             }
           else
             {
-              int level_start[tax_levels];
-              int level_len[tax_levels];
-              tax_split(seqno, level_start, level_len);
-              char * h = db_getheader(seqno);
-              for (int j = 0; j < tax_levels; j++)
+              bool match = true;
+              for (int j = 0; j <= k; j++)
                 {
-                  /* For each taxonomic level */
-                  if ((level_len[j] == first_level_len[j]) &&
-                      (strncmp(first_h + first_level_start[j],
-                               h + level_start[j],
-                               level_len[j]) == 0))
+                  if ((new_level_len[j] != cand_level_len[k][j]) ||
+                      (strncmp(db_getheader(cand[k]) + cand_level_start[k][j],
+                               db_getheader(seqno) + new_level_start[j],
+                               new_level_len[j]) != 0))
                     {
-                      level_match[j]++;
+                      match = false;
+                      break;
                     }
+                }
+              if (match)
+                {
+                  votes[k]++;
+                }
+              else
+                {
+                  votes[k]--;
                 }
             }
         }
+    }
 
+  /* count actual matches to the candidate at each level */
+
+  for (int t = 0; t < tophitcount; t++)
+    {
+      int seqno = hits[t].target;
+      int new_level_start[tax_levels];
+      int new_level_len[tax_levels];
+      tax_split(seqno, new_level_start, new_level_len);
+
+      for (int k = 0; k < tax_levels; k++)
+        {
+          bool match = true;
+          for (int j = 0; j <= k; j++)
+            {
+              if ((new_level_len[j] != cand_level_len[k][j]) ||
+                  (strncmp(db_getheader(cand[k]) + cand_level_start[k][j],
+                           db_getheader(seqno) + new_level_start[j],
+                           new_level_len[j]) != 0))
+                {
+                  match = false;
+                  break;
+                }
+            }
+          if (match)
+            {
+              level_match[k]++;
+            }
+        }
+    }
+
+  /* output results */
+
+  if (tophitcount > 0)
+    {
       bool comma = false;
       for (int j = 0; j < tax_levels; j++)
         {
-          if (1.0 * level_match[j] / hitcount < opt_lca_cutoff)
+          if (1.0 * level_match[j] / tophitcount < opt_lca_cutoff)
             {
               break;
             }
 
-          if (first_level_len[j] > 0)
+          if (cand_level_len[j][j] > 0)
             {
               fprintf(fp,
                       "%s%c:%.*s",
                       (comma ? "," : ""),
                       tax_letters[j],
-                      first_level_len[j],
-                      first_h + first_level_start[j]);
+                      cand_level_len[j][j],
+                      db_getheader(cand[j]) + cand_level_start[j][j]);
               comma = true;
             }
         }

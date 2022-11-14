@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2021, Akifumi S. Tanabe
+  Copyright (C) 2016-2022, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2021, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -141,7 +141,6 @@ void fastq_eestats()
   progress_init("Reading FASTQ file", filesize);
 
   uint64_t seq_count = 0;
-  uint64_t symbols = 0;
 
   int64_t len_alloc = 10;
 
@@ -223,8 +222,6 @@ void fastq_eestats()
         }
 
       /* update quality statistics */
-
-      symbols += len;
 
       double ee = 0.0;
 
