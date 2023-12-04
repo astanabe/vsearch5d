@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.22.1], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
+AC_INIT([vsearch5d], [2.26.0], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])
@@ -57,6 +57,29 @@ AS_IF([test "x$enable_zlib" != "xno"], [
 if test "x${have_zlib}" = "xyes"; then
   AC_CHECK_HEADERS([zlib.h], [], [have_zlib=no])
 fi
+
+have_ps2pdf=no
+AC_ARG_ENABLE(pdfman, AS_HELP_STRING([--disable-pdfman], [Disable PDF manual creation]))
+AS_IF([test "x$enable_pdfman" != "xno"], [
+  have_ps2pdf=yes
+  AC_CHECK_PROG(HAVE_PS2PDF, ps2pdf, yes, no)
+  if test "x$HAVE_PS2PDF" = "xno"; then
+    AC_MSG_WARN([*** ps2pdf is required to build a PDF version of the manual])
+    have_ps2pdf=no
+  fi
+])
+
+
+# Check for --enable-debug option
+AC_ARG_ENABLE([debug],
+  [AS_HELP_STRING([--enable-debug], [Enable debug build])],
+  [enable_debug=$enableval],
+  [enable_debug=no])
+
+# Define AM_CONDITIONAL for debug
+AM_CONDITIONAL([ENABLE_DEBUG], [test "x$enable_debug" = "xyes"])
+
+have_man_html=no
 
 case $target in
      aarch64*) target_aarch64="yes" ;;

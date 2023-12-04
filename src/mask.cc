@@ -182,6 +182,7 @@ static int seqcount = 0;
 
 void * dust_all_worker(void * vp)
 {
+  (void) vp; // not used, but required for thread creation
   while(true)
     {
       xpthread_mutex_lock(&mutex);

@@ -67,7 +67,6 @@ void results_show_fastapairs_one(FILE * fp,
                                  struct hit * hp,
                                  char * query_head,
                                  char * qsequence,
-                                 int64_t qseqlen,
                                  char * rc)
 {
   /* http://www.drive5.com/usearch/manual/fastapairs.html */
@@ -147,11 +146,7 @@ void results_show_qsegout_one(FILE * fp,
 }
 
 void results_show_tsegout_one(FILE * fp,
-                              struct hit * hp,
-                              char * query_head,
-                              char * qsequence,
-                              int64_t qseqlen,
-                              char * rc)
+                              struct hit * hp)
 {
   if (hp)
     {
@@ -179,9 +174,7 @@ void results_show_tsegout_one(FILE * fp,
 void results_show_blast6out_one(FILE * fp,
                                 struct hit * hp,
                                 char * query_head,
-                                char * qsequence,
-                                int64_t qseqlen,
-                                char * rc)
+                                int64_t qseqlen)
 {
 
   /*
@@ -245,9 +238,7 @@ void results_show_blast6out_one(FILE * fp,
 void results_show_uc_one(FILE * fp,
                          struct hit * hp,
                          char * query_head,
-                         char * qsequence,
                          int64_t qseqlen,
-                         char * rc,
                          int clusterno)
 {
   /*
@@ -291,17 +282,19 @@ void results_show_uc_one(FILE * fp,
               hp->id,
               hp->strand ? '-' : '+',
               perfect ? "=" : hp->nwalignment);
-      header_fprint_strip_size_ee(fp,
-                                  query_head,
-                                  strlen(query_head),
-                                  opt_xsize,
-                                  opt_xee);
+      header_fprint_strip(fp,
+                          query_head,
+                          strlen(query_head),
+                          opt_xsize,
+                          opt_xee,
+                          opt_xlength);
       fprintf(fp, "\t");
-      header_fprint_strip_size_ee(fp,
-                                  db_getheader(hp->target),
-                                  db_getheaderlen(hp->target),
-                                  opt_xsize,
-                                  opt_xee);
+      header_fprint_strip(fp,
+                          db_getheader(hp->target),
+                          db_getheaderlen(hp->target),
+                          opt_xsize,
+                          opt_xee,
+                          opt_xlength);
       fprintf(fp, "\n");
     }
   else
@@ -520,10 +513,7 @@ void results_show_userout_one(FILE * fp, struct hit * hp,
 void results_show_lcaout(FILE * fp,
                          struct hit * hits,
                          int hitcount,
-                         char * query_head,
-                         char * qsequence,
-                         int64_t qseqlen,
-                         char * rc)
+                         char * query_head)
 {
   /* Output last common ancestor (LCA) of the hits,
      in a similar way to the Sintax command */
@@ -666,8 +656,7 @@ void results_show_alnout(FILE * fp,
                          int hitcount,
                          char * query_head,
                          char * qsequence,
-                         int64_t qseqlen,
-                         char * rc)
+                         int64_t qseqlen)
 {
   /* http://drive5.com/usearch/manual/alnout.html */
 
@@ -905,7 +894,6 @@ void results_show_samout(FILE * fp,
                          int hitcount,
                          char * query_head,
                          char * qsequence,
-                         int64_t qseqlen,
                          char * rc)
 {
   /*

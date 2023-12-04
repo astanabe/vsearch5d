@@ -73,10 +73,11 @@ bool opt_fasta_score;
 bool opt_fastq_allowmergestagger;
 bool opt_fastq_eeout;
 bool opt_fastq_nostagger;
+bool opt_fastq_qout_max;
 bool opt_gzip_decompress;
 bool opt_label_substr_match;
+bool opt_lengthout;
 bool opt_no_progress;
-bool opt_fastq_qout_max;
 bool opt_quiet;
 bool opt_relabel_keep;
 bool opt_relabel_md5;
@@ -84,8 +85,11 @@ bool opt_relabel_self;
 bool opt_relabel_sha1;
 bool opt_samheader;
 bool opt_sff_clip;
+bool opt_sizein;
 bool opt_sizeorder;
+bool opt_sizeout;
 bool opt_xee;
+bool opt_xlength;
 bool opt_xsize;
 char * opt_allpairs_global;
 char * opt_alnout;
@@ -94,6 +98,8 @@ char * opt_blast6out;
 char * opt_borderline;
 char * opt_centroids;
 char * opt_chimeras;
+char * opt_chimeras_alnout;
+char * opt_chimeras_denovo;
 char * opt_cluster_fast;
 char * opt_cluster_size;
 char * opt_cluster_smallmem;
@@ -120,8 +126,8 @@ char * opt_fastaout_rev;
 char * opt_fastapairs;
 char * opt_fastq_chars;
 char * opt_fastq_convert;
-char * opt_fastq_eestats;
 char * opt_fastq_eestats2;
+char * opt_fastq_eestats;
 char * opt_fastq_filter;
 char * opt_fastq_join;
 char * opt_fastq_join2;
@@ -144,11 +150,11 @@ char * opt_fastx_uniques;
 char * opt_join_padgap;
 char * opt_join_padgapq;
 char * opt_label;
-char * opt_labels;
+char * opt_label_field;
 char * opt_label_suffix;
 char * opt_label_word;
 char * opt_label_words;
-char * opt_label_field;
+char * opt_labels;
 char * opt_lcaout;
 char * opt_log;
 char * opt_makeudb_usearch;
@@ -178,20 +184,21 @@ char * opt_sortbylength;
 char * opt_sortbysize;
 char * opt_tabbedout;
 char * opt_tsegout;
-char * opt_udb2fasta;
-char * opt_udbinfo;
-char * opt_udbstats;
 char * opt_uc;
-char * opt_uchime_denovo;
 char * opt_uchime2_denovo;
 char * opt_uchime3_denovo;
+char * opt_uchime_denovo;
 char * opt_uchime_ref;
 char * opt_uchimealns;
 char * opt_uchimeout;
+char * opt_udb2fasta;
+char * opt_udbinfo;
+char * opt_udbstats;
 char * opt_usearch_global;
 char * opt_userout;
 double * opt_ee_cutoffs_values;
 double opt_abskew;
+double opt_chimeras_diff_pct;
 double opt_dn;
 double opt_fastq_maxdiffpct;
 double opt_fastq_maxee;
@@ -220,6 +227,9 @@ double opt_weak_id;
 double opt_xn;
 int opt_acceptall;
 int opt_alignwidth;
+int opt_chimeras_length_min;
+int opt_chimeras_parents_max;
+int opt_chimeras_parts;
 int opt_cons_truncate;
 int opt_ee_cutoffs_count;
 int opt_gap_extension_query_interior;
@@ -235,9 +245,9 @@ int opt_gap_open_target_interior;
 int opt_gap_open_target_left;
 int opt_gap_open_target_right;
 int opt_help;
-int opt_length_cutoffs_shortest;
-int opt_length_cutoffs_longest;
 int opt_length_cutoffs_increment;
+int opt_length_cutoffs_longest;
+int opt_length_cutoffs_shortest;
 int opt_mindiffs;
 int opt_slots;
 int opt_uchimeout5;
@@ -297,11 +307,9 @@ int64_t opt_rowlen;
 int64_t opt_sample_size;
 int64_t opt_self;
 int64_t opt_selfid;
-int64_t opt_sizein;
-int64_t opt_sizeout;
 int64_t opt_strand;
-int64_t opt_subseq_start;
 int64_t opt_subseq_end;
+int64_t opt_subseq_start;
 int64_t opt_threads;
 int64_t opt_top_hits_only;
 int64_t opt_topn;
@@ -715,7 +723,7 @@ int64_t args_getlong(char * arg)
 {
   int len = 0;
   int64_t temp = 0;
-  int ret = sscanf(arg, "%" PRId64 "%n", &temp, &len);
+  const int ret = sscanf(arg, "%" PRId64 "%n", &temp, &len);
   if ((ret == 0) || (((unsigned int)(len)) < strlen(arg)))
     {
       fatal("Illegal option argument");
@@ -727,7 +735,7 @@ double args_getdouble(char * arg)
 {
   int len = 0;
   double temp = 0;
-  int ret = sscanf(arg, "%lf%n", &temp, &len);
+  const int ret = sscanf(arg, "%lf%n", &temp, &len);
   if ((ret == 0) || (((unsigned int)(len)) < strlen(arg)))
     {
       fatal("Illegal option argument");
@@ -741,17 +749,22 @@ void args_init(int argc, char **argv)
 
   progname = argv[0];
 
-  opt_abskew = -1.0;
+  opt_abskew = 0.0;
   opt_acceptall = 0;
   opt_alignwidth = 80;
   opt_allpairs_global = nullptr;
   opt_alnout = nullptr;
-  opt_blast6out = nullptr;
   opt_biomout = nullptr;
+  opt_blast6out = nullptr;
   opt_borderline = nullptr;
   opt_bzip2_decompress = false;
   opt_centroids = nullptr;
   opt_chimeras = nullptr;
+  opt_chimeras_denovo = nullptr;
+  opt_chimeras_diff_pct = 0.0;
+  opt_chimeras_length_min = 10;
+  opt_chimeras_parents_max = 3;
+  opt_chimeras_parts = 0;
   opt_cluster_fast = nullptr;
   opt_cluster_size = nullptr;
   opt_cluster_smallmem = nullptr;
@@ -780,13 +793,13 @@ void args_init(int argc, char **argv)
   opt_eeout = false;
   opt_eetabbedout = nullptr;
   opt_fasta2fastq = nullptr;
-  opt_fastaout_notmerged_fwd = nullptr;
-  opt_fastaout_notmerged_rev = nullptr;
   opt_fasta_score = false;
   opt_fasta_width = 80;
   opt_fastaout = nullptr;
   opt_fastaout_discarded = nullptr;
   opt_fastaout_discarded_rev = nullptr;
+  opt_fastaout_notmerged_fwd = nullptr;
+  opt_fastaout_notmerged_rev = nullptr;
   opt_fastaout_rev = nullptr;
   opt_fastapairs = nullptr;
   opt_fastq_allowmergestagger = false;
@@ -812,8 +825,6 @@ void args_init(int argc, char **argv)
   opt_fastq_minmergelen = 0;
   opt_fastq_minovlen = 10;
   opt_fastq_nostagger = true;
-  opt_fastqout_notmerged_fwd = nullptr;
-  opt_fastqout_notmerged_rev = nullptr;
   opt_fastq_qmax = 41;
   opt_fastq_qmaxout = 41;
   opt_fastq_qmin = 0;
@@ -830,8 +841,13 @@ void args_init(int argc, char **argv)
   opt_fastqout = nullptr;
   opt_fastqout_discarded = nullptr;
   opt_fastqout_discarded_rev = nullptr;
+  opt_fastqout_notmerged_fwd = nullptr;
+  opt_fastqout_notmerged_rev = nullptr;
   opt_fastqout_rev = nullptr;
   opt_fastx_filter = nullptr;
+  opt_fastx_getseq = nullptr;
+  opt_fastx_getseqs = nullptr;
+  opt_fastx_getsubseq = nullptr;
   opt_fastx_mask = nullptr;
   opt_fastx_revcomp = nullptr;
   opt_fastx_subsample = nullptr;
@@ -848,9 +864,6 @@ void args_init(int argc, char **argv)
   opt_gap_open_target_interior=20;
   opt_gap_open_target_left=2;
   opt_gap_open_target_right=2;
-  opt_fastx_getseq = nullptr;
-  opt_fastx_getseqs = nullptr;
-  opt_fastx_getsubseq = nullptr;
   opt_gzip_decompress = false;
   opt_hardmask = 0;
   opt_help = 0;
@@ -862,18 +875,19 @@ void args_init(int argc, char **argv)
   opt_join_padgap = nullptr;
   opt_join_padgapq = nullptr;
   opt_label = nullptr;
+  opt_label_field = nullptr;
   opt_label_substr_match = false;
   opt_label_suffix = nullptr;
-  opt_labels = nullptr;
-  opt_label_field = nullptr;
   opt_label_word = nullptr;
   opt_label_words = nullptr;
+  opt_labels = nullptr;
+  opt_lca_cutoff = 1.0;
+  opt_lcaout = nullptr;
   opt_leftjust = 0;
   opt_length_cutoffs_increment = 50;
   opt_length_cutoffs_longest = INT_MAX;
   opt_length_cutoffs_shortest = 50;
-  opt_lca_cutoff = 1.0;
-  opt_lcaout = nullptr;
+  opt_lengthout = false;
   opt_log = nullptr;
   opt_makeudb_usearch = nullptr;
   opt_maskfasta = nullptr;
@@ -944,38 +958,38 @@ void args_init(int argc, char **argv)
   opt_search_exact = nullptr;
   opt_self = 0;
   opt_selfid = 0;
-  opt_sff_convert = nullptr;
   opt_sff_clip = false;
+  opt_sff_convert = nullptr;
   opt_shuffle = nullptr;
   opt_sintax = nullptr;
   opt_sintax_cutoff = 0.0;
-  opt_sizein = 0;
+  opt_sizein = false;
   opt_sizeorder = false;
-  opt_sizeout = 0;
+  opt_sizeout = false;
   opt_slots = 0;
   opt_sortbylength = nullptr;
   opt_sortbysize = nullptr;
   opt_strand = 1;
-  opt_subseq_start = 1;
   opt_subseq_end = LONG_MAX;
+  opt_subseq_start = 1;
   opt_tabbedout = nullptr;
   opt_target_cov = 0.0;
   opt_threads = 0;
   opt_top_hits_only = 0;
   opt_topn = LONG_MAX;
   opt_tsegout = nullptr;
-  opt_udb2fasta = nullptr;
-  opt_udbinfo = nullptr;
-  opt_udbstats = nullptr;
   opt_uc = nullptr;
   opt_uc_allhits = 0;
-  opt_uchime_denovo = nullptr;
   opt_uchime2_denovo = nullptr;
   opt_uchime3_denovo = nullptr;
+  opt_uchime_denovo = nullptr;
   opt_uchime_ref = nullptr;
   opt_uchimealns = nullptr;
   opt_uchimeout = nullptr;
   opt_uchimeout5 = 0;
+  opt_udb2fasta = nullptr;
+  opt_udbinfo = nullptr;
+  opt_udbstats = nullptr;
   opt_unoise_alpha = 2.0;
   opt_usearch_global = nullptr;
   opt_userout = nullptr;
@@ -983,9 +997,10 @@ void args_init(int argc, char **argv)
   opt_version = 0;
   opt_weak_id = 10.0;
   opt_wordlength = 0;
+  opt_xee = false;
+  opt_xlength = false;
   opt_xn = 8.0;
   opt_xsize = false;
-  opt_xee = false;
 
   opterr = 1;
 
@@ -1003,6 +1018,11 @@ void args_init(int argc, char **argv)
       option_bzip2_decompress,
       option_centroids,
       option_chimeras,
+      option_chimeras_denovo,
+      option_chimeras_diff_pct,
+      option_chimeras_length_min,
+      option_chimeras_parents_max,
+      option_chimeras_parts,
       option_cluster_fast,
       option_cluster_size,
       option_cluster_smallmem,
@@ -1111,6 +1131,7 @@ void args_init(int argc, char **argv)
       option_lcaout,
       option_leftjust,
       option_length_cutoffs,
+      option_lengthout,
       option_log,
       option_makeudb_usearch,
       option_maskfasta,
@@ -1225,6 +1246,7 @@ void args_init(int argc, char **argv)
       option_wordlength,
       option_xdrop_nw,
       option_xee,
+      option_xlength,
       option_xn,
       option_xsize,
       option_idoffset
@@ -1244,6 +1266,11 @@ void args_init(int argc, char **argv)
       {"bzip2_decompress",      no_argument,       nullptr, 0 },
       {"centroids",             required_argument, nullptr, 0 },
       {"chimeras",              required_argument, nullptr, 0 },
+      {"chimeras_denovo",       required_argument, nullptr, 0 },
+      {"chimeras_diff_pct",     required_argument, nullptr, 0 },
+      {"chimeras_length_min",   required_argument, nullptr, 0 },
+      {"chimeras_parents_max",  required_argument, nullptr, 0 },
+      {"chimeras_parts",        required_argument, nullptr, 0 },
       {"cluster_fast",          required_argument, nullptr, 0 },
       {"cluster_size",          required_argument, nullptr, 0 },
       {"cluster_smallmem",      required_argument, nullptr, 0 },
@@ -1352,6 +1379,7 @@ void args_init(int argc, char **argv)
       {"lcaout",                required_argument, nullptr, 0 },
       {"leftjust",              no_argument,       nullptr, 0 },
       {"length_cutoffs",        required_argument, nullptr, 0 },
+      {"lengthout",             no_argument,       nullptr, 0 },
       {"log",                   required_argument, nullptr, 0 },
       {"makeudb_usearch",       required_argument, nullptr, 0 },
       {"maskfasta",             required_argument, nullptr, 0 },
@@ -1466,10 +1494,11 @@ void args_init(int argc, char **argv)
       {"wordlength",            required_argument, nullptr, 0 },
       {"xdrop_nw",              required_argument, nullptr, 0 },
       {"xee",                   no_argument,       nullptr, 0 },
+      {"xlength",               no_argument,       nullptr, 0 },
       {"xn",                    required_argument, nullptr, 0 },
       {"xsize",                 no_argument,       nullptr, 0 },
       {"idoffset",              required_argument, nullptr, 0 },
-      { nullptr,                      0,                 nullptr, 0 }
+      { nullptr,                0,                 nullptr, 0 }
     };
 
   const int options_count = (sizeof(long_options) / sizeof(struct option)) - 1;
@@ -1630,7 +1659,7 @@ void args_init(int argc, char **argv)
           break;
 
         case option_sizeout:
-          opt_sizeout = 1;
+          opt_sizeout = true;
           break;
 
         case option_derep_fulllength:
@@ -1651,6 +1680,10 @@ void args_init(int argc, char **argv)
 
         case option_topn:
           opt_topn = args_getlong(optarg);
+          if (opt_topn == 0)
+            {
+              fatal("The argument to --topn must be greater than zero");
+            }
           break;
 
         case option_maxseqlength:
@@ -1658,7 +1691,7 @@ void args_init(int argc, char **argv)
           break;
 
         case option_sizein:
-          opt_sizein = 1;
+          opt_sizein = true;
           break;
 
         case option_sortbylength:
@@ -2498,6 +2531,34 @@ void args_init(int argc, char **argv)
           opt_derep_smallmem = optarg;
           break;
 
+        case option_lengthout:
+          opt_lengthout = true;
+          break;
+
+        case option_xlength:
+          opt_xlength = true;
+          break;
+
+        case option_chimeras_denovo:
+          opt_chimeras_denovo = optarg;
+          break;
+
+        case option_chimeras_length_min:
+          opt_chimeras_length_min = args_getlong(optarg);
+          break;
+
+        case option_chimeras_parts:
+          opt_chimeras_parts = args_getlong(optarg);
+          break;
+
+        case option_chimeras_parents_max:
+          opt_chimeras_parents_max = args_getlong(optarg);
+          break;
+
+        case option_chimeras_diff_pct:
+          opt_chimeras_diff_pct = args_getdouble(optarg);
+          break;
+
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
@@ -2525,6 +2586,7 @@ void args_init(int argc, char **argv)
   int command_options[] =
     {
       option_allpairs_global,
+      option_chimeras_denovo,
       option_cluster_fast,
       option_cluster_size,
       option_cluster_smallmem,
@@ -2583,7 +2645,7 @@ void args_init(int argc, char **argv)
     The first line is the command and the lines below are the valid options.
   */
 
-  const int valid_options[][97] =
+  const int valid_options[][99] =
     {
       {
         option_allpairs_global,
@@ -2607,6 +2669,7 @@ void args_init(int argc, char **argv)
         option_idoffset,
         option_label_suffix,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -2667,6 +2730,46 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
+        option_xsize,
+        -1 },
+
+      { option_chimeras_denovo,
+        option_abskew,
+        option_alignwidth,
+        option_alnout,
+        option_chimeras,
+        option_chimeras_diff_pct,
+        option_chimeras_length_min,
+        option_chimeras_parents_max,
+        option_chimeras_parts,
+        option_fasta_width,
+        option_gapext,
+        option_gapopen,
+        option_hardmask,
+        option_label_suffix,
+        option_log,
+        option_match,
+	option_maxseqlength,
+	option_minseqlength,
+        option_mismatch,
+        option_no_progress,
+        option_nonchimeras,
+        option_notrunclabels,
+        option_qmask,
+        option_quiet,
+        option_relabel,
+        option_relabel_keep,
+        option_relabel_md5,
+        option_relabel_self,
+        option_relabel_sha1,
+        option_sample,
+        option_sizein,
+        option_sizeout,
+        option_tabbedout,
+        option_threads,
+        option_xee,
+        option_xn,
         option_xsize,
         -1 },
 
@@ -2697,6 +2800,7 @@ void args_init(int argc, char **argv)
         option_idoffset,
         option_label_suffix,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -2763,6 +2867,7 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -2793,6 +2898,7 @@ void args_init(int argc, char **argv)
         option_idoffset,
         option_label_suffix,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -2859,6 +2965,7 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -2889,6 +2996,7 @@ void args_init(int argc, char **argv)
         option_idoffset,
         option_label_suffix,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -2956,6 +3064,7 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -2986,6 +3095,7 @@ void args_init(int argc, char **argv)
         option_idoffset,
         option_label_suffix,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -3054,6 +3164,7 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3067,6 +3178,7 @@ void args_init(int argc, char **argv)
         option_fastaout_rev,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3080,6 +3192,7 @@ void args_init(int argc, char **argv)
         option_sizein,
         option_sizeout,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3087,6 +3200,7 @@ void args_init(int argc, char **argv)
         option_bzip2_decompress,
         option_fasta_width,
         option_gzip_decompress,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3109,6 +3223,7 @@ void args_init(int argc, char **argv)
         option_topn,
         option_uc,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3117,6 +3232,7 @@ void args_init(int argc, char **argv)
         option_fasta_width,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3139,6 +3255,7 @@ void args_init(int argc, char **argv)
         option_topn,
         option_uc,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3147,6 +3264,7 @@ void args_init(int argc, char **argv)
         option_fasta_width,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3169,6 +3287,7 @@ void args_init(int argc, char **argv)
         option_topn,
         option_uc,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3181,6 +3300,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmin,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3200,6 +3320,7 @@ void args_init(int argc, char **argv)
         option_strand,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3210,6 +3331,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3223,6 +3345,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3247,6 +3370,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3260,6 +3384,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3320,6 +3445,7 @@ void args_init(int argc, char **argv)
         option_fastqout_rev,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxsize,
         option_minsize,
@@ -3336,6 +3462,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3351,6 +3478,7 @@ void args_init(int argc, char **argv)
         option_join_padgap,
         option_join_padgapq,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3364,6 +3492,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3426,6 +3555,7 @@ void args_init(int argc, char **argv)
         option_fastqout_notmerged_rev,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3440,6 +3570,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3485,6 +3616,7 @@ void args_init(int argc, char **argv)
         option_fastqout_rev,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxsize,
         option_minsize,
@@ -3502,6 +3634,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3517,6 +3650,7 @@ void args_init(int argc, char **argv)
         option_label,
         option_label_substr_match,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3533,6 +3667,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3552,6 +3687,7 @@ void args_init(int argc, char **argv)
         option_label_word,
         option_label_words,
         option_labels,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3568,6 +3704,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3583,6 +3720,7 @@ void args_init(int argc, char **argv)
         option_label,
         option_label_substr_match,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3601,6 +3739,7 @@ void args_init(int argc, char **argv)
         option_subseq_start,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3615,6 +3754,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_max_unmasked_pct,
         option_min_unmasked_pct,
@@ -3632,6 +3772,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3645,6 +3786,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3659,6 +3801,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3674,6 +3817,7 @@ void args_init(int argc, char **argv)
         option_fastqout_discarded,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3691,6 +3835,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3708,6 +3853,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxuniquesize,
@@ -3730,6 +3876,7 @@ void args_init(int argc, char **argv)
         option_topn,
         option_uc,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3751,6 +3898,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_hardmask,
         option_log,
+        option_maxseqlength,
         option_minseqlength,
         option_no_progress,
         option_notrunclabels,
@@ -3766,6 +3914,7 @@ void args_init(int argc, char **argv)
         option_gzip_decompress,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_max_unmasked_pct,
         option_maxseqlength,
@@ -3786,6 +3935,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3798,6 +3948,7 @@ void args_init(int argc, char **argv)
         option_fastqout,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notmatched,
@@ -3816,6 +3967,7 @@ void args_init(int argc, char **argv)
         option_threads,
         option_wordlength,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3824,6 +3976,7 @@ void args_init(int argc, char **argv)
         option_fasta_width,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_notrunclabels,
@@ -3839,6 +3992,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3858,6 +4012,7 @@ void args_init(int argc, char **argv)
         option_label_suffix,
         option_lca_cutoff,
         option_lcaout,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -3904,6 +4059,7 @@ void args_init(int argc, char **argv)
         option_userfields,
         option_userout,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3913,6 +4069,7 @@ void args_init(int argc, char **argv)
         option_fastq_qminout,
         option_fastqout,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_quiet,
@@ -3935,6 +4092,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmin,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_minseqlength,
@@ -3954,6 +4112,7 @@ void args_init(int argc, char **argv)
         option_threads,
         option_topn,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -3988,6 +4147,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmin,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_minseqlength,
@@ -4006,6 +4166,7 @@ void args_init(int argc, char **argv)
         option_threads,
         option_topn,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -4017,6 +4178,7 @@ void args_init(int argc, char **argv)
         option_fastq_qmin,
         option_gzip_decompress,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_maxseqlength,
         option_maxsize,
@@ -4037,6 +4199,7 @@ void args_init(int argc, char **argv)
         option_threads,
         option_topn,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -4052,11 +4215,14 @@ void args_init(int argc, char **argv)
         option_gapopen,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_match,
+	option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
+	option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4076,6 +4242,7 @@ void args_init(int argc, char **argv)
         option_uchimeout,
         option_uchimeout5,
         option_xee,
+        option_xlength,
         option_xn,
         option_xsize,
         -1 },
@@ -4092,11 +4259,14 @@ void args_init(int argc, char **argv)
         option_gapopen,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_match,
+	option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
+	option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4116,6 +4286,7 @@ void args_init(int argc, char **argv)
         option_uchimeout,
         option_uchimeout5,
         option_xee,
+        option_xlength,
         option_xn,
         option_xsize,
         -1 },
@@ -4132,11 +4303,14 @@ void args_init(int argc, char **argv)
         option_gapopen,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_match,
+	option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
+	option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4156,6 +4330,7 @@ void args_init(int argc, char **argv)
         option_uchimeout,
         option_uchimeout5,
         option_xee,
+        option_xlength,
         option_xn,
         option_xsize,
         -1 },
@@ -4174,11 +4349,14 @@ void args_init(int argc, char **argv)
         option_gapopen,
         option_hardmask,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_match,
+	option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
+	option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4201,6 +4379,7 @@ void args_init(int argc, char **argv)
         option_uchimeout,
         option_uchimeout5,
         option_xee,
+        option_xlength,
         option_xn,
         option_xsize,
         -1 },
@@ -4208,6 +4387,7 @@ void args_init(int argc, char **argv)
       { option_udb2fasta,
         option_fasta_width,
         option_label_suffix,
+        option_lengthout,
         option_log,
         option_no_progress,
         option_output,
@@ -4222,6 +4402,7 @@ void args_init(int argc, char **argv)
         option_sizeout,
         option_threads,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -4265,6 +4446,7 @@ void args_init(int argc, char **argv)
         option_lca_cutoff,
         option_lcaout,
         option_leftjust,
+        option_lengthout,
         option_log,
         option_match,
         option_matched,
@@ -4329,6 +4511,7 @@ void args_init(int argc, char **argv)
         option_wordlength,
         option_xdrop_nw,
         option_xee,
+        option_xlength,
         option_xsize,
         -1 },
 
@@ -4368,8 +4551,7 @@ void args_init(int argc, char **argv)
     {
       /* check if any options are specified */
       bool any_options = false;
-      for (bool i
-             : options_selected)
+      for (bool i: options_selected)
         {
           if (i)
             {
@@ -4459,6 +4641,10 @@ void args_init(int argc, char **argv)
           fprintf(stderr, "WARNING: The %s command does not support multithreading.\nOnly 1 thread used.\n", long_options[command_options[k]].name);
         }
       opt_threads = 1;
+    }
+  if (opt_sintax && opt_randseed && (opt_threads > 1))
+    {
+      fprintf(stderr, "WARNING: Using the --sintax command with the --randseed option may not work as intended with multiple threads. Use a single thread (--threads 1) to ensure reproducible results.\n");
     }
 
   if (opt_cluster_unoise)
@@ -4583,7 +4769,7 @@ void args_init(int argc, char **argv)
 
   if (opt_min_unmasked_pct > opt_max_unmasked_pct)
     {
-      fatal("The argument to --min_unmasked_pct cannot be larger than to --max_unmasked_pct");
+      fatal("The argument to --min_unmasked_pct cannot be larger than --max_unmasked_pct");
     }
 
   if ((opt_fastq_ascii != 33) && (opt_fastq_ascii != 64))
@@ -4593,7 +4779,7 @@ void args_init(int argc, char **argv)
 
   if (opt_fastq_qmin > opt_fastq_qmax)
     {
-      fatal("The argument to --fastq_qmin cannot be larger than to --fastq_qmax");
+      fatal("The argument to --fastq_qmin cannot be equal to or greater than --fastq_qmax");
     }
 
   if (opt_fastq_ascii + opt_fastq_qmin < 33)
@@ -4608,7 +4794,7 @@ void args_init(int argc, char **argv)
 
   if (opt_fastq_qminout > opt_fastq_qmaxout)
     {
-      fatal("The argument to --fastq_qminout cannot be larger than to --fastq_qmaxout");
+      fatal("The argument to --fastq_qminout cannot be larger than --fastq_qmaxout");
     }
 
   if ((opt_fastq_asciiout != 33) && (opt_fastq_asciiout != 64))
@@ -4659,6 +4845,35 @@ void args_init(int argc, char **argv)
   if (opt_maxhits < 0)
     {
       fatal("The argument to maxhits cannot be negative");
+    }
+
+  if (opt_chimeras_length_min < 1)
+    {
+      fatal("The argument to chimeras_length_min must be at least 1");
+    }
+
+  if ((opt_chimeras_parents_max < 2) || (opt_chimeras_parents_max > maxparents))
+    {
+      char maxparents_string[25];
+      snprintf(maxparents_string, 25, "%d", maxparents);
+      fatal("The argument to chimeras_parents_max must be in the range 2 to %s.\n", maxparents_string);
+    }
+
+  if ((opt_chimeras_diff_pct < 0.0) || (opt_chimeras_diff_pct > 50.0))
+    {
+      fatal("The argument to chimeras_diff_pct must be in the range 0.0 to 50.0");
+    }
+
+  if (options_selected[option_chimeras_parts] &&
+      ((opt_chimeras_parts < 2) || (opt_chimeras_parts > 100)))
+    {
+      fatal("The argument to chimeras_parts must be in the range 2 to 100");
+    }
+
+  if (opt_chimeras_denovo)
+    {
+      if (! options_selected[option_alignwidth])
+        opt_alignwidth = 60;
     }
 
 
@@ -4715,9 +4930,13 @@ void args_init(int argc, char **argv)
     }
 
   /* set default opt_abskew depending on command */
-  if (opt_abskew < 0.0)
+  if (! options_selected[option_abskew])
     {
-      if (opt_uchime3_denovo)
+      if (opt_chimeras_denovo)
+        {
+          opt_abskew = 1.0;
+        }
+      else if (opt_uchime3_denovo)
         {
           opt_abskew = 16.0;
         }
@@ -4850,7 +5069,30 @@ void cmd_help()
               "  --threads INT               number of threads to use, zero for all cores (0)\n"
               "  --version | -v              display version information\n"
               "\n"
-              "Chimera detection\n"
+              "Chimera detection with new algorithm\n"
+              "  --chimeras_denovo FILENAME  detect chimeras de novo in long exact sequences\n"
+              " Parameters\n"
+              "  --abskew REAL               minimum abundance ratio (1.0)\n"
+              "  --chimeras_diff_pct         mismatch %% allowed in each chimeric region (0.0)\n"
+              "  --chimeras_length_min       minimum length of each chimeric region (10)\n"
+              "  --chimeras_parents_max      maximum number of parent sequences (3)\n"
+              "  --chimeras_parts            number of parts to divide sequences (length/100)\n"
+              "  --sizein                    propagate abundance annotation from input\n"
+              " Output\n"
+              "  --alignwidth INT            width of alignments in alignment output file (60)\n"
+              "  --alnout FILENAME           output chimera alignments to file\n"
+              "  --chimeras FILENAME         output chimeric sequences to file\n"
+              "  --nonchimeras FILENAME      output non-chimeric sequences to file\n"
+              "  --relabel STRING            relabel nonchimeras with this prefix string\n"
+              "  --relabel_keep              keep the old label after the new when relabelling\n"
+              "  --relabel_md5               relabel with md5 digest of normalized sequence\n"
+              "  --relabel_self              relabel with the sequence itself as label\n"
+              "  --relabel_sha1              relabel with sha1 digest of normalized sequence\n"
+              "  --sizeout                   include abundance information when relabelling\n"
+              "  --tabbedout FILENAME        output chimera info to tab-separated file\n"
+              "  --xsize                     strip abundance information in output\n"
+              "\n"
+              "Chimera detection with UCHIME algorithms\n"
               "  --uchime_denovo FILENAME    detect chimeras de novo\n"
               "  --uchime2_denovo FILENAME   detect chimeras de novo in denoised amplicons\n"
               "  --uchime3_denovo FILENAME   detect chimeras de novo in denoised amplicons\n"
@@ -4871,7 +5113,7 @@ void cmd_help()
               "  --alignwidth INT            width of alignment in uchimealn output (80)\n"
               "  --borderline FILENAME       output borderline chimeric sequences to file\n"
               "  --chimeras FILENAME         output chimeric sequences to file\n"
-              "  --fasta_score               include chimera score in fasta output\n"
+              "  --fasta_score               include chimera score in FASTA output\n"
               "  --nonchimeras FILENAME      output non-chimeric sequences to file\n"
               "  --relabel STRING            relabel nonchimeras with this prefix string\n"
               "  --relabel_keep              keep the old label after the new when relabelling\n"
@@ -5291,10 +5533,10 @@ void cmd_allpairs_global()
 {
   /* check options */
 
-  if ((!opt_alnout) && (!opt_userout) &&
-      (!opt_uc) && (!opt_blast6out) &&
-      (!opt_matched) && (!opt_notmatched) &&
-      (!opt_samout) && (!opt_fastapairs))
+  if ((! opt_alnout) && (! opt_userout) &&
+      (! opt_uc) && (! opt_blast6out) &&
+      (! opt_matched) && (! opt_notmatched) &&
+      (! opt_samout) && (! opt_fastapairs))
     {
       fatal("No output files specified");
     }
@@ -5311,18 +5553,18 @@ void cmd_usearch_global()
 {
   /* check options */
 
-  if ((!opt_alnout) && (!opt_userout) &&
-      (!opt_uc) && (!opt_blast6out) &&
-      (!opt_matched) && (!opt_notmatched) &&
-      (!opt_dbmatched) && (!opt_dbnotmatched) &&
-      (!opt_samout) && (!opt_otutabout) &&
-      (!opt_biomout) && (!opt_mothur_shared_out) &&
-      (!opt_fastapairs) && (!opt_lcaout))
+  if ((! opt_alnout) && (! opt_userout) &&
+      (! opt_uc) && (! opt_blast6out) &&
+      (! opt_matched) && (! opt_notmatched) &&
+      (! opt_dbmatched) && (! opt_dbnotmatched) &&
+      (! opt_samout) && (! opt_otutabout) &&
+      (! opt_biomout) && (! opt_mothur_shared_out) &&
+      (! opt_fastapairs) && (! opt_lcaout))
     {
       fatal("No output files specified");
     }
 
-  if (!opt_db)
+  if (! opt_db)
     {
       fatal("Database filename not specified with --db");
     }
@@ -5339,18 +5581,18 @@ void cmd_search_exact()
 {
   /* check options */
 
-  if ((!opt_alnout) && (!opt_userout) &&
-      (!opt_uc) && (!opt_blast6out) &&
-      (!opt_matched) && (!opt_notmatched) &&
-      (!opt_dbmatched) && (!opt_dbnotmatched) &&
-      (!opt_samout) && (!opt_otutabout) &&
-      (!opt_biomout) && (!opt_mothur_shared_out) &&
-      (!opt_fastapairs) && (!opt_lcaout))
+  if ((! opt_alnout) && (! opt_userout) &&
+      (! opt_uc) && (! opt_blast6out) &&
+      (! opt_matched) && (! opt_notmatched) &&
+      (! opt_dbmatched) && (! opt_dbnotmatched) &&
+      (! opt_samout) && (! opt_otutabout) &&
+      (! opt_biomout) && (! opt_mothur_shared_out) &&
+      (! opt_fastapairs) && (! opt_lcaout))
     {
       fatal("No output files specified");
     }
 
-  if (!opt_db)
+  if (! opt_db)
     {
       fatal("Database filename not specified with --db");
     }
@@ -5360,7 +5602,7 @@ void cmd_search_exact()
 
 void cmd_subsample()
 {
-  if ((!opt_fastaout) && (!opt_fastqout))
+  if ((! opt_fastaout) && (! opt_fastqout))
     {
       fatal("Specify output files for subsampling with --fastaout and/or --fastqout");
     }
@@ -5422,19 +5664,19 @@ void cmd_none()
 
 void cmd_cluster()
 {
-  if ((!opt_alnout) && (!opt_userout) &&
-      (!opt_uc) && (!opt_blast6out) &&
-      (!opt_matched) && (!opt_notmatched) &&
-      (!opt_centroids) && (!opt_clusters) &&
-      (!opt_consout) && (!opt_msaout) &&
-      (!opt_samout) && (!opt_profile) &&
-      (!opt_otutabout) && (!opt_biomout) &&
-      (!opt_mothur_shared_out))
+  if ((! opt_alnout) && (! opt_userout) &&
+      (! opt_uc) && (! opt_blast6out) &&
+      (! opt_matched) && (! opt_notmatched) &&
+      (! opt_centroids) && (! opt_clusters) &&
+      (! opt_consout) && (! opt_msaout) &&
+      (! opt_samout) && (! opt_profile) &&
+      (! opt_otutabout) && (! opt_biomout) &&
+      (! opt_mothur_shared_out))
     {
       fatal("No output files specified");
     }
 
-  if (!opt_cluster_unoise)
+  if (! opt_cluster_unoise)
     {
       if ((opt_id < 0.0) || (opt_id > 1.0))
         {
@@ -5460,10 +5702,10 @@ void cmd_cluster()
     }
 }
 
-void cmd_uchime()
+void cmd_chimera()
 {
-  if ((!opt_chimeras)  && (!opt_nonchimeras) &&
-      (!opt_uchimeout) && (!opt_uchimealns))
+  if ((! opt_chimeras)  && (! opt_nonchimeras) &&
+      (! opt_uchimeout) && (! opt_uchimealns))
     {
       fatal("No output files specified");
     }
@@ -5483,7 +5725,7 @@ void cmd_uchime()
       fatal("Argument to --dn must be > 0");
     }
 
-  if ((!opt_uchime2_denovo) && (!opt_uchime3_denovo))
+  if ((! opt_uchime2_denovo) && (! opt_uchime3_denovo))
     {
       if (opt_mindiffs <= 0)
         {
@@ -5501,27 +5743,22 @@ void cmd_uchime()
         }
     }
 
-#if 0
-  if (opt_abskew <= 1.0)
-    fatal("Argument to --abskew must be > 1");
-#endif
-
   chimera();
 }
 
 void cmd_fastq_mergepairs()
 {
-  if (!opt_reverse)
+  if (! opt_reverse)
     {
       fatal("No reverse reads file specified with --reverse");
     }
-  if ((!opt_fastqout) &&
-      (!opt_fastaout) &&
-      (!opt_fastqout_notmerged_fwd) &&
-      (!opt_fastqout_notmerged_rev) &&
-      (!opt_fastaout_notmerged_fwd) &&
-      (!opt_fastaout_notmerged_rev) &&
-      (!opt_eetabbedout))
+  if ((! opt_fastqout) &&
+      (! opt_fastaout) &&
+      (! opt_fastqout_notmerged_fwd) &&
+      (! opt_fastqout_notmerged_rev) &&
+      (! opt_fastaout_notmerged_fwd) &&
+      (! opt_fastaout_notmerged_rev) &&
+      (! opt_eetabbedout))
     {
       fatal("No output files specified");
     }
@@ -5531,7 +5768,7 @@ void cmd_fastq_mergepairs()
 
 void fillheader()
 {
-  constexpr double one_gigabyte {1024.0 * 1024.0 * 1024.0};
+  constexpr static double one_gigabyte {1024 * 1024 * 1024};
   snprintf(progheader, 80,
            "%s v%s_%s, %.1fGB RAM, %ld cores",
            PROG_NAME, PROG_VERSION, PROG_ARCH,
@@ -5543,7 +5780,7 @@ void fillheader()
 void getentirecommandline(int argc, char** argv)
 {
   int len = 0;
-  for (int i=0; i<argc; i++)
+  for (int i = 0; i < argc; i++)
     {
       len += strlen(argv[i]);
     }
@@ -5551,9 +5788,9 @@ void getentirecommandline(int argc, char** argv)
   cmdline = (char*) xmalloc(len+argc);
   cmdline[0] = 0;
 
-  for (int i=0; i<argc; i++)
+  for (int i = 0; i < argc; i++)
     {
-      if (i>0)
+      if (i > 0)
         {
           strcat(cmdline, " ");
         }
@@ -5584,7 +5821,7 @@ int main(int argc, char** argv)
   if (opt_log)
     {
       fp_log = fopen_output(opt_log);
-      if (!fp_log)
+      if (! fp_log)
         {
           fatal("Unable to open log file for writing");
         }
@@ -5663,9 +5900,9 @@ int main(int argc, char** argv)
     {
       cmd_cluster();
     }
-  else if (opt_uchime_denovo || opt_uchime_ref || opt_uchime2_denovo || opt_uchime3_denovo)
+  else if (opt_uchime_denovo || opt_uchime_ref || opt_uchime2_denovo || opt_uchime3_denovo || opt_chimeras_denovo)
     {
-      cmd_uchime();
+      cmd_chimera();
     }
   else if (opt_fastq_chars)
     {
@@ -5805,7 +6042,7 @@ int main(int argc, char** argv)
         }
       else
         {
-          fprintf(fp_log, "Max memory %.1lfGB\n", maxmem/1024.0);
+          fprintf(fp_log, "Max memory %.1lfGB\n", maxmem / 1024.0);
         }
       fclose(fp_log);
     }

@@ -1,16 +1,25 @@
 bin_PROGRAMS = $(top_builddir)/bin/vsearch5d
 
+AM_CFLAGS = -Wall -Wsign-compare
+
 if TARGET_PPC
-AM_CFLAGS=-Wall -Wsign-compare -mcpu=powerpc64le -maltivec
+AM_CFLAGS += -mcpu=powerpc64le -maltivec
 else
 if TARGET_AARCH64
-AM_CFLAGS=-Wall -Wsign-compare -march=armv8-a+simd -mtune=generic
+AM_CFLAGS += -march=armv8-a+simd -mtune=generic
 else
-AM_CFLAGS=-Wall -Wsign-compare -march=x86-64 -mtune=generic
+AM_CFLAGS += -march=x86-64 -mtune=generic
 endif
 endif
 
-AM_CXXFLAGS=$(AM_CFLAGS) -std=c++11
+# Conditionally set NDEBUG based on ENABLE_DEBUG
+if ENABLE_DEBUG
+AM_CFLAGS += -UNDEBUG -Wcast-align -Wextra -Wfloat-equal
+else
+AM_CFLAGS += -DNDEBUG
+endif
+
+AM_CXXFLAGS = $(AM_CFLAGS) -std=c++11
 
 export MACOSX_DEPLOYMENT_TARGET=10.9
 
