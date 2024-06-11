@@ -61,73 +61,38 @@
 
 */
 
-#include <cstdint>  // uint64_t
-#include <cstdio>  // std::size_t
+#include <array>
 
 
-struct seqinfo_s
-{
-  std::size_t header_p;
-  std::size_t seq_p;
-  std::size_t qual_p;
-  unsigned int headerlen;
-  unsigned int seqlen;
-  unsigned int size;
-};
+const std::array<unsigned char, 256> chrmap_no_change_array = {
+    /*
 
-typedef struct seqinfo_s seqinfo_t;
+      Map from ascii to ascii - no change
 
-extern char * datap;
-extern seqinfo_t * seqindex;
+     @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
+     P   Q   R   S   T   U   V   W   X   Y   Z   [   \   ]   ^   _
+    */
 
-inline auto db_getheader(uint64_t seqno) -> char *
-{
-  return datap + seqindex[seqno].header_p;
-}
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
 
-inline auto db_getsequence(uint64_t seqno) -> char *
-{
-  return datap + seqindex[seqno].seq_p;
-}
+    'N', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+    'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
+    'Z', 'N', 'N', 'N', 'N', 'N', 'N', 'a', 'b', 'c', 'd', 'e', 'f',
+    'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z', 'N', 'N', 'N', 'N', 'N',
 
-inline auto db_getabundance(uint64_t seqno) -> uint64_t
-{
-  return seqindex[seqno].size;
-}
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
 
-inline auto db_getsequencelen(uint64_t seqno) -> uint64_t
-{
-  return seqindex[seqno].seqlen;
-}
-
-inline auto db_getheaderlen(uint64_t seqno) -> uint64_t
-{
-  return seqindex[seqno].headerlen;
-}
-
-auto db_read(const char * filename, int upcase) -> void;
-auto db_free() -> void;
-
-auto db_getsequencecount() -> uint64_t;
-auto db_getnucleotidecount() -> uint64_t;
-auto db_getlongestheader() -> uint64_t;
-auto db_getlongestsequence() -> uint64_t;
-auto db_getshortestsequence() -> uint64_t;
-
-/* Note: the sorting functions below must be called after db_read,
-   but before dbindex_prepare */
-
-auto db_sortbylength() -> void;
-auto db_sortbylength_shortest_first() -> void;
-
-auto db_sortbyabundance() -> void;
-
-auto db_is_fastq() -> bool;
-auto db_getquality(uint64_t seqno) -> char *;
-
-auto db_setinfo(bool new_is_fastq,
-                uint64_t new_sequences,
-                uint64_t new_nucleotides,
-                uint64_t new_longest,
-                uint64_t new_shortest,
-                uint64_t new_longestheader) -> void;
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N',
+    'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N', 'N'};

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,45 +62,58 @@
 */
 
 #include "vsearch5d.h"
+#include <cinttypes>  // macros PRIu64 and PRId64
+#include <cstdint>  // int64_t
+#include <cstdio>  // std::FILE, std::fprintf
+#include <vector>
 
-void subsample()
+
+// subsampling refactoring:
+//  - split with and without sizein,
+//  - without sizein:
+//    - equivalent to a shuffle + resize() + sort()
+//  - with sizein:
+//    - std::discrete_distribution()
+
+
+auto subsample() -> void
 {
-  FILE * fp_fastaout = nullptr;
-  FILE * fp_fastaout_discarded = nullptr;
-  FILE * fp_fastqout = nullptr;
-  FILE * fp_fastqout_discarded = nullptr;
+  std::FILE * fp_fastaout = nullptr;
+  std::FILE * fp_fastaout_discarded = nullptr;
+  std::FILE * fp_fastqout = nullptr;
+  std::FILE * fp_fastqout_discarded = nullptr;
 
-  if (opt_fastaout)
+  if (opt_fastaout != nullptr)
     {
       fp_fastaout = fopen_output(opt_fastaout);
-      if (!fp_fastaout)
+      if (fp_fastaout == nullptr)
         {
           fatal("Unable to open FASTA output file for writing");
         }
     }
 
-  if (opt_fastaout_discarded)
+  if (opt_fastaout_discarded != nullptr)
     {
       fp_fastaout_discarded = fopen_output(opt_fastaout_discarded);
-      if (!fp_fastaout_discarded)
+      if (fp_fastaout_discarded == nullptr)
         {
           fatal("Unable to open FASTA output file for writing");
         }
     }
 
-  if (opt_fastqout)
+  if (opt_fastqout != nullptr)
     {
       fp_fastqout = fopen_output(opt_fastqout);
-      if (!fp_fastqout)
+      if (fp_fastqout == nullptr)
         {
           fatal("Unable to open FASTQ output file for writing");
         }
     }
 
-  if (opt_fastqout_discarded)
+  if (opt_fastqout_discarded != nullptr)
     {
       fp_fastqout_discarded = fopen_output(opt_fastqout_discarded);
-      if (!fp_fastqout_discarded)
+      if (fp_fastqout_discarded == nullptr)
         {
           fatal("Unable to open FASTQ output file for writing");
         }
@@ -109,48 +122,50 @@ void subsample()
   db_read(opt_fastx_subsample, 0);
   show_rusage();
 
-  if ((fp_fastqout || fp_fastqout_discarded) && ! db_is_fastq())
+  if ((fp_fastqout != nullptr or fp_fastqout_discarded != nullptr) and not db_is_fastq())
     {
       fatal("Cannot write FASTQ output with a FASTA input file, lacking quality scores");
     }
 
-  int dbsequencecount = db_getsequencecount();
+  int const dbsequencecount = db_getsequencecount();
+
+  // create deck:
+  // - if not sizein, then { fill(1) ; return deck }
+  // - if sizein, then { counter ; range-for loop get_abundance ; return deck }
+
+  // compute mass_total = std::accumulate(begin, end, 0ULL);
 
   uint64_t mass_total = 0;
 
-  if (!opt_sizein)
+  if (not opt_sizein)
     {
       mass_total = dbsequencecount;
     }
   else
     {
-      for(int i=0; i<dbsequencecount; i++)
+      for(int i = 0; i < dbsequencecount; i++)
         {
           mass_total += db_getabundance(i);
         }
     }
 
-  if (! opt_quiet)
+  if (not opt_quiet)
     {
       fprintf(stderr, "Got %" PRIu64 " reads from %d amplicons\n",
               mass_total, dbsequencecount);
     }
 
-  if (opt_log)
+  if (opt_log != nullptr)
     {
       fprintf(fp_log, "Got %" PRIu64 " reads from %d amplicons\n",
               mass_total, dbsequencecount);
     }
 
 
-  int * abundance = (int*) xmalloc(dbsequencecount * sizeof(int));
+  std::vector<int> abundance(dbsequencecount);
+  // refactoring: default abundance values should be 1?
 
-  for(int i=0; i<dbsequencecount; i++)
-    {
-      abundance[i] = 0;
-    }
-
-  uint64_t n;                              /* number of reads to sample */
+  uint64_t n = 0;                              /* number of reads to sample */
   if (opt_sample_size)
     {
       n = opt_sample_size;
@@ -173,24 +188,25 @@ void subsample()
   uint64_t mass =                          /* mass of current amplicon */
     opt_sizein ? db_getabundance(0) : 1;
 
+  // refactoring C++17: std::sample()
   progress_init("Subsampling", mass_total);
   while (x > 0)
     {
-      uint64_t random = random_ulong(mass_total - r);
+      uint64_t const random = random_ulong(mass_total - r);
 
       if (random < x)
         {
           /* selected read r from amplicon a */
           abundance[a]++;
-          x--;
+          --x;
         }
 
-      r++;
-      m++;
+      ++r;
+      ++m;
       if (m >= mass)
         {
           /* next amplicon */
-          a++;
+          ++a;
           mass = opt_sizein ? db_getabundance(a) : 1;
           m = 0;
         }
@@ -201,16 +217,16 @@ void subsample()
   int samples = 0;
   int discarded = 0;
   progress_init("Writing output", dbsequencecount);
-  for(int i=0; i<dbsequencecount; i++)
+  for(int i = 0; i < dbsequencecount; i++)
     {
-      int64_t ab_sub = abundance[i];
-      int64_t ab_discarded = (opt_sizein ? db_getabundance(i) : 1) - ab_sub;
+      int64_t const ab_sub = abundance[i];
+      int64_t const ab_discarded = (opt_sizein ? db_getabundance(i) : 1) - ab_sub;
 
       if (ab_sub > 0)
         {
-          samples++;
+          ++samples;
 
-          if (opt_fastaout)
+          if (opt_fastaout != nullptr)
             {
               fasta_print_general(fp_fastaout,
                                   nullptr,
@@ -224,7 +240,7 @@ void subsample()
                                   -1, -1, nullptr, 0.0);
             }
 
-          if (opt_fastqout)
+          if (opt_fastqout != nullptr)
             {
               fastq_print_general(fp_fastqout,
                                   db_getsequence(i),
@@ -240,9 +256,9 @@ void subsample()
 
       if (ab_discarded > 0)
         {
-          discarded++;
+          ++discarded;
 
-          if (opt_fastaout_discarded)
+          if (opt_fastaout_discarded != nullptr)
             {
               fasta_print_general(fp_fastaout_discarded,
                                   nullptr,
@@ -256,7 +272,7 @@ void subsample()
                                   -1, -1, nullptr, 0.0);
             }
 
-          if (opt_fastqout_discarded)
+          if (opt_fastqout_discarded != nullptr)
             {
               fastq_print_general(fp_fastqout_discarded,
                                   db_getsequence(i),
@@ -273,35 +289,34 @@ void subsample()
     }
   progress_done();
 
-  xfree(abundance);
 
-  if (! opt_quiet)
+  if (not opt_quiet)
     {
       fprintf(stderr, "Subsampled %" PRIu64 " reads from %d amplicons\n", n, samples);
     }
-  if (opt_log)
+  if (opt_log != nullptr)
     {
       fprintf(fp_log, "Subsampled %" PRIu64 " reads from %d amplicons\n", n, samples);
     }
 
   db_free();
 
-  if (opt_fastaout)
+  if (opt_fastaout != nullptr)
     {
       fclose(fp_fastaout);
     }
 
-  if (opt_fastqout)
+  if (opt_fastqout != nullptr)
     {
       fclose(fp_fastqout);
     }
 
-  if (opt_fastaout_discarded)
+  if (opt_fastaout_discarded != nullptr)
     {
       fclose(fp_fastaout_discarded);
     }
 
-  if (opt_fastqout_discarded)
+  if (opt_fastqout_discarded != nullptr)
     {
       fclose(fp_fastqout_discarded);
     }

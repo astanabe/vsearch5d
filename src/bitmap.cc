@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,15 +63,16 @@
 
 #include "vsearch5d.h"
 
-bitmap_t * bitmap_init(unsigned int size)
+
+auto bitmap_init(unsigned int size) -> bitmap_t *
 {
-  auto * b = (bitmap_t*) xmalloc(sizeof(bitmap_t));
+  auto * b = (bitmap_t *) xmalloc(sizeof(bitmap_t));
   b->size = size;
-  b->bitmap = (unsigned char *) xmalloc((size+7)/8);
+  b->bitmap = (unsigned char *) xmalloc((size + 7) / 8);
   return b;
 }
 
-void bitmap_free(bitmap_t* b)
+auto bitmap_free(bitmap_t * b) -> void
 {
   if (b->bitmap)
     {

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,34 +61,38 @@
 
 */
 
+#include <cstdint>  // uint64_t
+#include <cstdio>   // std::FILE, std::size_t
+
+
 #ifdef _WIN32
 typedef struct __stat64 xstat_t;
 #else
 typedef struct stat xstat_t;
 #endif
 
-uint64_t arch_get_memused();
-uint64_t arch_get_memtotal();
-long arch_get_cores();
-void arch_get_user_system_time(double * user_time, double * system_time);
-void arch_srandom();
-uint64_t arch_random();
-void * xmalloc(size_t size);
-void * xrealloc(void * ptr, size_t size);
-void xfree(void * ptr);
+auto arch_get_memused() -> uint64_t;
+auto arch_get_memtotal() -> uint64_t;
+auto arch_get_cores() -> long;
+auto arch_get_user_system_time(double * user_time, double * system_time) -> void;
+auto arch_srandom() -> void;
+auto arch_random() -> uint64_t;
+auto xmalloc(std::size_t size) -> void *;
+auto xrealloc(void * ptr, std::size_t size) -> void *;
+auto xfree(void * ptr) -> void;
 
-int xfstat(int fd, xstat_t * buf);
-int xstat(const char * path, xstat_t  * buf);
-uint64_t xlseek(int fd, uint64_t offset, int whence);
-uint64_t xftello(FILE * stream);
+auto xfstat(int fd, xstat_t * buf) -> int;
+auto xstat(const char * path, xstat_t  * buf) -> int;
+auto xlseek(int fd, uint64_t offset, int whence) -> uint64_t;
+auto xftello(std::FILE * stream) -> uint64_t;
 
-int xopen_read(const char * path);
-int xopen_write(const char * path);
+auto xopen_read(const char * path) -> int;
+auto xopen_write(const char * path) -> int;
 
-const char * xstrcasestr(const char * haystack, const char * needle);
+auto xstrcasestr(const char * haystack, const char * needle) -> const char *;
 
 #ifdef _WIN32
-FARPROC arch_dlsym(HMODULE handle, const char * symbol);
+auto arch_dlsym(HMODULE handle, const char * symbol) -> FARPROC;
 #else
-void * arch_dlsym(void * handle, const char * symbol);
+auto arch_dlsym(void * handle, const char * symbol) -> void *;
 #endif

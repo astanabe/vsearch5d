@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,7 +63,7 @@
 
 #include "vsearch5d.h"
 
-const char * tax_letters = "dkpcofgs";
+const char * tax_letters = "dkpcofgst";
 
 bool tax_parse(const char * header,
                int header_length,
@@ -125,7 +125,7 @@ bool tax_parse(const char * header,
 
 void tax_split(int seqno, int * level_start, int * level_len)
 {
-  /* Parse taxonomy string into the following parts
+  /* Parse taxonomy string into the following 9 parts
      d domain
      k kingdom
      p phylum
@@ -134,6 +134,7 @@ void tax_split(int seqno, int * level_start, int * level_len)
      f family
      g genus
      s species
+     t strain
   */
 
   for (int i = 0; i < tax_levels; i++)
@@ -142,7 +143,8 @@ void tax_split(int seqno, int * level_start, int * level_len)
       level_len[i] = 0;
     }
 
-  int tax_start, tax_end;
+  int tax_start;
+  int tax_end;
   char * h = db_getheader(seqno);
   int hlen = db_getheaderlen(seqno);
   if (tax_parse(h, hlen, & tax_start, & tax_end))

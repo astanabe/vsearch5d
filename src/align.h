@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,13 +61,16 @@
 
 */
 
+#include <cstdint> // int64_t
+
+
 struct nwinfo_s;
 
-struct nwinfo_s * nw_init();
+auto nw_init() -> struct nwinfo_s *;
 
-void nw_exit(struct nwinfo_s * nw);
+auto nw_exit(struct nwinfo_s * nw) -> void;
 
-void nw_align(char * dseq,
+auto nw_align(char * dseq,
               char * dend,
               char * qseq,
               char * qend,
@@ -92,4 +95,4 @@ void nw_align(char * dseq,
               char ** nwalignment,
               int64_t queryno,
               int64_t dbseqno,
-              struct nwinfo_s * nw);
+              struct nwinfo_s * nw) -> void;

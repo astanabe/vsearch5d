@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,8 @@
 */
 
 #include "vsearch5d.h"
+#include <limits>
+
 
 static pthread_t * pthread;
 
@@ -89,7 +91,7 @@ static FILE * fp_tsegout = nullptr;
 static int count_matched = 0;
 static int count_notmatched = 0;
 
-inline int allpairs_hit_compare_typed(struct hit * x, struct hit * y)
+inline auto allpairs_hit_compare_typed(struct hit * x, struct hit * y) -> int
 {
   // high id, then low id
   // early target, then late target
@@ -116,17 +118,17 @@ inline int allpairs_hit_compare_typed(struct hit * x, struct hit * y)
     }
 }
 
-int allpairs_hit_compare(const void * a, const void * b)
+auto allpairs_hit_compare(const void * a, const void * b) -> int
 {
   return allpairs_hit_compare_typed((struct hit *) a, (struct hit *) b);
 }
 
-void allpairs_output_results(int hit_count,
+auto allpairs_output_results(int hit_count,
                              struct hit * hits,
                              char * query_head,
                              int qseqlen,
                              char * qsequence,
-                             char * qsequence_rc)
+                             char * qsequence_rc) -> void
 {
   /* show results */
   int64_t toreport = MIN(opt_maxhits, hit_count);
@@ -159,7 +161,7 @@ void allpairs_output_results(int hit_count,
         {
           struct hit * hp = hits + t;
 
-          if (opt_top_hits_only && (hp->id < top_hit_id))
+          if (opt_top_hits_only and (hp->id < top_hit_id))
             {
               break;
             }
@@ -191,7 +193,7 @@ void allpairs_output_results(int hit_count,
 
           if (fp_uc)
             {
-              if ((t==0) || opt_uc_allhits)
+              if ((t == 0) or opt_uc_allhits)
                 {
                   results_show_uc_one(fp_uc,
                                       hp,
@@ -255,7 +257,7 @@ void allpairs_output_results(int hit_count,
 
   if (hit_count)
     {
-      count_matched++;
+      ++count_matched;
       if (opt_matched)
         {
           fasta_print_general(fp_matched,
@@ -272,7 +274,7 @@ void allpairs_output_results(int hit_count,
     }
   else
     {
-      count_notmatched++;
+      ++count_notmatched;
       if (opt_notmatched)
         {
           fasta_print_general(fp_notmatched,
@@ -289,7 +291,7 @@ void allpairs_output_results(int hit_count,
     }
 }
 
-void allpairs_thread_run(int64_t t)
+auto allpairs_thread_run(int64_t t) -> void
 {
   (void) t;
 
@@ -348,16 +350,16 @@ void allpairs_thread_run(int64_t t)
   auto * pseqnos =
     (unsigned int *) xmalloc(sizeof(unsigned int) * maxhits);
   CELL * pscores =
-    (CELL*) xmalloc(sizeof(CELL) * maxhits);
+    (CELL *) xmalloc(sizeof(CELL) * maxhits);
   auto * paligned =
-    (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
+    (unsigned short *) xmalloc(sizeof(unsigned short) * maxhits);
   auto * pmatches =
-    (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
+    (unsigned short *) xmalloc(sizeof(unsigned short) * maxhits);
   auto * pmismatches =
-    (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
+    (unsigned short *) xmalloc(sizeof(unsigned short) * maxhits);
   auto * pgaps =
-    (unsigned short*) xmalloc(sizeof(unsigned short) * maxhits);
-  char** pcigar = (char**) xmalloc(sizeof(char*) * maxhits);
+    (unsigned short *) xmalloc(sizeof(unsigned short) * maxhits);
+  char** pcigar = (char **) xmalloc(sizeof(char *) * maxhits);
 
   auto * finalhits
     = (struct hit *) xmalloc(sizeof(struct hit) * seqcount);
@@ -372,7 +374,7 @@ void allpairs_thread_run(int64_t t)
 
       if (query_no < seqcount)
         {
-          queries++;
+          ++queries;
 
           /* let other threads read input */
           xpthread_mutex_unlock(&mutex_input);
@@ -391,7 +393,7 @@ void allpairs_thread_run(int64_t t)
           for(int target = si->query_no + 1;
               target < seqcount; target++)
             {
-              if (opt_acceptall || search_acceptable_unaligned(si, target))
+              if (opt_acceptall or search_acceptable_unaligned(si, target))
                 {
                   pseqnos[si->hit_count++] = target;
                 }
@@ -427,7 +429,7 @@ void allpairs_thread_run(int64_t t)
                   int64_t nwmismatches {0};
                   int64_t nwgaps {0};
 
-                  if (nwscore == SHRT_MAX)
+                  if (nwscore == std::numeric_limits<short>::max())
                     {
                       /* In case the SIMD aligner cannot align,
                          perform a new alignment with the
@@ -491,7 +493,7 @@ void allpairs_thread_run(int64_t t)
                   align_trim(hit);
 
                   /* test accept/reject criteria after alignment */
-                  if (opt_acceptall || search_acceptable_aligned(si, hit))
+                  if (opt_acceptall or search_acceptable_aligned(si, hit))
                     {
                       finalhits[si->accepts++] = *hit;
                     }
@@ -516,7 +518,7 @@ void allpairs_thread_run(int64_t t)
           /* update stats */
           if (si->accepts)
             {
-              qmatches++;
+              ++qmatches;
             }
 
           /* show progress */
@@ -526,7 +528,7 @@ void allpairs_thread_run(int64_t t)
           xpthread_mutex_unlock(&mutex_output);
 
           /* free memory for alignment strings */
-          for(int i=0; i < si->hit_count; i++)
+          for(int i = 0; i < si->hit_count; i++)
             {
               if (si->hits[i].aligned)
                 {
@@ -562,14 +564,14 @@ void allpairs_thread_run(int64_t t)
   xfree(si->hits);
 }
 
-void * allpairs_thread_worker(void * vp)
+auto allpairs_thread_worker(void * vp) -> void *
 {
   auto t = (int64_t) vp;
   allpairs_thread_run(t);
   return nullptr;
 }
 
-void allpairs_thread_worker_run()
+auto allpairs_thread_worker_run() -> void
 {
   /* initialize threads, start them, join them and return */
 
@@ -577,14 +579,14 @@ void allpairs_thread_worker_run()
   xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   /* init and create worker threads, put them into stand-by mode */
-  for(int t=0; t<opt_threads; t++)
+  for(int t = 0; t < opt_threads; t++)
     {
-      xpthread_create(pthread+t, &attr,
-                      allpairs_thread_worker, (void*)(int64_t)t);
+      xpthread_create(pthread + t, &attr,
+                      allpairs_thread_worker, (void *) (int64_t) t);
     }
 
   /* finish and clean up worker threads */
-  for(int t=0; t<opt_threads; t++)
+  for(int t = 0; t < opt_threads; t++)
     {
       xpthread_join(pthread[t], nullptr);
     }
@@ -593,7 +595,7 @@ void allpairs_thread_worker_run()
 }
 
 
-void allpairs_global(char * cmdline, char * progheader)
+auto allpairs_global(char * cmdline, char * progheader) -> void
 {
   opt_strand = 1;
   opt_uc_allhits = 1;
@@ -603,7 +605,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_alnout)
     {
       fp_alnout = fopen_output(opt_alnout);
-      if (! fp_alnout)
+      if (not fp_alnout)
         {
           fatal("Unable to open alignment output file for writing");
         }
@@ -615,7 +617,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_samout)
     {
       fp_samout = fopen_output(opt_samout);
-      if (! fp_samout)
+      if (not fp_samout)
         {
           fatal("Unable to open SAM output file for writing");
         }
@@ -624,7 +626,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_userout)
     {
       fp_userout = fopen_output(opt_userout);
-      if (! fp_userout)
+      if (not fp_userout)
         {
           fatal("Unable to open user-defined output file for writing");
         }
@@ -633,7 +635,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_blast6out)
     {
       fp_blast6out = fopen_output(opt_blast6out);
-      if (! fp_blast6out)
+      if (not fp_blast6out)
         {
           fatal("Unable to open blast6-like output file for writing");
         }
@@ -642,7 +644,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_uc)
     {
       fp_uc = fopen_output(opt_uc);
-      if (! fp_uc)
+      if (not fp_uc)
         {
           fatal("Unable to open uc output file for writing");
         }
@@ -651,7 +653,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_fastapairs)
     {
       fp_fastapairs = fopen_output(opt_fastapairs);
-      if (! fp_fastapairs)
+      if (not fp_fastapairs)
         {
           fatal("Unable to open fastapairs output file for writing");
         }
@@ -660,7 +662,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_qsegout)
     {
       fp_qsegout = fopen_output(opt_qsegout);
-      if (! fp_qsegout)
+      if (not fp_qsegout)
         {
           fatal("Unable to open qsegout output file for writing");
         }
@@ -669,7 +671,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_tsegout)
     {
       fp_tsegout = fopen_output(opt_tsegout);
-      if (! fp_tsegout)
+      if (not fp_tsegout)
         {
           fatal("Unable to open tsegout output file for writing");
         }
@@ -678,7 +680,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_matched)
     {
       fp_matched = fopen_output(opt_matched);
-      if (! fp_matched)
+      if (not fp_matched)
         {
           fatal("Unable to open matched output file for writing");
         }
@@ -687,7 +689,7 @@ void allpairs_global(char * cmdline, char * progheader)
   if (opt_notmatched)
     {
       fp_notmatched = fopen_output(opt_notmatched);
-      if (! fp_notmatched)
+      if (not fp_notmatched)
         {
           fatal("Unable to open notmatched output file for writing");
         }
@@ -701,7 +703,7 @@ void allpairs_global(char * cmdline, char * progheader)
     {
       dust_all();
     }
-  else if ((opt_qmask == MASK_SOFT) && (opt_hardmask))
+  else if ((opt_qmask == MASK_SOFT) and (opt_hardmask))
     {
       hardmask_all();
     }
@@ -721,11 +723,11 @@ void allpairs_global(char * cmdline, char * progheader)
   xpthread_mutex_init(&mutex_output, nullptr);
 
   progress = 0;
-  progress_init("Aligning", MAX(0,((int64_t)seqcount)*((int64_t)seqcount-1))/2);
+  progress_init("Aligning", MAX(0, ((int64_t) seqcount) * ((int64_t) seqcount - 1)) / 2);
   allpairs_thread_worker_run();
   progress_done();
 
-  if (!opt_quiet)
+  if (not opt_quiet)
     {
       fprintf(stderr, "Matching query sequences: %d of %d",
               qmatches, queries);

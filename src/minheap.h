@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -76,21 +76,19 @@ typedef struct minheap_s
   elem_t * array;
 } minheap_t;
 
-inline int minheap_isempty(minheap_t * m)
+inline auto minheap_isempty(minheap_t * a_minheap) -> int
 {
-  return (m->count == 0);
+  return (a_minheap->count == 0);
 }
 
-inline void minheap_empty(minheap_t * m)
+inline auto minheap_empty(minheap_t * a_minheap) -> void
 {
-  m->count = 0;
+  a_minheap->count = 0;
 }
 
-elem_t minheap_poplast(minheap_t * m);
-void minheap_sort(minheap_t * m);
-minheap_t * minheap_init(int size);
-void minheap_exit(minheap_t * m);
-void minheap_add(minheap_t * m, elem_t * n);
-elem_t minheap_pop(minheap_t * m);
-
-void minheap_dump(minheap_t * m);
+auto minheap_poplast(minheap_t * a_minheap) -> elem_t;
+auto minheap_sort(minheap_t * a_minheap) -> void;
+auto minheap_init(int size) -> minheap_t *;
+auto minheap_exit(minheap_t * a_minheap) -> void;
+auto minheap_add(minheap_t * a_minheap, elem_t * n) -> void;
+auto minheap_pop(minheap_t * a_minheap) -> elem_t;

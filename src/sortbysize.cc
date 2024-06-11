@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,136 +62,191 @@
 */
 
 #include "vsearch5d.h"
+#include <algorithm>  // std::min, std::sort
+#include <cassert>
+#include <cstdint>  // int64_t
+#include <cstdio>  // std::FILE, std::fprintf, std::size_t
+#include <cstdlib>   // std::ldiv
+#include <cstring>  // std::strcmp
+#include <vector>
 
-static struct sortinfo_size_s
+#ifndef NDEBUG
+#include <limits>
+#endif
+
+
+struct sortinfo_size_s
 {
-  unsigned int size;
-  unsigned int seqno;
-} * sortinfo;
+  unsigned int size = 0;
+  unsigned int seqno = 0;
+};
 
-int sortbysize_compare(const void * a, const void * b)
-{
-  auto * x = (struct sortinfo_size_s *) a;
-  auto * y = (struct sortinfo_size_s *) b;
 
-  /* highest abundance first, then by label, otherwise keep order */
-
-  if (x->size < y->size)
-    {
-      return +1;
+namespace {
+  // anonymous namespace to avoid linker error (multiple definitions
+  // of function with identical names and parameters)
+  auto create_deck() -> std::vector<struct sortinfo_size_s> {
+    auto const dbsequencecount = db_getsequencecount();
+    assert(dbsequencecount < std::numeric_limits<std::size_t>::max());
+    std::vector<struct sortinfo_size_s> deck(dbsequencecount);
+    progress_init("Getting sizes", deck.size());
+    auto counter = std::size_t{0};
+    for (auto seqno = 0U; seqno < dbsequencecount; ++seqno) {
+      auto const size = static_cast<int64_t>(db_getabundance(seqno));
+      if ((size < opt_minsize) or (size > opt_maxsize)) {
+        continue;
+      }
+      deck[counter].seqno = seqno;
+      deck[counter].size = static_cast<unsigned int>(size);
+      progress_update(seqno);
+      ++counter;
     }
-  else if (x->size > y->size)
-    {
-      return -1;
-    }
-  else
-    {
-      int r = strcmp(db_getheader(x->seqno), db_getheader(y->seqno));
-      if (r != 0)
-        {
-          return r;
-        }
-      else
-        {
-          if (x->seqno < y->seqno)
-            {
-              return -1;
-            }
-          else if (x->seqno > y->seqno)
-            {
-              return +1;
-            }
-          else
-            {
-              return 0;
-            }
-        }
-    }
+    progress_done();
+    deck.resize(counter);
+    return deck;
+  }
 }
 
-void sortbysize()
-{
-  if (!opt_output)
-    fatal("FASTA output file for sortbysize must be specified with --output");
 
-  FILE * fp_output = fopen_output(opt_output);
-  if (!fp_output)
-    {
-      fatal("Unable to open sortbysize output file for writing");
+auto sort_deck(std::vector<sortinfo_size_s> & deck) -> void {
+  auto compare_sequences = [](struct sortinfo_size_s const & lhs,
+                              struct sortinfo_size_s const & rhs) -> bool {
+    // highest abundance first...
+    if (lhs.size < rhs.size) {
+      return false;
     }
+    if (lhs.size > rhs.size) {
+      return true;
+    }
+    // ...then ties are sorted by sequence labels (alpha-numerical ordering),
+    // preserve input order
+    auto const result = std::strcmp(db_getheader(lhs.seqno), db_getheader(rhs.seqno));
+    return result < 0;
+  };
+
+  static constexpr auto one_hundred_percent = 100ULL;
+  progress_init("Sorting", one_hundred_percent);
+  std::stable_sort(deck.begin(), deck.end(), compare_sequences);
+  progress_done();
+}
+
+
+// refactoring C++17 [[nodiscard]]
+auto find_median_abundance(std::vector<sortinfo_size_s> const & deck) -> double
+{
+  // function returns a round value or a value with a remainder of 0.5
+  static constexpr double half = 0.5;
+
+  if (deck.empty()) {
+    return 0.0;
+  }
+
+  // refactoring C++11: use const& std::vector.size()
+  auto const midarray = std::ldiv(static_cast<long>(deck.size()), 2L);
+
+  // odd number of valid amplicons
+  if (deck.size() % 2 != 0)  {
+    return deck[midarray.quot].size * 1.0;  // a round value
+  }
+
+  // even number of valid amplicons
+  // (average of two ints is either round or has a remainder of .5)
+  // avoid risk of silent overflow for large abundance values:
+  // a >= b ; (a + b) / 2 == b + (a - b) / 2
+  return deck[midarray.quot].size +
+    ((deck[midarray.quot - 1].size - deck[midarray.quot].size) * half);
+}
+
+
+auto output_median_abundance(std::vector<sortinfo_size_s> const & deck) -> void {
+  // Banker's rounding (round half to even)
+  auto const median = find_median_abundance(deck);
+  if (not opt_quiet) {
+      static_cast<void>(fprintf(stderr, "Median abundance: %.0f\n", median));
+  }
+  if (opt_log != nullptr) {
+    static_cast<void>(fprintf(fp_log, "Median abundance: %.0f\n", median));
+  }
+}
+
+
+auto truncate_deck(std::vector<struct sortinfo_size_s> & deck,
+                   long int const n_first_sequences) -> void {
+  auto const final_size = std::min(deck.size(),
+                                   static_cast<unsigned long>(n_first_sequences));
+  deck.resize(final_size);
+}
+
+
+// refactoring: extract as a template
+auto output_sorted_fasta(std::vector<struct sortinfo_size_s> const & deck,
+                           std::FILE * output_file) -> void {
+  progress_init("Writing output", deck.size());
+  auto counter = std::size_t{0};
+  for (auto const & sequence: deck) {
+    fasta_print_db_relabel(output_file, sequence.seqno, counter + 1);
+    progress_update(counter);
+    ++counter;
+  }
+  progress_done();
+}
+
+
+// refactoring: trim misize and maxsize with a free function
+// https://stackoverflow.com/questions/26719144/how-to-erase-a-value-efficiently-from-a-sorted-vector
+// auto erase_high_abundances(std::vector<int> & vec, int value) -> void
+// {
+//     auto lb = std::lower_bound(std::begin(vec), std::end(vec), value);
+//     if (lb != std::end(vec) and *lb == value) {
+//         auto ub = std::upper_bound(lb, std::end(vec), value);
+//         vec.erase(lb, ub);
+//     }
+// }
+
+
+// refactoring:
+// - create vector (no branch)
+// - stable_sort vector (by increasing size, then label)
+// - find lower_bound(comp(opt_minsize)),
+// - deck.resize()
+// - find upper_bound(comp(opt_maxsize)),
+// - std::vector<S> subdeck = {deck.begin() + upper_bound, deck.end()};  // view?
+// - opt_minsize = 0 by default
+// - opt_maxsize = LONG_MAX by default
+// - top_n = LONG_MAX by default
+// - mediane, etc...
+// - std::min(subdeck.size(), topn);
+
+
+auto sortbysize() -> void
+{
+  if (opt_output == nullptr) {
+    fatal("FASTA output file for sortbysize must be specified with --output");
+  }
+
+  auto * fp_output = fopen_output(opt_output);
+  if (fp_output == nullptr) {
+    fatal("Unable to open sortbysize output file for writing");
+  }
 
   db_read(opt_sortbysize, 0);
-
   show_rusage();
 
-  int dbsequencecount = db_getsequencecount();
-
-  progress_init("Getting sizes", dbsequencecount);
-
-  sortinfo = (struct sortinfo_size_s*)
-    xmalloc(dbsequencecount * sizeof(sortinfo_size_s));
-
-  int passed = 0;
-
-  for(int i=0; i<dbsequencecount; i++)
-    {
-      int64_t size = db_getabundance(i);
-
-      if((size >= opt_minsize) && (size <= opt_maxsize))
-        {
-          sortinfo[passed].seqno = i;
-          sortinfo[passed].size = (unsigned int) size;
-          passed++;
-        }
-      progress_update(i);
-    }
-
-  progress_done();
-
+  auto deck = create_deck();
   show_rusage();
 
-  progress_init("Sorting", 100);
-  qsort(sortinfo, passed, sizeof(sortinfo_size_s), sortbysize_compare);
-  progress_done();
+  sort_deck(deck);
 
-  double median = 0.0;
-  if (passed > 0)
-    {
-      if (passed % 2)
-        {
-          median = sortinfo[(passed-1)/2].size;
-        }
-      else
-        {
-          median = (sortinfo[(passed/2)-1].size +
-                    sortinfo[passed/2].size) / 2.0;
-        }
-    }
-
-  if (! opt_quiet)
-    {
-      fprintf(stderr, "Median abundance: %.0f\n", median);
-    }
-
-  if (opt_log)
-    {
-      fprintf(fp_log, "Median abundance: %.0f\n", median);
-    }
-
+  output_median_abundance(deck);
   show_rusage();
 
-  passed = MIN(passed, opt_topn);
+  truncate_deck(deck, opt_topn);
+  output_sorted_fasta(deck, fp_output);
+  show_rusage();  // refactoring: why three calls to show_rusage()?
 
-  progress_init("Writing output", passed);
-  for(int i=0; i<passed; i++)
-    {
-      fasta_print_db_relabel(fp_output, sortinfo[i].seqno, i+1);
-      progress_update(i);
-    }
-  progress_done();
-  show_rusage();
-
-  xfree(sortinfo);
   db_free();
-  fclose(fp_output);
+
+  if (fp_output != nullptr) {
+    static_cast<void>(fclose(fp_output));
+  }
 }

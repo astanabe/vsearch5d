@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,6 +61,10 @@
 
 */
 
+#include <cstdio>  // std::FILE, std::size_t
+#include <cstdint>  // int64_t
+
+
 class LinearMemoryAligner
 {
   char op;
@@ -91,20 +95,20 @@ class LinearMemoryAligner
   int64_t ge_q_r;
   int64_t ge_t_r;
 
-  size_t vector_alloc;
+  std::size_t vector_alloc;
 
   int64_t * HH;
   int64_t * EE;
   int64_t * XX;
   int64_t * YY;
 
-  void cigar_reset();
+  auto cigar_reset() -> void;
 
-  void cigar_flush();
+  auto cigar_flush() -> void;
 
-  void cigar_add(char _op, int64_t run);
+  auto cigar_add(char _op, int64_t run) -> void;
 
-  inline int64_t subst_score(int64_t x, int64_t y)
+  auto subst_score(int64_t x, int64_t y) -> int64_t
   {
     /* return substitution score for replacing symbol at position x in a
        with symbol at position y in b */
@@ -112,7 +116,7 @@ class LinearMemoryAligner
                        chrmap_4bit[(int)(a_seq[x])]];
   }
 
-  void diff(int64_t a_start,
+  auto diff(int64_t a_start,
             int64_t b_start,
             int64_t a_len,
             int64_t b_len,
@@ -121,11 +125,11 @@ class LinearMemoryAligner
             bool a_left,      /* includes left end of a  */
             bool a_right,     /* includes right end of a */
             bool b_left,      /* includes left end of b  */
-            bool b_right);    /* includes right end of b */
+            bool b_right) -> void;    /* includes right end of b */
 
-  void alloc_vectors(size_t N);
+  auto alloc_vectors(std::size_t x) -> void;
 
-  void show_matrix();
+  auto show_matrix() -> void;
 
 public:
 
@@ -133,9 +137,9 @@ public:
 
   ~LinearMemoryAligner();
 
-  int64_t * scorematrix_create(int64_t match, int64_t mismatch);
+  auto scorematrix_create(int64_t match, int64_t mismatch) -> int64_t *;
 
-  void set_parameters(int64_t * _scorematrix,
+  auto set_parameters(int64_t * _scorematrix,
                       int64_t _gap_open_query_left,
                       int64_t _gap_open_target_left,
                       int64_t _gap_open_query_interior,
@@ -147,20 +151,20 @@ public:
                       int64_t _gap_extension_query_interior,
                       int64_t _gap_extension_target_interior,
                       int64_t _gap_extension_query_right,
-                      int64_t _gap_extension_target_right);
+                      int64_t _gap_extension_target_right) -> void;
 
-  char * align(char * _a_seq,
-               char * _b_seq,
-               int64_t M,
-               int64_t N);
+  auto align(char * _a_seq,
+             char * _b_seq,
+             int64_t a_len,
+             int64_t b_len) -> char *;
 
-  void alignstats(char * cigar,
+  auto alignstats(char * cigar,
                   char * a_seq,
                   char * b_seq,
                   int64_t * nwscore,
                   int64_t * nwalignmentlength,
                   int64_t * nwmatches,
                   int64_t * nwmismatches,
-                  int64_t * nwgaps);
+                  int64_t * nwgaps) -> void;
 
 };

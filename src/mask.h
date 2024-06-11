@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,15 +61,17 @@
 
 */
 
-#define MASK_ERROR -1
-#define MASK_NONE 0
-#define MASK_DUST 1
-#define MASK_SOFT 2
+// refactoring: enum struct Masking: int { error, none, dust, soft };
+constexpr auto MASK_ERROR = -1;
+constexpr auto MASK_NONE = 0;
+constexpr auto MASK_DUST = 1;
+constexpr auto MASK_SOFT = 2;
 
-void maskfasta();
-void fastx_mask();
 
-void dust(char * m, int len);
-void hardmask(char * m, int len);
-void dust_all();
-void hardmask_all();
+auto maskfasta() -> void;
+auto fastx_mask() -> void;
+
+auto dust(char * m, int len) -> void;
+auto hardmask(char * seq, int len) -> void;
+auto dust_all() -> void;
+auto hardmask_all() -> void;

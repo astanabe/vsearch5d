@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,6 +63,7 @@
 
 #include "vsearch5d.h"
 
+
 struct nwinfo_s
 {
   int64_t dir_alloc;
@@ -91,7 +92,7 @@ inline void pushop(char newop, char ** cigarendp, char * op, int * count)
           char buf[size];
           int len = snprintf(buf, size, "%d", *count);
           *cigarendp -= len;
-          memcpy(*cigarendp, buf, (size_t)len);
+          memcpy(*cigarendp, buf, (size_t) len);
         }
       *op = newop;
       *count = 1;
@@ -100,7 +101,7 @@ inline void pushop(char newop, char ** cigarendp, char * op, int * count)
 
 inline void finishop(char ** cigarendp, char * op, int * count)
 {
-  if ((op) && (count))
+  if ((op) and (count))
   {
     *--*cigarendp = *op;
     if (*count > 1)
@@ -109,7 +110,7 @@ inline void finishop(char ** cigarendp, char * op, int * count)
       char buf[size];
       int len = snprintf(buf, size, "%d", *count);
       *cigarendp -= len;
-      memcpy(*cigarendp, buf, (size_t)len);
+      memcpy(*cigarendp, buf, (size_t) len);
     }
     *op = 0;
     *count = 0;
@@ -167,7 +168,7 @@ struct nwinfo_s * nw_init()
   return nw;
 }
 
-void nw_exit(struct nwinfo_s * nw)
+auto nw_exit(struct nwinfo_s * nw) -> void
 {
   if (nw->dir)
     {
@@ -180,12 +181,12 @@ void nw_exit(struct nwinfo_s * nw)
   xfree(nw);
 }
 
-inline int64_t getscore(int64_t * score_matrix, char a, char b)
+inline auto getscore(int64_t * score_matrix, char a, char b) -> int64_t
 {
-  return score_matrix[(chrmap_4bit[(int)a]<<4) + chrmap_4bit[(int)b]];
+  return score_matrix[(chrmap_4bit[(int) a] << 4) + chrmap_4bit[(int) b]];
 }
 
-void nw_align(char * dseq,
+auto nw_align(char * dseq,
               char * dend,
               char * qseq,
               char * qend,
@@ -210,11 +211,16 @@ void nw_align(char * dseq,
               char ** nwalignment,
               int64_t queryno,
               int64_t dbseqno,
-              struct nwinfo_s * nw)
+              struct nwinfo_s * nw) -> void
 {
 
-  int64_t h, n, e, f, h_e, h_f;
-  int64_t *hep;
+  int64_t h;
+  int64_t n;
+  int64_t e;
+  int64_t f;
+  int64_t h_e;
+  int64_t h_f;
+  int64_t * hep;
 
   int64_t qlen = qend - qseq;
   int64_t dlen = dend - dseq;
@@ -222,38 +228,39 @@ void nw_align(char * dseq,
   if (qlen * dlen > nw->dir_alloc)
     {
       nw->dir_alloc = qlen * dlen;
-      nw->dir = (char *) xrealloc(nw->dir, (size_t)nw->dir_alloc);
+      nw->dir = (char *) xrealloc(nw->dir, (size_t) nw->dir_alloc);
     }
 
   int64_t need = 2 * qlen * (int64_t) sizeof(int64_t);
   if (need > nw->hearray_alloc)
     {
       nw->hearray_alloc = need;
-      nw->hearray = (int64_t *) xrealloc(nw->hearray, (size_t)nw->hearray_alloc);
+      nw->hearray = (int64_t *) xrealloc(nw->hearray, (size_t) nw->hearray_alloc);
     }
 
-  memset(nw->dir, 0, (size_t)(qlen*dlen));
+  memset(nw->dir, 0, (size_t) (qlen * dlen));
 
-  int64_t i, j;
+  int64_t i;
+  int64_t j;
 
-  for(i=0; i<qlen; i++)
+  for (i = 0; i < qlen; i++)
   {
-    nw->hearray[2*i] = -gapopen_t_left - (i+1) * gapextend_t_left;
+    nw->hearray[2 * i] = -gapopen_t_left - (i + 1) * gapextend_t_left;
     if (i < qlen-1)
       {
-        nw->hearray[2*i+1] =
-          - gapopen_t_left - (i+1) * gapextend_t_left
+        nw->hearray[2 * i + 1] =
+          - gapopen_t_left - (i + 1) * gapextend_t_left
           - gapopen_q_interior - gapextend_q_interior;
       }
     else
       {
-        nw->hearray[2*i+1] =
-          - gapopen_t_left - (i+1) * gapextend_t_left
+        nw->hearray[2 * i + 1] =
+          - gapopen_t_left - (i + 1) * gapextend_t_left
           - gapopen_q_right - gapextend_q_right;
       }
   }
 
-  for(j=0; j<dlen; j++)
+  for (j = 0; j < dlen; j++)
   {
     hep = nw->hearray;
 
@@ -268,21 +275,21 @@ void nw_align(char * dseq,
 
     if (j < dlen-1)
       {
-        f = - gapopen_q_left - (j+1) * gapextend_q_left
+        f = - gapopen_q_left - (j + 1) * gapextend_q_left
           - gapopen_t_interior - gapextend_t_interior;
       }
     else
       {
-        f = - gapopen_q_left - (j+1) * gapextend_q_left
+        f = - gapopen_q_left - (j + 1) * gapextend_q_left
           - gapopen_t_right - gapextend_t_right;
       }
 
-    for(i=0; i<qlen; i++)
+    for (i = 0; i < qlen; i++)
     {
-      char * d = nw->dir + qlen*j+i;
+      char * d = nw->dir + qlen * j + i;
 
       n = *hep;
-      e = *(hep+1);
+      e = *(hep + 1);
       h += getscore(score_matrix, dseq[j], qseq[i]);
 
       if (f > h)
@@ -339,13 +346,13 @@ void nw_align(char * dseq,
           e = h_e;
         }
 
-      *(hep+1) = e;
+      *(hep + 1) = e;
       h = n;
       hep += 2;
     }
   }
 
-  int64_t dist = nw->hearray[2*qlen-2];
+  int64_t dist = nw->hearray[2 * qlen - 2];
 
   /* backtrack: count differences and save alignment in cigar string */
 
@@ -355,8 +362,8 @@ void nw_align(char * dseq,
   int64_t gaps = 0;
   int64_t indels = 0;
 
-  char * cigar = (char *) xmalloc((size_t)(qlen + dlen + 1));
-  char * cigarend = cigar+qlen+dlen+1;
+  char * cigar = (char *) xmalloc((size_t) (qlen + dlen + 1));
+  char * cigarend = cigar + qlen + dlen + 1;
 
   char op = 0;
   int count = 0;
@@ -365,93 +372,93 @@ void nw_align(char * dseq,
   i = qlen;
   j = dlen;
 
-  while ((i>0) && (j>0))
+  while ((i > 0) and (j > 0))
   {
     int64_t gapopen_q   = (i < qlen) ? gapopen_q_interior   : gapopen_q_right;
     int64_t gapextend_q = (i < qlen) ? gapextend_q_interior : gapextend_q_right;
     int64_t gapopen_t   = (j < dlen) ? gapopen_t_interior   : gapopen_t_right;
     int64_t gapextend_t = (j < dlen) ? gapextend_t_interior : gapextend_t_right;
 
-    int d = nw->dir[qlen*(j-1)+(i-1)];
+    int d = nw->dir[qlen * (j - 1) + (i - 1)];
 
-    alength++;
+    ++alength;
 
-    if ((op == 'I') && (d & maskextleft))
+    if ((op == 'I') and (d & maskextleft))
     {
       score -= gapextend_q;
-      indels++;
-      j--;
+      ++indels;
+      --j;
       pushop('I', &cigarend, &op, &count);
     }
-    else if ((op == 'D') && (d & maskextup))
+    else if ((op == 'D') and (d & maskextup))
     {
       score -= gapextend_t;
-      indels++;
-      i--;
+      ++indels;
+      --i;
       pushop('D', &cigarend, &op, &count);
     }
     else if (d & maskleft)
     {
       score -= gapextend_q;
-      indels++;
+      ++indels;
       if (op != 'I')
         {
           score -= gapopen_q;
-          gaps++;
+          ++gaps;
         }
-      j--;
+      --j;
       pushop('I', &cigarend, &op, &count);
     }
     else if (d & maskup)
     {
       score -= gapextend_t;
-      indels++;
+      ++indels;
       if (op != 'D')
         {
           score -= gapopen_t;
-          gaps++;
+          ++gaps;
         }
-      i--;
+      --i;
       pushop('D', &cigarend, &op, &count);
     }
     else
     {
-      score += getscore(score_matrix, dseq[j-1], qseq[i-1]);
-      if (chrmap_4bit[(int)(dseq[j-1])] & chrmap_4bit[(int)(qseq[i-1])])
+      score += getscore(score_matrix, dseq[j - 1], qseq[i - 1]);
+      if (chrmap_4bit[(int) (dseq[j - 1])] & chrmap_4bit[(int) (qseq[i - 1])])
         {
           matches++;
         }
-      i--;
-      j--;
+      --i;
+      --j;
       pushop('M', &cigarend, &op, &count);
     }
   }
 
-  while(i>0)
+  while(i > 0)
   {
-    alength++;
+    ++alength;
     score -= gapextend_t_left;
-    indels++;
+    ++indels;
     if (op != 'D')
       {
         score -= gapopen_t_left;
-        gaps++;
+        ++gaps;
       }
-    i--;
+    --i;
     pushop('D', &cigarend, &op, &count);
   }
 
-  while(j>0)
+  while(j > 0)
   {
-    alength++;
+    ++alength;
     score -= gapextend_q_left;
-    indels++;
+    ++indels;
     if (op != 'I')
       {
         score -= gapopen_q_left;
-        gaps++;
+        ++gaps;
       }
-    j--;
+    --j;
     pushop('I', &cigarend, &op, &count);
   }
 
@@ -459,9 +466,9 @@ void nw_align(char * dseq,
 
   /* move and reallocate cigar */
 
-  int64_t cigarlength = cigar+qlen+dlen-cigarend;
-  memmove(cigar, cigarend, (size_t)(cigarlength+1));
-  cigar = (char*) xrealloc(cigar, (size_t)(cigarlength+1));
+  int64_t cigarlength = cigar + qlen + dlen - cigarend;
+  memmove(cigar, cigarend, (size_t) (cigarlength + 1));
+  cigar = (char *) xrealloc(cigar, (size_t) (cigarlength + 1));
 
   * nwscore = dist;
   * nwdiff = alength - matches;

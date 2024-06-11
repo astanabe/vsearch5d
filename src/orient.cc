@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,9 @@
 */
 
 #include "vsearch5d.h"
+#include <cassert>
+#include <cstddef> // size_t
+
 
 unsigned int rc_kmer(unsigned int kmer)
 {
@@ -295,14 +298,17 @@ void orient()
           /* rev */
 
           strand = 1;
-          matches_rev++;
-          qmatches++;
+          ++matches_rev;
+          ++qmatches;
 
           /* alloc more mem if necessary to keep reverse sequence and qual */
-
-          if ((size_t)(qseqlen + 1) > alloc)
+          assert(qseqlen > 0);
+          static_assert(sizeof(std::size_t) >= sizeof(int), "size_t is too small");
+          const std::size_t requirements = qseqlen + 1;
+          // refactoring: unsigned int qseqlen
+          if (requirements > alloc)
             {
-              alloc = qseqlen + 1;
+              alloc = requirements;
               qseq_rev = (char*) xrealloc(qseq_rev, alloc);
               if (fastx_is_fastq(query_h))
                 {

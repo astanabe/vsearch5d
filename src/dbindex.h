@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,6 +61,10 @@
 
 */
 
+#include <cstdio>  // std::FILE
+#include <cstdint>  // uint64_t
+
+
 extern unsigned int * kmercount; /* number of matching seqnos for each kmer */
 extern uint64_t * kmerhash;  /* index into the list below for each kmer */
 extern unsigned int * kmerindex; /* the list of matching seqnos for kmers */
@@ -71,15 +75,15 @@ extern unsigned int kmerhashsize;
 extern uint64_t kmerindexsize;
 extern uhandle_s * dbindex_uh;
 
-void fprint_kmer(FILE * f, unsigned int k, uint64_t kmer);
+auto fprint_kmer(std::FILE * f, unsigned int k, uint64_t kmer) -> void;
 
-void dbindex_prepare(int use_bitmap, int seqmask);
-void dbindex_addallsequences(int seqmask);
-void dbindex_addsequence(unsigned int seqno, int seqmask);
-void dbindex_free();
-void dbindex_udb_write();
+auto dbindex_prepare(int use_bitmap, int seqmask) -> void;
+auto dbindex_addallsequences(int seqmask) -> void;
+auto dbindex_addsequence(unsigned int seqno, int seqmask) -> void;
+auto dbindex_free() -> void;
+auto dbindex_udb_write() -> void;
 
-inline unsigned char * dbindex_getbitmap(unsigned int kmer)
+inline auto dbindex_getbitmap(unsigned int kmer) -> unsigned char *
 {
   if (kmerbitmap[kmer])
     {
@@ -91,22 +95,22 @@ inline unsigned char * dbindex_getbitmap(unsigned int kmer)
     }
 }
 
-inline unsigned int dbindex_getmatchcount(unsigned int kmer)
+inline auto dbindex_getmatchcount(unsigned int kmer) -> unsigned int
 {
   return kmercount[kmer];
 }
 
-inline unsigned int * dbindex_getmatchlist(unsigned int kmer)
+inline auto dbindex_getmatchlist(unsigned int kmer) -> unsigned int *
 {
   return kmerindex + kmerhash[kmer];
 }
 
-inline unsigned int dbindex_getmapping(unsigned int index)
+inline auto dbindex_getmapping(unsigned int index) -> unsigned int
 {
   return dbindex_map[index];
 }
 
-inline unsigned int dbindex_getcount()
+inline auto dbindex_getcount() -> unsigned int
 {
   return dbindex_count;
 }

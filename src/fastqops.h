@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,7 +61,7 @@
 
 */
 
-void fastq_chars();
-void fastq_convert();
-void fastq_stats();
-void fastx_revcomp();
+auto fastq_chars() -> void;
+auto fastq_convert() -> void;
+auto fastq_stats() -> void;
+auto fastx_revcomp() -> void;

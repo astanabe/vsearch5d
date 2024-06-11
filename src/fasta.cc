@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,8 @@
 */
 
 #include "vsearch5d.h"
+#include <cstdio> // std::FILE, std::fprintf, std::size_t
+
 
 fastx_handle fasta_open(const char * filename)
 {
@@ -490,6 +492,25 @@ void fasta_print_db_relabel(FILE * fp,
                       -1, -1,
                       nullptr, 0.0);
 }
+
+
+auto fasta_print_db_relabel(std::FILE * fp,
+                            uint64_t seqno,
+                            std::size_t ordinal) -> void
+{
+  fasta_print_general(fp,
+                      nullptr,
+                      db_getsequence(seqno),
+                      db_getsequencelen(seqno),
+                      db_getheader(seqno),
+                      db_getheaderlen(seqno),
+                      db_getabundance(seqno),
+                      static_cast<int>(ordinal),
+                      -1.0,
+                      -1, -1,
+                      nullptr, 0.0);
+}
+
 
 void fasta_print_db(FILE * fp, uint64_t seqno)
 {

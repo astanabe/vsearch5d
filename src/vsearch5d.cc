@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -85,6 +85,7 @@ bool opt_relabel_self;
 bool opt_relabel_sha1;
 bool opt_samheader;
 bool opt_sff_clip;
+bool opt_sintax_random;
 bool opt_sizein;
 bool opt_sizeorder;
 bool opt_sizeout;
@@ -364,7 +365,10 @@ void cpu_features_detect()
 #elif __PPC__
   altivec_present = 1;
 #elif __x86_64__
-  unsigned int a, b, c, d;
+  unsigned int a;
+  unsigned int b;
+  unsigned int c;
+  unsigned int d;
 
   cpuid(0, 0, a, b, c, d);
   unsigned int maxlevel = a & 0xff;
@@ -963,6 +967,7 @@ void args_init(int argc, char **argv)
   opt_shuffle = nullptr;
   opt_sintax = nullptr;
   opt_sintax_cutoff = 0.0;
+  opt_sintax_random = false;
   opt_sizein = false;
   opt_sizeorder = false;
   opt_sizeout = false;
@@ -1208,6 +1213,7 @@ void args_init(int argc, char **argv)
       option_shuffle,
       option_sintax,
       option_sintax_cutoff,
+      option_sintax_random,
       option_sizein,
       option_sizeorder,
       option_sizeout,
@@ -1456,6 +1462,7 @@ void args_init(int argc, char **argv)
       {"shuffle",               required_argument, nullptr, 0 },
       {"sintax",                required_argument, nullptr, 0 },
       {"sintax_cutoff",         required_argument, nullptr, 0 },
+      {"sintax_random",         no_argument,       nullptr, 0 },
       {"sizein",                no_argument,       nullptr, 0 },
       {"sizeorder",             no_argument,       nullptr, 0 },
       {"sizeout",               no_argument,       nullptr, 0 },
@@ -2559,6 +2566,10 @@ void args_init(int argc, char **argv)
           opt_chimeras_diff_pct = args_getdouble(optarg);
           break;
 
+        case option_sintax_random:
+          opt_sintax_random = true;
+          break;
+
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
@@ -2750,8 +2761,8 @@ void args_init(int argc, char **argv)
         option_label_suffix,
         option_log,
         option_match,
-	option_maxseqlength,
-	option_minseqlength,
+        option_maxseqlength,
+        option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4133,6 +4144,7 @@ void args_init(int argc, char **argv)
         option_quiet,
         option_randseed,
         option_sintax_cutoff,
+        option_sintax_random,
         option_strand,
         option_tabbedout,
         option_threads,
@@ -4218,11 +4230,11 @@ void args_init(int argc, char **argv)
         option_lengthout,
         option_log,
         option_match,
-	option_maxseqlength,
+        option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
-	option_minseqlength,
+        option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4262,11 +4274,11 @@ void args_init(int argc, char **argv)
         option_lengthout,
         option_log,
         option_match,
-	option_maxseqlength,
+        option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
-	option_minseqlength,
+        option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4306,11 +4318,11 @@ void args_init(int argc, char **argv)
         option_lengthout,
         option_log,
         option_match,
-	option_maxseqlength,
+        option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
-	option_minseqlength,
+        option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -4352,11 +4364,11 @@ void args_init(int argc, char **argv)
         option_lengthout,
         option_log,
         option_match,
-	option_maxseqlength,
+        option_maxseqlength,
         option_mindiffs,
         option_mindiv,
         option_minh,
-	option_minseqlength,
+        option_minseqlength,
         option_mismatch,
         option_no_progress,
         option_nonchimeras,
@@ -5055,6 +5067,8 @@ void cmd_help()
 
       fprintf(stdout,
               "\n"
+              "For further details, please consult the manual by entering: man vsearch\n"
+              "\n"
               "General options\n"
               "  --bzip2_decompress          decompress input with bzip2 (required if pipe)\n"
               "  --fasta_width INT           width of FASTA seq lines, 0 for no wrap (80)\n"
@@ -5471,6 +5485,7 @@ void cmd_help()
               " Parameters\n"
               "  --db FILENAME               taxonomic reference db in given FASTA or UDB file\n"
               "  --sintax_cutoff REAL        confidence value cutoff level (0.0)\n"
+              "  --sintax_random             use random sequence, not shortest, if equal match\n"
               " Output\n"
               "  --tabbedout FILENAME        write results to given tab-delimited file\n"
               "\n"
@@ -5831,7 +5846,7 @@ int main(int argc, char** argv)
       char time_string[26];
       time_start = time(nullptr);
       struct tm * tm_start = localtime(& time_start);
-      strftime(time_string, 26, "%c", tm_start);
+      strftime(time_string, 26, "%Y-%m-%dT%H:%M:%S", tm_start);
       fprintf(fp_log, "Started  %s\n", time_string);
     }
 
@@ -6026,7 +6041,7 @@ int main(int argc, char** argv)
       time_finish = time(nullptr);
       struct tm * tm_finish = localtime(& time_finish);
       char time_string[26];
-      strftime(time_string, 26, "%c", tm_finish);
+      strftime(time_string, 26, "%Y-%m-%dT%H:%M:%S", tm_finish);
       fprintf(fp_log, "\n");
       fprintf(fp_log, "Finished %s", time_string);
 

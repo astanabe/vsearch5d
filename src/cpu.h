@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,15 +61,18 @@
 
 */
 
+using count_t = unsigned short;
+
+
 #ifdef __x86_64__
-void increment_counters_from_bitmap_sse2(count_t * counters,
+auto increment_counters_from_bitmap_sse2(count_t * counters,
                                          unsigned char * bitmap,
-                                         unsigned int totalbits);
-void increment_counters_from_bitmap_ssse3(count_t * counters,
+                                         unsigned int totalbits) -> void;
+auto increment_counters_from_bitmap_ssse3(count_t * counters,
                                           unsigned char * bitmap,
-                                          unsigned int totalbits);
+                                          unsigned int totalbits) -> void;
 #else
-void increment_counters_from_bitmap(count_t * counters,
+auto increment_counters_from_bitmap(count_t * counters,
                                     unsigned char * bitmap,
-                                    unsigned int totalbits);
+                                    unsigned int totalbits) -> void;
 #endif

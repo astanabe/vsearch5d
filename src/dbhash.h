@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,6 +61,9 @@
 
 */
 
+#include <cstdint>  // uint64_t
+
+
 struct dbhash_bucket_s
 {
   uint64_t hash;
@@ -75,15 +78,15 @@ struct dbhash_search_info_s
   uint64_t index;
 };
 
-void dbhash_open(uint64_t maxelements);
-void dbhash_close();
+auto dbhash_open(uint64_t maxelements) -> void;
+auto dbhash_close() -> void;
 
-void dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno);
-void dbhash_add_one(uint64_t seqno);
-void dbhash_add_all();
+auto dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno) -> void;
+auto dbhash_add_one(uint64_t seqno) -> void;
+auto dbhash_add_all() -> void;
 
-int64_t dbhash_search_first(char * seq,
+auto dbhash_search_first(char * seq,
                          uint64_t seqlen,
-                         struct dbhash_search_info_s * info);
-int64_t dbhash_search_next(struct dbhash_search_info_s * info);
-void dbhash_search_finish(struct dbhash_search_info_s * info);
+                         struct dbhash_search_info_s * info) -> int64_t;
+auto dbhash_search_next(struct dbhash_search_info_s * info) -> int64_t;
+auto dbhash_search_finish(struct dbhash_search_info_s * info) -> void;

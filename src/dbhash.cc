@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,6 +63,7 @@
 
 #include "vsearch5d.h"
 
+
 static bitmap_t * dbhash_bitmap;
 static uint64_t dbhash_size;
 static unsigned int dbhash_shift;
@@ -79,17 +80,17 @@ int dbhash_seqcmp(char * a, char * b, uint64_t n)
       return 0;
     }
 
-  while ((n-- > 0) && (chrmap_4bit[(int)(*p)] == chrmap_4bit[(int)(*q)]))
+  while ((n-- > 0) and (chrmap_4bit[(int) (*p)] == chrmap_4bit[(int) (*q)]))
     {
-      if ((n == 0) || (*p == 0) || (*q == 0))
+      if ((n == 0) or (*p == 0) or (*q == 0))
         {
           break;
         }
-      p++;
-      q++;
+      ++p;
+      ++q;
     }
 
-  return chrmap_4bit[(int)(*p)] - chrmap_4bit[(int)(*q)];
+  return chrmap_4bit[(int) (*p)] - chrmap_4bit[(int) (*q)];
 }
 
 void dbhash_open(uint64_t maxelements)
@@ -102,7 +103,7 @@ void dbhash_open(uint64_t maxelements)
   while (3 * maxelements > 2 * dbhash_size)
     {
       dbhash_size <<= 1;
-      dbhash_shift++;
+      ++dbhash_shift;
     }
   dbhash_mask = dbhash_size - 1;
 
@@ -135,9 +136,9 @@ int64_t dbhash_search_first(char * seq,
   struct dbhash_bucket_s * bp = dbhash_table + index;
 
   while (bitmap_get(dbhash_bitmap, index)
-         &&
-         ((bp->hash != hash) ||
-          (seqlen != db_getsequencelen(bp->seqno)) ||
+         and
+         ((bp->hash != hash) or
+          (seqlen != db_getsequencelen(bp->seqno)) or
           (dbhash_seqcmp(seq, db_getsequence(bp->seqno), seqlen))))
     {
       index = (index + 1) & dbhash_mask;
@@ -165,9 +166,9 @@ int64_t dbhash_search_next(struct dbhash_search_info_s * info)
   struct dbhash_bucket_s * bp = dbhash_table + index;
 
   while (bitmap_get(dbhash_bitmap, index)
-         &&
-         ((bp->hash != hash) ||
-          (seqlen != db_getsequencelen(bp->seqno)) ||
+         and
+         ((bp->hash != hash) or
+          (seqlen != db_getsequencelen(bp->seqno)) or
           (dbhash_seqcmp(seq, db_getsequence(bp->seqno), seqlen))))
     {
       index = (index + 1) & dbhash_mask;
@@ -206,7 +207,7 @@ void dbhash_add_one(uint64_t seqno)
 {
   char * seq = db_getsequence(seqno);
   uint64_t seqlen = db_getsequencelen(seqno);
-  char * normalized = (char*) xmalloc(seqlen+1);
+  char * normalized = (char *) xmalloc(seqlen + 1);
   string_normalize(normalized, seq, seqlen);
   dbhash_add(normalized, seqlen, seqno);
 }
@@ -214,14 +215,14 @@ void dbhash_add_one(uint64_t seqno)
 void dbhash_add_all()
 {
   progress_init("Hashing database sequences", db_getsequencecount());
-  char * normalized = (char*) xmalloc(db_getlongestsequence()+1);
+  char * normalized = (char *) xmalloc(db_getlongestsequence() + 1);
   for(uint64_t seqno=0; seqno < db_getsequencecount(); seqno++)
     {
       char * seq = db_getsequence(seqno);
       uint64_t seqlen = db_getsequencelen(seqno);
       string_normalize(normalized, seq, seqlen);
       dbhash_add(normalized, seqlen, seqno);
-      progress_update(seqno+1);
+      progress_update(seqno + 1);
     }
   xfree(normalized);
   progress_done();

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,12 +61,12 @@
 
 */
 
-const int tax_levels = 8;
+const int tax_levels = 9;
 extern const char * tax_letters;
 
-bool tax_parse(const char * header,
+auto tax_parse(const char * header,
                int header_length,
                int * tax_start,
-               int * tax_end);
+               int * tax_end) -> bool;
 
-void tax_split(int seqno, int * level_start, int * level_len);
+auto tax_split(int seqno, int * level_start, int * level_len) -> void;

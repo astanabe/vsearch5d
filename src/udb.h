@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,11 +61,11 @@
 
 */
 
-bool udb_detect_isudb(const char * filename);
-void udb_read(const char * filename,
+auto udb_detect_isudb(const char * filename) -> bool;
+auto udb_read(const char * filename,
               bool create_bitmaps,
-              bool parse_abundances);
-void udb_fasta();
-void udb_info();
-void udb_make();
-void udb_stats();
+              bool parse_abundances) -> void;
+auto udb_fasta() -> void;
+auto udb_info() -> void;
+auto udb_make() -> void;
+auto udb_stats() -> void;

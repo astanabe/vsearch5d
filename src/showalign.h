@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,11 +61,15 @@
 
 */
 
-char * align_getrow(char * seq, char * cigar, int alignlen, int origin);
+#include <cstdint>  // int64_t
+#include <cstdio>  // FILE
 
-void align_fprint_uncompressed_alignment(FILE * f, char * cigar);
 
-void align_show(FILE * f,
+auto align_getrow(char * seq, char * cigar, int alignlen, int origin) -> char *;
+
+auto align_fprint_uncompressed_alignment(std::FILE * f, char * cigar) -> void;
+
+auto align_show(std::FILE * f,
                 char * seq1,
                 int64_t seq1len,
                 int64_t seq1off,
@@ -79,4 +83,4 @@ void align_show(FILE * f,
                 int numwidth,
                 int namewidth,
                 int alignwidth,
-                int strand);
+                int strand) -> void;

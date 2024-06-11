@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,6 +63,7 @@
 
 #include "vsearch5d.h"
 
+
 static uint64_t fragment_no = 0;
 static uint64_t fragment_rev_no = 0;
 static uint64_t fragment_discarded_no = 0;
@@ -97,8 +98,8 @@ int cut_one(fastx_handle h,
       bool match = true;
       for(int j = 0; j < pattern_length; j++)
         {
-          if ((chrmap_4bit[(unsigned char)(pattern[j])] &
-               chrmap_4bit[(unsigned char)(seq[i+j])]) == 0)
+          if ((chrmap_4bit[(unsigned char) (pattern[j])] &
+               chrmap_4bit[(unsigned char) (seq[i + j])]) == 0)
             {
               match = false;
               break;
@@ -107,7 +108,7 @@ int cut_one(fastx_handle h,
 
       if (match)
         {
-          matches++;
+          ++matches;
 
           frag_length = i + cut_fwd - frag_start;
 
@@ -249,10 +250,10 @@ int cut_one(fastx_handle h,
 
 void cut()
 {
-  if ((!opt_fastaout) &&
-      (!opt_fastaout_discarded) &&
-      (!opt_fastaout_rev) &&
-      (!opt_fastaout_discarded_rev))
+  if ((not opt_fastaout) and
+      (not opt_fastaout_discarded) and
+      (not opt_fastaout_rev) and
+      (not opt_fastaout_discarded_rev))
     {
       fatal("No output files specified");
     }
@@ -261,7 +262,7 @@ void cut()
 
   h = fasta_open(opt_cut);
 
-  if (!h)
+  if (not h)
     {
       fatal("Unrecognized file type (not proper FASTA format)");
     }
@@ -276,7 +277,7 @@ void cut()
   if (opt_fastaout)
     {
       fp_fastaout = fopen_output(opt_fastaout);
-      if (!fp_fastaout)
+      if (not fp_fastaout)
         {
           fatal("Unable to open FASTA output file for writing");
         }
@@ -285,7 +286,7 @@ void cut()
   if (opt_fastaout_rev)
     {
       fp_fastaout_rev = fopen_output(opt_fastaout_rev);
-      if (!fp_fastaout_rev)
+      if (not fp_fastaout_rev)
         {
           fatal("Unable to open FASTA output file for writing");
         }
@@ -294,7 +295,7 @@ void cut()
   if (opt_fastaout_discarded)
     {
       fp_fastaout_discarded = fopen_output(opt_fastaout_discarded);
-      if (!fp_fastaout_discarded)
+      if (not fp_fastaout_discarded)
         {
           fatal("Unable to open FASTA output file for writing");
         }
@@ -303,7 +304,7 @@ void cut()
   if (opt_fastaout_discarded_rev)
     {
       fp_fastaout_discarded_rev = fopen_output(opt_fastaout_discarded_rev);
-      if (!fp_fastaout_discarded_rev)
+      if (not fp_fastaout_discarded_rev)
         {
           fatal("Unable to open FASTA output file for writing");
         }
@@ -348,7 +349,7 @@ void cut()
             }
           cut_rev = j;
         }
-      else if (chrmap_4bit[(unsigned int)x])
+      else if (chrmap_4bit[(unsigned int) x])
         {
           pattern[j++] = x;
         }
@@ -388,11 +389,11 @@ void cut()
       matches += m;
       if (m > 0)
         {
-          cut++;
+          ++cut;
         }
       else
         {
-          uncut++;
+          ++uncut;
         }
 
       progress_update(fasta_get_position(h));
@@ -400,7 +401,7 @@ void cut()
 
   progress_done();
 
-  if (! opt_quiet)
+  if (not opt_quiet)
     {
       fprintf(stderr,
               "%" PRId64 " sequence(s) cut %" PRId64 " times, %" PRId64 " sequence(s) never cut.\n",

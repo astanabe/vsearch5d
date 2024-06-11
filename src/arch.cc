@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,10 +62,13 @@
 */
 
 #include "vsearch5d.h"
+#include <cstdio>  // std::FILE
+#include <cstdint>  // uint64_t
+
 
 const int memalignment = 16;
 
-uint64_t arch_get_memused()
+auto arch_get_memused() -> uint64_t
 {
 #ifdef _WIN32
 
@@ -91,7 +94,7 @@ uint64_t arch_get_memused()
 #endif
 }
 
-uint64_t arch_get_memtotal()
+auto arch_get_memtotal() -> uint64_t
 {
 #ifdef _WIN32
 
@@ -129,7 +132,7 @@ uint64_t arch_get_memtotal()
 #endif
 }
 
-long arch_get_cores()
+auto arch_get_cores() -> long
 {
 #ifdef _WIN32
   SYSTEM_INFO si;
@@ -140,7 +143,7 @@ long arch_get_cores()
 #endif
 }
 
-void arch_get_user_system_time(double * user_time, double * system_time)
+auto arch_get_user_system_time(double * user_time, double * system_time) -> void
 {
   *user_time = 0;
   *system_time = 0;
@@ -165,7 +168,7 @@ void arch_get_user_system_time(double * user_time, double * system_time)
 #endif
 }
 
-void arch_srandom()
+auto arch_srandom() -> void
 {
   /* initialize pseudo-random number generator */
   unsigned int seed = opt_randseed;
@@ -197,7 +200,7 @@ void arch_srandom()
     }
 }
 
-uint64_t arch_random()
+auto arch_random() -> uint64_t
 {
 #ifdef _WIN32
   return rand();
@@ -206,7 +209,7 @@ uint64_t arch_random()
 #endif
 }
 
-void * xmalloc(size_t size)
+auto xmalloc(size_t size) -> void *
 {
   if (size == 0)
     {
@@ -228,7 +231,7 @@ void * xmalloc(size_t size)
   return t;
 }
 
-void * xrealloc(void *ptr, size_t size)
+auto xrealloc(void *ptr, size_t size) -> void *
 {
   if (size == 0)
     {
@@ -239,14 +242,14 @@ void * xrealloc(void *ptr, size_t size)
 #else
   void * t = realloc(ptr, size);
 #endif
-  if (!t)
+  if (not t)
     {
       fatal("Unable to reallocate enough memory.");
     }
   return t;
 }
 
-void xfree(void * ptr)
+auto xfree(void * ptr) -> void
 {
   if (ptr)
     {
@@ -262,7 +265,7 @@ void xfree(void * ptr)
     }
 }
 
-int xfstat(int fd, xstat_t * buf)
+auto xfstat(int fd, xstat_t * buf) -> int
 {
 #ifdef _WIN32
   return _fstat64(fd, buf);
@@ -271,7 +274,7 @@ int xfstat(int fd, xstat_t * buf)
 #endif
 }
 
-int xstat(const char * path, xstat_t  * buf)
+auto xstat(const char * path, xstat_t * buf) -> int
 {
 #ifdef _WIN32
   return _stat64(path, buf);
@@ -280,7 +283,7 @@ int xstat(const char * path, xstat_t  * buf)
 #endif
 }
 
-uint64_t xlseek(int fd, uint64_t offset, int whence)
+auto xlseek(int fd, uint64_t offset, int whence) -> uint64_t
 {
 #ifdef _WIN32
   return _lseeki64(fd, offset, whence);
@@ -289,7 +292,7 @@ uint64_t xlseek(int fd, uint64_t offset, int whence)
 #endif
 }
 
-uint64_t xftello(FILE * stream)
+auto xftello(std::FILE * stream) -> uint64_t
 {
 #ifdef _WIN32
   return _ftelli64(stream);
@@ -298,7 +301,7 @@ uint64_t xftello(FILE * stream)
 #endif
 }
 
-int xopen_read(const char * path)
+auto xopen_read(const char * path) -> int
 {
 #ifdef _WIN32
   return _open(path, _O_RDONLY | _O_BINARY);
@@ -307,7 +310,7 @@ int xopen_read(const char * path)
 #endif
 }
 
-int xopen_write(const char * path)
+auto xopen_write(const char * path) -> int
 {
 #ifdef _WIN32
   return _open(path,
@@ -320,7 +323,7 @@ int xopen_write(const char * path)
 #endif
 }
 
-const char * xstrcasestr(const char * haystack, const char * needle)
+auto xstrcasestr(const char * haystack, const char * needle) -> const char *
 {
 #ifdef _WIN32
   return StrStrIA(haystack, needle);

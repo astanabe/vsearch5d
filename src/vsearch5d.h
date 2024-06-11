@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -236,7 +236,6 @@
 #include "shuffle.h"
 #include "mask.h"
 #include "cluster.h"
-#include "msa.h"
 #include "chimera.h"
 #include "cpu.h"
 #include "allpairs.h"
@@ -286,6 +285,7 @@ extern bool opt_relabel_self;
 extern bool opt_relabel_sha1;
 extern bool opt_samheader;
 extern bool opt_sff_clip;
+extern bool opt_sintax_random;
 extern bool opt_sizein;
 extern bool opt_sizeorder;
 extern bool opt_sizeout;

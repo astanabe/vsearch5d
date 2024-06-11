@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,12 +63,13 @@
 
 #include <array>
 
+
 /* the number of alignments that can be delayed */
 constexpr auto MAXDELAYED = 8U;
 
 /* Default minimum number of word matches for word lengths 3-15 */
 constexpr std::array<int, 16> minwordmatches_defaults =
-  { -1, -1, -1, 18, 17, 16, 15, 14, 12, 11, 10,  9,  8,  7,  5,  3 };
+  {{ -1, -1, -1, 18, 17, 16, 15, 14, 12, 11, 10,  9,  8,  7,  5,  3 }};
 
 struct hit
 {
@@ -145,15 +146,15 @@ struct searchinfo_s
   int finalized;
 };
 
-void search_topscores(struct searchinfo_s * si);
+auto search_topscores(struct searchinfo_s * si) -> void;
 
-void search_onequery(struct searchinfo_s * si, int seqmask);
+auto search_onequery(struct searchinfo_s * si, int seqmask) -> void;
 
-struct hit * search_findbest2_byid(struct searchinfo_s * si_p,
-                                   struct searchinfo_s * si_m);
+auto search_findbest2_byid(struct searchinfo_s * si_p,
+                           struct searchinfo_s * si_m) -> struct hit *;
 
-struct hit * search_findbest2_bysize(struct searchinfo_s * si_p,
-                                     struct searchinfo_s * si_m);
+auto search_findbest2_bysize(struct searchinfo_s * si_p,
+                             struct searchinfo_s * si_m) -> struct hit *;
 
 auto search_acceptable_unaligned(struct searchinfo_s * si,
                                  int target) -> bool;
@@ -161,12 +162,12 @@ auto search_acceptable_unaligned(struct searchinfo_s * si,
 auto search_acceptable_aligned(struct searchinfo_s * si,
                                struct hit * hit) -> bool;
 
-void align_trim(struct hit * hit);
+auto align_trim(struct hit * hit) -> void;
 
-void search_joinhits(struct searchinfo_s * si_p,
+auto search_joinhits(struct searchinfo_s * si_p,
                      struct searchinfo_s * si_m,
                      struct hit * * hits,
-                     int * hit_count);
+                     int * hit_count) -> void;
 
-bool search_enough_kmers(struct searchinfo_s * si,
-                         unsigned int count);
+auto search_enough_kmers(struct searchinfo_s * si,
+                         unsigned int count) -> bool;

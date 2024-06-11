@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,15 +63,15 @@
 
 struct kh_handle_s;
 
-struct kh_handle_s * kh_init();
-void kh_exit(struct kh_handle_s * kh);
+auto kh_init() -> struct kh_handle_s *;
+auto kh_exit(struct kh_handle_s * kh) -> void;
 
-void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len);
+auto kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len) -> void;
 
-int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len);
+auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) -> int;
 
-void kh_find_diagonals(struct kh_handle_s * kh,
+auto kh_find_diagonals(struct kh_handle_s * kh,
                        int k,
                        char * seq,
                        int len,
-                       int * diags);
+                       int * diags) -> void;

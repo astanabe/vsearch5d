@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,9 @@
 */
 
 #include "vsearch5d.h"
+#include <cmath>
+#include <cstdio> // std::FILE, std::fprintf, std::size_t
+
 
 #define BLOCKSIZE (4096 * 4096)
 
@@ -627,7 +630,7 @@ void udb_fasta()
 
   unsigned int seqcount = db_getsequencecount();
   progress_init("Writing FASTA file", seqcount);
-  for(unsigned int i = 0; i < seqcount; i++)
+  for(std::size_t i = 0; i < seqcount; i++)
     {
       fasta_print_db_relabel(fp_output, i, i+1);
       progress_update(i+1);
@@ -808,14 +811,15 @@ void udb_stats()
 
           fprintf(fp_log, "  %5.1f%%  %5.1f%%", pct, totpct);
 
-          int dots = int (pct / 3.0 + 0.5);
+          static constexpr double divider = 3.0;
+          const auto dots = std::lround(pct / divider);
 
           if (dots > 0)
             {
               fprintf(fp_log, "  ");
             }
 
-          for (int i = 0; i < dots ; i++)
+          for (auto i = 0L; i < dots ; i++)
             {
               fprintf(fp_log, "*");
             }
@@ -941,7 +945,7 @@ void udb_make()
   buffer[5]  = 1; /* dbstep */
   buffer[6]  = 100; /* dbaccelpct % */
   buffer[11] = 0; /* slots */
-  buffer[13] = (unsigned int) seqcount; /* number of sequences */
+  buffer[13] = seqcount; /* number of sequences */
   buffer[17] = 0x0000746e; /* alphabet: "nt" */
   buffer[49] = 0x55444266; /* fBDU UDBf */
   pos += largewrite(fd_output, buffer, 50 * 4, 0);
@@ -986,7 +990,7 @@ void udb_make()
   /* 0x005e0db3 */
   buffer[1] = 0x005e0db3;
   /* number of sequences, uint32 */
-  buffer[2] = (unsigned int) seqcount;
+  buffer[2] = seqcount;
   /* total number of nucleotides, uint64 */
   buffer[3] = (unsigned int)(ntcount & 0xffffffff);
   buffer[4] = (unsigned int)(ntcount >> 32);

@@ -1,0 +1,19 @@
+FROM fedora:latest
+WORKDIR /opt/vsearch5d
+COPY . .
+RUN yum update -y
+RUN yum -y install \
+    	autoconf \
+	automake \
+	bzip2-devel \
+	gcc-c++ \
+	ghostscript \
+	groff-base \
+	make \
+	zlib-devel
+RUN ./autogen.sh
+RUN ./configure CFLAGS="-O3 -fomit-frame-pointer -finline-functions" CXXFLAGS="-O3 -fomit-frame-pointer -finline-functions"
+RUN make clean
+RUN make ARFLAGS="cr"
+RUN make install
+ENTRYPOINT ["/usr/local/bin/vsearch5d"]

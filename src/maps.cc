@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,6 +63,7 @@
 
 #include "vsearch5d.h"
 
+
 /*
   legal symbols: *abcdefghiklmnpqrstuvxyz (all except j and o), also upper case
   fatal symbols: .-
@@ -74,6 +75,8 @@
 
 char sym_nt_2bit[] = "ACGT";
 char sym_nt_4bit[] = "-ACMGRSVTWYHKDBN";
+//                    |    |    |    |
+//                    0....5...10...15
 
 unsigned int char_header_action[256] =
   {

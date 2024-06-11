@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -71,7 +71,7 @@ HMODULE gz_lib;
 #  ifdef __APPLE__
 const char gz_libname[] = "libz.dylib";
 #  else
-const char gz_libname[] = "libz.so";
+const char gz_libname[] = "libz.so.1";
 #  endif
 void * gz_lib;
 # endif
@@ -90,7 +90,7 @@ HMODULE bz2_lib;
 #  ifdef __APPLE__
 const char bz2_libname[] = "libbz2.dylib";
 #  else
-const char bz2_libname[] = "libbz2.so";
+const char bz2_libname[] = "libbz2.so.1";
 #  endif
 void * bz2_lib;
 # endif
@@ -117,7 +117,7 @@ void dynlibs_open()
         arch_dlsym(gz_lib, "gzclose");
       gzread_p = (int (*)(gzFile, void*, unsigned))
         arch_dlsym(gz_lib, "gzread");
-      if (!(gzdopen_p && gzclose_p && gzread_p))
+      if (not (gzdopen_p && gzclose_p && gzread_p))
         {
           fatal("Invalid compression library (zlib)");
         }
@@ -138,7 +138,7 @@ void dynlibs_open()
         arch_dlsym(bz2_lib, "BZ2_bzReadClose");
       BZ2_bzRead_p = (int (*)(int*, BZFILE*, void*, int))
         arch_dlsym(bz2_lib, "BZ2_bzRead");
-      if (!(BZ2_bzReadOpen_p && BZ2_bzReadClose_p && BZ2_bzRead_p))
+      if (not (BZ2_bzReadOpen_p && BZ2_bzReadClose_p && BZ2_bzRead_p))
         {
           fatal("Invalid compression library (bz2)");
         }

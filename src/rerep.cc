@@ -1,15 +1,14 @@
-
 /*
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -63,84 +62,85 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/maps.hpp"
+#include <cinttypes> // macros PRIu64 and PRId64
+#include <cstdio>  // std::FILE, std::fprintf
+#include <cstdint>  // int64_t
 
-void rereplicate()
+
+auto rereplicate() -> void
 {
-  if (!opt_output)
+  if (opt_output == nullptr) {
     fatal("FASTA output file for rereplicate must be specified with --output");
+  }
+
+  auto * fp_output = fopen_output(opt_output);
+  if (fp_output == nullptr) {
+    fatal("Unable to open FASTA output file for writing");
+  }
 
   opt_xsize = true;
-
-  FILE * fp_output = nullptr;
-
-  if (opt_output)
-    {
-      fp_output = fopen_output(opt_output);
-      if (!fp_output)
-        {
-          fatal("Unable to open FASTA output file for writing");
-        }
-    }
-
-  fastx_handle fh = fasta_open(opt_rereplicate);
-  int64_t filesize = fasta_get_size(fh);
+  fastx_handle file_handle = fasta_open(opt_rereplicate);
+  auto const filesize = static_cast<int64_t>(fasta_get_size(file_handle));
 
   progress_init("Rereplicating", filesize);
 
+  int64_t n_amplicons = 0;
   int64_t missing = 0;
-  int64_t i = 0;
-  int64_t n = 0;
-  while (fasta_next(fh, ! opt_notrunclabels, chrmap_no_change))
+  int64_t n_reads = 0;
+  auto const truncateatspace = (opt_notrunclabels == 0);
+  while (fasta_next(file_handle, truncateatspace, chrmap_no_change_array.data()))
     {
-      n++;
-      int64_t abundance = fasta_get_abundance_and_presence(fh);
+      ++n_amplicons;
+      int64_t abundance = fasta_get_abundance_and_presence(file_handle);
       if (abundance == 0)
         {
-          missing++;
+          ++missing;
           abundance = 1;
         }
 
-      for(int64_t j=0; j<abundance; j++)
+      for(int64_t i = 0; i < abundance; ++i)
         {
-          i++;
-          if (opt_output)
+          ++n_reads;
+          if (opt_output != nullptr)
             {
               fasta_print_general(fp_output,
                                   nullptr,
-                                  fasta_get_sequence(fh),
-                                  fasta_get_sequence_length(fh),
-                                  fasta_get_header(fh),
-                                  fasta_get_header_length(fh),
+                                  fasta_get_sequence(file_handle),
+                                  static_cast<int>(fasta_get_sequence_length(file_handle)),
+                                  fasta_get_header(file_handle),
+                                  static_cast<int>(fasta_get_header_length(file_handle)),
                                   1,
-                                  i,
+                                  static_cast<int>(n_reads),
                                   -1.0,
                                   -1, -1, nullptr, 0.0);
             }
         }
 
-      progress_update(fasta_get_position(fh));
+      progress_update(fasta_get_position(file_handle));
     }
   progress_done();
 
-  if (! opt_quiet)
+  if (not opt_quiet)
     {
-      if (missing)
+      if (missing != 0)
         {
           fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
         }
-      fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
+      fprintf(stderr, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", n_reads, n_amplicons);
     }
 
-  if (opt_log)
+  if (opt_log != nullptr)
     {
-      if (missing)
+      if (missing != 0)
         {
           fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
         }
-      fprintf(fp_log, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", i, n);
+      fprintf(fp_log, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", n_reads, n_amplicons);
     }
 
-  fasta_close(fh);
-
-  fclose(fp_output);
+  fasta_close(file_handle);
+  if (fp_output != nullptr) {
+    static_cast<void>(fclose(fp_output));
+  }
 }

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,7 +61,7 @@
 
 */
 
-void cluster_smallmem(char * cmdline, char * progheader);
-void cluster_fast(char * cmdline, char * progheader);
-void cluster_size(char * cmdline, char * progheader);
-void cluster_unoise(char * cmdline, char * progheader);
+auto cluster_smallmem(char * cmdline, char * progheader) -> void;
+auto cluster_fast(char * cmdline, char * progheader) -> void;
+auto cluster_size(char * cmdline, char * progheader) -> void;
+auto cluster_unoise(char * cmdline, char * progheader) -> void;

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,28 +61,32 @@
 
 */
 
-void fastq_open_rest(fastx_handle h);
-fastx_handle fastq_open(const char * filename);
-void fastq_close(fastx_handle h);
-bool fastq_next(fastx_handle h,
+#include <cstdio>  // std::FILE
+#include <cstdint>  // uint64_t
+
+
+auto fastq_open_rest(fastx_handle h) -> void;
+auto fastq_open(const char * filename) -> fastx_handle;
+auto fastq_close(fastx_handle h) -> void;
+auto fastq_next(fastx_handle h,
                 bool truncateatspace,
-                const unsigned char * char_mapping);
-uint64_t fastq_get_position(fastx_handle h);
-uint64_t fastq_get_size(fastx_handle h);
-uint64_t fastq_get_lineno(fastx_handle h);
-uint64_t fastq_get_seqno(fastx_handle h);
-char * fastq_get_header(fastx_handle h);
-char * fastq_get_sequence(fastx_handle h);
-char * fastq_get_quality(fastx_handle h);
-int64_t fastq_get_abundance(fastx_handle h);
-int64_t fastq_get_abundance_and_presence(fastx_handle h);
-uint64_t fastq_get_header_length(fastx_handle h);
-uint64_t fastq_get_sequence_length(fastx_handle h);
-uint64_t fastq_get_quality_length(fastx_handle h);
+                const unsigned char * char_mapping) -> bool;
+auto fastq_get_position(fastx_handle h) -> uint64_t;
+auto fastq_get_size(fastx_handle h) -> uint64_t;
+auto fastq_get_lineno(fastx_handle h) -> uint64_t;
+auto fastq_get_seqno(fastx_handle h) -> uint64_t;
+auto fastq_get_header(fastx_handle h) -> char *;
+auto fastq_get_sequence(fastx_handle h) -> char *;
+auto fastq_get_quality(fastx_handle h) -> char *;
+auto fastq_get_abundance(fastx_handle h) -> int64_t;
+auto fastq_get_abundance_and_presence(fastx_handle h) -> int64_t;
+auto fastq_get_header_length(fastx_handle h) -> uint64_t;
+auto fastq_get_sequence_length(fastx_handle h) -> uint64_t;
+auto fastq_get_quality_length(fastx_handle h) -> uint64_t;
 
-void fastq_print(FILE * fp, char * header, char * sequence, char * quality);
+auto fastq_print(std::FILE * fp, char * header, char * sequence, char * quality) -> void;
 
-void fastq_print_general(FILE * fp,
+auto fastq_print_general(std::FILE * fp,
                          char * seq,
                          int len,
                          char * header,
@@ -90,4 +94,4 @@ void fastq_print_general(FILE * fp,
                          char * quality,
                          int abundance,
                          int ordinal,
-                         double ee);
+                         double ee) -> void;

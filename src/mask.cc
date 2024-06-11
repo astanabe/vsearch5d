@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2022, Akifumi S. Tanabe
+  Copyright (C) 2016-2024, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2022, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,17 +62,21 @@
 */
 
 #include "vsearch5d.h"
+#include <array>
+#include <cstdio>  // FILE
+#include <cstring>  // memset
+// #include <string>
 
-static const int dust_word = 3;
-static const int dust_level = 20;
-static const int dust_window = 64;
-static const int dust_window2 = dust_window / 2;
-static const int word_count = 1 << (2 * dust_word);
-static const int bitmask = word_count - 1;
+
+constexpr int dust_window = 64;
+
 
 int wo(int len, const char *s, int *beg, int *end)
 {
-  int l1 = len - dust_word + 1 - 5; /* smallest possible region is 8 */
+  static constexpr int dust_word = 3;
+  static constexpr int word_count = 1 << (2 * dust_word);  // 64
+  static constexpr int bitmask = word_count - 1;
+  const int l1 = len - dust_word + 1 - 5; /* smallest possible region is 8 */
   if (l1 < 0)
     {
       return 0;
@@ -81,8 +85,8 @@ int wo(int len, const char *s, int *beg, int *end)
   int bestv = 0;
   int besti = 0;
   int bestj = 0;
-  int counts[word_count];
-  int words[dust_window];
+  std::array<int, word_count> counts {{}};
+  std::array<int, dust_window> words {{}};
   int word = 0;
 
   for (int j = 0; j < len; j++)
@@ -92,20 +96,20 @@ int wo(int len, const char *s, int *beg, int *end)
       words[j] = word & bitmask;
     }
 
-  for (int i=0; i < l1; i++)
+  for (int i = 0; i < l1; i++)
     {
-      memset(counts, 0, sizeof(counts));
+      counts.fill(0);  // reset counts to zero
 
       int sum = 0;
 
-      for (int j = dust_word-1; j<len-i; j++)
+      for (int j = dust_word - 1; j < len - i; j++)
         {
-          word = words[i+j];
-          int c = counts[word];
+          word = words[i + j];
+          const int c = counts[word];
           if (c)
             {
               sum += c;
-              int v = 10 * sum / j;
+              const int v = 10 * sum / j;
 
               if (v > bestv)
                 {
@@ -124,54 +128,63 @@ int wo(int len, const char *s, int *beg, int *end)
   return bestv;
 }
 
+
 void dust(char * m, int len)
 {
-  int a, b;
+  static constexpr int dust_level = 20;
+  static constexpr int half_dust_window = dust_window / 2;
+  int a = 0;
+  int b = 0;
 
   /* make a local copy of the original sequence */
-  char * s = (char*) xmalloc(len+1);
-  strcpy(s, m);
+  char * local_seq = (char*) xmalloc(len + 1);
+  strcpy(local_seq, m);
+  // refactoring: <string>
+  // std::string local_seq2;
+  // local_seq2.reserve(len + 1);
+  // local_seq2.insert(0, m);
+  // local_seq2.insert(len, 1, '\0');
 
-  if (! opt_hardmask)
+  if (not opt_hardmask)
     {
       /* convert sequence to upper case unless hardmask in effect */
-      for(int i=0; i < len; i++)
+      for(int i = 0; i < len; i++)
         {
           m[i] = toupper(m[i]);
         }
       m[len] = 0;
     }
 
-  for (int i=0; i < len; i += dust_window2)
+  for (int i = 0; i < len; i += half_dust_window)
     {
-      int l = (len > i + dust_window) ? dust_window : len-i;
-      int v = wo(l, s+i, &a, &b);
+      const int l = (len > i + dust_window) ? dust_window : len - i;
+      const int v = wo(l, local_seq + i, &a, &b);
 
       if (v > dust_level)
         {
           if (opt_hardmask)
             {
-              for(int j=a+i; j<=b+i; j++)
+              for(int j = a + i; j <= b + i; j++)
                 {
                   m[j] = 'N';
                 }
             }
           else
             {
-              for(int j=a+i; j<=b+i; j++)
+              for(int j = a + i; j <= b + i; j++)
                 {
-                  m[j] = s[j] | 0x20;
+                  m[j] = local_seq[j] | 0x20;
                 }
             }
 
-          if (b < dust_window2)
+          if (b < half_dust_window)
             {
-              i += dust_window2 - b;
+              i += half_dust_window - b;
             }
         }
     }
 
-  xfree(s);
+  xfree(local_seq);
 }
 
 static pthread_t * pthread;
@@ -186,7 +199,7 @@ void * dust_all_worker(void * vp)
   while(true)
     {
       xpthread_mutex_lock(&mutex);
-      int seqno = nextseq;
+      const int seqno = nextseq;
       if (seqno < seqcount)
         {
           nextseq++;
@@ -203,6 +216,7 @@ void * dust_all_worker(void * vp)
   return nullptr;
 }
 
+
 void dust_all()
 {
   nextseq = 0;
@@ -216,12 +230,12 @@ void dust_all()
 
   pthread = (pthread_t *) xmalloc(opt_threads * sizeof(pthread_t));
 
-  for(int t=0; t<opt_threads; t++)
+  for(int t = 0; t < opt_threads; t++)
     {
       xpthread_create(pthread+t, &attr, dust_all_worker, (void*)(int64_t)t);
     }
 
-  for(int t=0; t<opt_threads; t++)
+  for(int t = 0; t < opt_threads; t++)
     {
       xpthread_join(pthread[t], nullptr);
     }
@@ -235,11 +249,12 @@ void dust_all()
   progress_done();
 }
 
+
 void hardmask(char * seq, int len)
 {
   /* convert all lower case letters in seq to N */
 
-  for(int j=0; j<len; j++)
+  for(int j = 0; j < len; j++)
     {
       if (seq[j] & 0x20)
         {
@@ -248,21 +263,23 @@ void hardmask(char * seq, int len)
     }
 }
 
+
 void hardmask_all()
 {
-  for(uint64_t i=0; i<db_getsequencecount(); i++)
+  for(uint64_t i = 0; i < db_getsequencecount(); i++)
     {
       hardmask(db_getsequence(i), db_getsequencelen(i));
     }
 }
 
+
 void maskfasta()
 {
-  if (!opt_output)
+  if (! opt_output)
     fatal("Output file for masking must be specified with --output");
 
-  FILE * fp_output = fopen_output(opt_output);
-  if (!fp_output)
+  std::FILE * fp_output = fopen_output(opt_output);
+  if (! fp_output)
     {
       fatal("Unable to open mask output file for writing");
     }
@@ -283,9 +300,9 @@ void maskfasta()
   show_rusage();
 
   progress_init("Writing output", seqcount);
-  for(int i=0; i<seqcount; i++)
+  for(int i = 0; i < seqcount; i++)
     {
-      fasta_print_db_relabel(fp_output, i, i+1);
+      fasta_print_db_relabel(fp_output, i, i + 1);
       progress_update(i);
     }
   progress_done();
@@ -295,18 +312,19 @@ void maskfasta()
   fclose(fp_output);
 }
 
+
 void fastx_mask()
 {
-  FILE * fp_fastaout = nullptr;
-  FILE * fp_fastqout = nullptr;
+  std::FILE * fp_fastaout = nullptr;
+  std::FILE * fp_fastqout = nullptr;
 
-  if ((!opt_fastaout) && (!opt_fastqout))
+  if ((! opt_fastaout) && (! opt_fastqout))
     fatal("Specify output files for masking with --fastaout and/or --fastqout");
 
   if (opt_fastaout)
     {
       fp_fastaout = fopen_output(opt_fastaout);
-      if (!fp_fastaout)
+      if (! fp_fastaout)
         {
           fatal("Unable to open mask output FASTA file for writing");
         }
@@ -315,7 +333,7 @@ void fastx_mask()
   if (opt_fastqout)
     {
       fp_fastqout = fopen_output(opt_fastqout);
-      if (!fp_fastqout)
+      if (! fp_fastqout)
         {
           fatal("Unable to open mask output FASTQ file for writing");
         }
@@ -345,18 +363,18 @@ void fastx_mask()
   int discarded_less = 0;
   int discarded_more = 0;
   progress_init("Writing output", seqcount);
-  for(int i=0; i<seqcount; i++)
+  for(int i = 0; i < seqcount; i++)
     {
       int unmasked = 0;
       char * seq = db_getsequence(i);
-      int len = db_getsequencelen(i);
+      const int len = db_getsequencelen(i);
       if (opt_qmask == MASK_NONE)
         {
           unmasked = len;
         }
       else if (opt_hardmask)
         {
-          for(int j=0; j<len; j++)
+          for(int j = 0; j < len; j++)
             {
               if (seq[j] != 'N')
                 {
@@ -366,7 +384,7 @@ void fastx_mask()
         }
       else
         {
-          for(int j=0; j<len; j++)
+          for(int j = 0; j < len; j++)
             {
               if (isupper(seq[j]))
                 {
@@ -374,7 +392,7 @@ void fastx_mask()
                 }
             }
         }
-      double unmasked_pct = 100.0 * unmasked / len;
+      const double unmasked_pct = 100.0 * unmasked / len;
 
       if (unmasked_pct < opt_min_unmasked_pct)
         {
@@ -420,7 +438,7 @@ void fastx_mask()
     }
   progress_done();
 
-  if (!opt_quiet)
+  if (! opt_quiet)
     {
       if (opt_min_unmasked_pct > 0.0)
         {
