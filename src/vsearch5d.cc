@@ -2635,6 +2635,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
         case option_idoffset:
           /* idoffset */
           opt_idoffset = args_getlong(optarg);
+          break;
 
         default:
           fatal("Internal error in option parsing");
