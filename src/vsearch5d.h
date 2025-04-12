@@ -499,6 +499,7 @@ struct Parameters {
   char * opt_fastaout_discarded_rev = nullptr;
   char * opt_fastq_chars = nullptr;
   char * opt_fastq_join = nullptr;
+  char * opt_fastq_join2 = nullptr;
   char * opt_fastqout = nullptr;
   char * opt_fastqout_rev = nullptr;
   char * opt_fastqout_discarded = nullptr;
