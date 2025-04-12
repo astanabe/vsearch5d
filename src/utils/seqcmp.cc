@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -61,4 +61,22 @@
 
 */
 
-auto rereplicate() -> void;
+#include "maps.hpp"
+#include <iterator>
+
+
+auto seqcmp(char * lhs, char * rhs, int length) -> int {
+  if (length <= 0) {
+    return 0;
+  }
+
+  while ((length-- > 0) and (chrmap_4bit_vector[static_cast<unsigned char>(*lhs)] == chrmap_4bit_vector[static_cast<unsigned char>(*rhs)])) {
+    if ((length == 0) or (*lhs == '\0') or (*rhs == '\0')) {
+      break;
+    }
+    std::advance(lhs, 1);
+    std::advance(rhs, 1);
+  }
+
+  return static_cast<int>(chrmap_4bit_vector[static_cast<unsigned char>(*lhs)] - chrmap_4bit_vector[static_cast<unsigned char>(*rhs)]);
+}

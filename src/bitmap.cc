@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,21 +62,48 @@
 */
 
 #include "vsearch5d.h"
+#include "bitmap.h"
+#include <cstring> // std::memset
 
 
-auto bitmap_init(unsigned int size) -> bitmap_t *
+auto bitmap_init(unsigned int const size) -> struct bitmap_s *
 {
-  auto * b = (bitmap_t *) xmalloc(sizeof(bitmap_t));
+  auto * b = (struct bitmap_s *) xmalloc(sizeof(struct bitmap_s));
   b->size = size;
   b->bitmap = (unsigned char *) xmalloc((size + 7) / 8);
   return b;
 }
 
-auto bitmap_free(bitmap_t * b) -> void
+
+auto bitmap_get(struct bitmap_s * a_bitmap, unsigned int const seed_value) -> unsigned char
 {
-  if (b->bitmap)
+  constexpr auto mask_111 = 7U;
+  constexpr auto divider = 3U;  // divide by 8
+  return (a_bitmap->bitmap[seed_value >> divider] >> (seed_value & mask_111)) & 1U;
+}
+
+
+auto bitmap_reset_all(struct bitmap_s * a_bitmap) -> void
+{
+  constexpr auto n_bits_in_a_byte = 8U;
+  const auto size_in_bytes = (a_bitmap->size + n_bits_in_a_byte - 1) / n_bits_in_a_byte;
+  std::memset(a_bitmap->bitmap, 0, size_in_bytes);
+}
+
+
+auto bitmap_set(struct bitmap_s * a_bitmap, unsigned int const seed_value) -> void
+{
+  constexpr auto mask_111 = 7U;
+  constexpr auto divider = 3U;  // divide by 8
+  a_bitmap->bitmap[seed_value >> divider] |= 1U << (seed_value & mask_111);
+}
+
+
+auto bitmap_free(struct bitmap_s * a_bitmap) -> void
+{
+  if (a_bitmap->bitmap)
     {
-      xfree(b->bitmap);
+      xfree(a_bitmap->bitmap);
     }
-  xfree(b);
+  xfree(a_bitmap);
 }

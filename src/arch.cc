@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,8 +62,11 @@
 */
 
 #include "vsearch5d.h"
+#include "dynlibs.h"
 #include <cstdio>  // std::FILE
 #include <cstdint>  // uint64_t
+#include <cstdlib>  // std::realloc, std::free
+#include <string.h>  // strcasestr
 
 
 const int memalignment = 16;
@@ -114,8 +117,8 @@ auto arch_get_memtotal() -> uint64_t
 
 #elif defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
 
-  int64_t phys_pages = sysconf(_SC_PHYS_PAGES);
-  int64_t pagesize = sysconf(_SC_PAGESIZE);
+  int64_t const phys_pages = sysconf(_SC_PHYS_PAGES);
+  int64_t const pagesize = sysconf(_SC_PAGESIZE);
   if ((phys_pages == -1) || (pagesize == -1))
     {
       fatal("Cannot determine amount of RAM");
@@ -177,7 +180,7 @@ auto arch_srandom() -> void
 #ifdef _WIN32
       srand(GetTickCount());
 #else
-      int fd = open("/dev/urandom", O_RDONLY);
+      int const fd = open("/dev/urandom", O_RDONLY);
       if (fd < 0)
         {
           fatal("Unable to open /dev/urandom");
@@ -265,12 +268,12 @@ auto xfree(void * ptr) -> void
     }
 }
 
-auto xfstat(int fd, xstat_t * buf) -> int
+auto xfstat(int file_descriptor, xstat_t * buf) -> int
 {
 #ifdef _WIN32
-  return _fstat64(fd, buf);
+  return _fstat64(file_descriptor, buf);
 #else
-  return fstat(fd, buf);
+  return fstat(file_descriptor, buf);
 #endif
 }
 
@@ -283,12 +286,12 @@ auto xstat(const char * path, xstat_t * buf) -> int
 #endif
 }
 
-auto xlseek(int fd, uint64_t offset, int whence) -> uint64_t
+auto xlseek(int file_descriptor, uint64_t offset, int whence) -> uint64_t
 {
 #ifdef _WIN32
-  return _lseeki64(fd, offset, whence);
+  return _lseeki64(file_descriptor, offset, whence);
 #else
-  return lseek(fd, offset, whence);
+  return lseek(file_descriptor, offset, whence);
 #endif
 }
 
@@ -333,9 +336,9 @@ auto xstrcasestr(const char * haystack, const char * needle) -> const char *
 }
 
 #ifdef _WIN32
-FARPROC arch_dlsym(HMODULE handle, const char * symbol)
+auto arch_dlsym(HMODULE handle, const char * symbol) -> FARPROC
 #else
-void * arch_dlsym(void * handle, const char * symbol)
+auto arch_dlsym(void * handle, const char * symbol) -> void *
 #endif
 {
 #ifdef _WIN32

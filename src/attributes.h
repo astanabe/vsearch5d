@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -67,7 +67,7 @@
 
 auto header_get_size(char * header, int header_length) -> int64_t;
 
-auto header_fprint_strip(std::FILE * fp,
+auto header_fprint_strip(std::FILE * output_handle,
                          char * header,
                          int header_length,
                          bool strip_size,

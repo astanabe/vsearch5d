@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -65,6 +65,8 @@
 #include <cstdint>  // uint64_t
 
 
+constexpr auto byte_range = 256U;
+
 struct fastx_buffer_s
 {
   char * data;
@@ -111,12 +113,12 @@ struct fastx_s
   int64_t seqno;
 
   uint64_t stripped_all;
-  uint64_t stripped[256];
+  uint64_t stripped[byte_range];
 
   int format;
 };
 
-typedef struct fastx_s * fastx_handle;
+using fastx_handle = struct fastx_s *;
 
 
 /* fastx input */

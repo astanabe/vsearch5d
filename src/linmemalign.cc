@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,13 @@
 */
 
 #include "vsearch5d.h"
+#include "maps.h"
+#include <algorithm>  // std::max
+#include <cinttypes>  // macros PRIu64 and PRId64
+#include <cstdint>  // int64_t
+#include <cstdio>  // std::FILE, std::printf, std::size_t, std::snprintf, std::sscanf
+#include <limits>
+
 
 /*
 
@@ -100,6 +107,7 @@ LinearMemoryAligner::LinearMemoryAligner()
   YY = nullptr;
 }
 
+
 LinearMemoryAligner::~LinearMemoryAligner()
 {
   if (cigar_string)
@@ -124,16 +132,21 @@ LinearMemoryAligner::~LinearMemoryAligner()
     }
 }
 
-int64_t * LinearMemoryAligner::scorematrix_create(int64_t match, int64_t mismatch)
-{
-  auto * newscorematrix = (int64_t*) xmalloc(16 * 16 * sizeof(int64_t));
 
-  for(int i = 0; i < 16; i++)
+auto LinearMemoryAligner::scorematrix_create(int64_t match, int64_t mismatch) -> int64_t *
+{
+  auto * newscorematrix = (int64_t *) xmalloc(16 * 16 * sizeof(int64_t));
+
+  for (int i = 0; i < 16; i++)
     {
-      for(int j = 0; j < 16; j++)
+      for (int j = 0; j < 16; j++)
         {
-          int64_t value;
-          if (ambiguous_4bit[i] || ambiguous_4bit[j])
+          int64_t value = 0;
+          if (opt_n_mismatch && ((i == 15) || (j == 15)))
+            {
+              value = mismatch;
+            }
+          else if (ambiguous_4bit[i] || ambiguous_4bit[j])
             {
               value = 0;
             }
@@ -145,13 +158,14 @@ int64_t * LinearMemoryAligner::scorematrix_create(int64_t match, int64_t mismatc
             {
               value = mismatch;
             }
-          newscorematrix[16 * i + j] = value;
+          newscorematrix[(16 * i) + j] = value;
         }
     }
   return newscorematrix;
 }
 
-void LinearMemoryAligner::alloc_vectors(size_t x)
+
+auto LinearMemoryAligner::alloc_vectors(size_t x) -> void
 {
   if (vector_alloc < x)
     {
@@ -174,19 +188,20 @@ void LinearMemoryAligner::alloc_vectors(size_t x)
           xfree(YY);
         }
 
-      HH = (int64_t*) xmalloc(vector_alloc * (sizeof(int64_t)));
-      EE = (int64_t*) xmalloc(vector_alloc * (sizeof(int64_t)));
-      XX = (int64_t*) xmalloc(vector_alloc * (sizeof(int64_t)));
-      YY = (int64_t*) xmalloc(vector_alloc * (sizeof(int64_t)));
+      HH = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
+      EE = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
+      XX = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
+      YY = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
     }
 }
 
-void LinearMemoryAligner::cigar_reset()
+
+auto LinearMemoryAligner::cigar_reset() -> void
 {
   if (cigar_alloc < 1)
     {
       cigar_alloc = 64;
-      cigar_string = (char*) xrealloc(cigar_string, cigar_alloc);
+      cigar_string = (char *) xrealloc(cigar_string, cigar_alloc);
     }
   cigar_string[0] = 0;
   cigar_length = 0;
@@ -194,7 +209,8 @@ void LinearMemoryAligner::cigar_reset()
   op_run = 0;
 }
 
-void LinearMemoryAligner::cigar_flush()
+
+auto LinearMemoryAligner::cigar_flush() -> void
 {
   if (op_run > 0)
     {
@@ -202,8 +218,8 @@ void LinearMemoryAligner::cigar_flush()
         {
           /* try writing string until enough memory has been allocated */
 
-          int64_t rest = cigar_alloc - cigar_length;
-          int n;
+          int64_t const rest = cigar_alloc - cigar_length;
+          int n = 0;
           if (op_run > 1)
             {
               n = snprintf(cigar_string + cigar_length,
@@ -223,7 +239,7 @@ void LinearMemoryAligner::cigar_flush()
           else if (n >= rest)
             {
               cigar_alloc += MAX(n - rest + 1, 64);
-              cigar_string = (char*) xrealloc(cigar_string, cigar_alloc);
+              cigar_string = (char *) xrealloc(cigar_string, cigar_alloc);
             }
           else
             {
@@ -234,7 +250,8 @@ void LinearMemoryAligner::cigar_flush()
     }
 }
 
-void LinearMemoryAligner::cigar_add(char _op, int64_t run)
+
+auto LinearMemoryAligner::cigar_add(char _op, int64_t run) -> void
 {
   if (op == _op)
     {
@@ -248,20 +265,22 @@ void LinearMemoryAligner::cigar_add(char _op, int64_t run)
     }
 }
 
-void LinearMemoryAligner::show_matrix()
+
+auto LinearMemoryAligner::show_matrix() -> void
 {
-  for(int i = 0; i < 16; i++)
+  for (int i = 0; i < 16; i++)
     {
       printf("%2d:", i);
-      for(int j = 0; j < 16; j++)
+      for (int j = 0; j < 16; j++)
         {
-          printf(" %2" PRId64, scorematrix[16*i+j]);
+          printf(" %2" PRId64, scorematrix[(16 * i) + j]);
         }
       printf("\n");
     }
 }
 
-void LinearMemoryAligner::diff(int64_t a_start,
+
+auto LinearMemoryAligner::diff(int64_t a_start,
                                int64_t b_start,
                                int64_t a_len,
                                int64_t b_len,
@@ -270,8 +289,9 @@ void LinearMemoryAligner::diff(int64_t a_start,
                                bool a_left,      /* includes left end of a  */
                                bool a_right,     /* includes right end of a */
                                bool b_left,      /* includes left end of b  */
-                               bool b_right)     /* includes right end of b */
+                               bool b_right) -> void  /* includes right end of b */
 {
+  static constexpr auto long_min = std::numeric_limits<long>::min();
   if (b_len == 0)
     {
       /* B and possibly A is empty */
@@ -302,8 +322,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
       */
 
 
-      int64_t MaxScore;
-      int64_t best;
+      int64_t MaxScore = 0;
+      int64_t best = 0;
 
       int64_t Score = 0;
 
@@ -324,7 +344,7 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
       /* gap penalty for gap in A of length b_len */
 
-      Score -= a_right ? go_q_r + b_len * ge_q_r : go_q_i + b_len * ge_q_i;
+      Score -= a_right ? go_q_r + (b_len * ge_q_r) : go_q_i + (b_len * ge_q_i);
 
       MaxScore = Score;
       best = -1;
@@ -338,7 +358,7 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
       /* gap penalty for gap in A of length b_len */
 
-      Score -= a_left ? go_q_l + b_len * ge_q_l : go_q_i + b_len * ge_q_i;
+      Score -= a_left ? go_q_l + (b_len * ge_q_l) : go_q_i + (b_len * ge_q_i);
 
       /* gap penalty for gap in B of length 1 */
 
@@ -368,7 +388,7 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
           if (j > 0)
             {
-              Score -= a_left ? go_q_l + j * ge_q_l : go_q_i + j * ge_q_i;
+              Score -= a_left ? go_q_l + (j * ge_q_l) : go_q_i + (j * ge_q_i);
             }
 
           Score += subst_score(a_start, b_start + j);
@@ -376,8 +396,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
           if (j < b_len - 1)
             {
               Score -= a_right ?
-                go_q_r + (b_len - 1 - j) * ge_q_r :
-                go_q_i + (b_len - 1 - j) * ge_q_i;
+                go_q_r + ((b_len - 1 - j) * ge_q_r) :
+                go_q_i + ((b_len - 1 - j) * ge_q_i);
             }
 
           if (Score > MaxScore)
@@ -414,7 +434,7 @@ void LinearMemoryAligner::diff(int64_t a_start,
     {
       /* a_len >= 2, b_len >= 1 */
 
-      int64_t I = a_len / 2;
+      int64_t const I = a_len / 2;
 
       // Compute HH & EE in forward phase
       // Upper part
@@ -428,8 +448,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
       for (int64_t j = 1; j <= b_len; j++)
         {
-          HH[j] = - (a_left ? go_q_l + j * ge_q_l : go_q_i + j * ge_q_i);
-          EE[j] = LONG_MIN;
+          HH[j] = - (a_left ? go_q_l + (j * ge_q_l) : go_q_i + (j * ge_q_i));
+          EE[j] = long_min;
         }
 
       /* compute matrix */
@@ -439,11 +459,11 @@ void LinearMemoryAligner::diff(int64_t a_start,
           int64_t p = HH[0];
 
           int64_t h = - (b_left ?
-                         (gap_b_left ? 0 : go_t_l) + i * ge_t_l :
-                         (gap_b_left ? 0 : go_t_i) + i * ge_t_i);
+                         (gap_b_left ? 0 : go_t_l) + (i * ge_t_l) :
+                         (gap_b_left ? 0 : go_t_i) + (i * ge_t_i));
 
           HH[0] = h;
-          int64_t f = LONG_MIN;
+          int64_t f = long_min;
 
           for (int64_t j = 1; j <= b_len; j++)
             {
@@ -459,14 +479,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
               h = p + subst_score(a_start + i - 1, b_start + j - 1);
 
-              if (f > h)
-                {
-                  h = f;
-                }
-              if (EE[j] > h)
-                {
-                  h = EE[j];
-                }
+              h = std::max(f, h);
+              h = std::max(EE[j], h);
               p = HH[j];
               HH[j] = h;
             }
@@ -484,8 +498,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
       for (int64_t j = 1; j <= b_len; j++)
         {
-          XX[j] = - (a_right ? go_q_r + j * ge_q_r : go_q_i + j * ge_q_i);
-          YY[j] = LONG_MIN;
+          XX[j] = - (a_right ? go_q_r + (j * ge_q_r) : go_q_i + (j * ge_q_i));
+          YY[j] = long_min;
         }
 
       /* compute matrix */
@@ -495,10 +509,10 @@ void LinearMemoryAligner::diff(int64_t a_start,
           int64_t p = XX[0];
 
           int64_t h = - (b_right ?
-                         (gap_b_right ? 0 : go_t_r) + i * ge_t_r :
-                         (gap_b_right ? 0 : go_t_i) + i * ge_t_i);
+                         (gap_b_right ? 0 : go_t_r) + (i * ge_t_r) :
+                         (gap_b_right ? 0 : go_t_i) + (i * ge_t_i));
           XX[0] = h;
-          int64_t f = LONG_MIN;
+          int64_t f = long_min;
 
           for (int64_t j = 1; j <= b_len; j++)
             {
@@ -514,14 +528,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
               h = p + subst_score(a_start + a_len - i, b_start + b_len - j);
 
-              if (f > h)
-                {
-                  h = f;
-                }
-              if (YY[j] > h)
-                {
-                  h = YY[j];
-                }
+              h = std::max(f, h);
+              h = std::max(YY[j], h);
               p = XX[j];
               XX[j] = h;
             }
@@ -532,14 +540,14 @@ void LinearMemoryAligner::diff(int64_t a_start,
 
       /* find maximum score along division line */
 
-      int64_t MaxScore0 = LONG_MIN;
+      int64_t MaxScore0 = long_min;
       int64_t best0 = -1;
 
       /* solutions with diagonal at break */
 
       for (int64_t j = 0; j <= b_len; j++)
         {
-          int64_t Score = HH[j] + XX[b_len - j];
+          int64_t const Score = HH[j] + XX[b_len - j];
 
           if (Score > MaxScore0)
             {
@@ -548,14 +556,14 @@ void LinearMemoryAligner::diff(int64_t a_start,
             }
         }
 
-      int64_t MaxScore1 = LONG_MIN;
+      int64_t MaxScore1 = long_min;
       int64_t best1 = -1;
 
       /* solutions that end with a gap in b from both ends at break */
 
       for (int64_t j = 0; j <= b_len; j++)
         {
-          int64_t g;
+          int64_t g = 0;
           if (b_left && (j == 0))
             {
               g = go_t_l;
@@ -569,7 +577,7 @@ void LinearMemoryAligner::diff(int64_t a_start,
               g = go_t_i;
             }
 
-          int64_t Score = EE[j] + YY[b_len - j] + g;
+          int64_t const Score = EE[j] + YY[b_len - j] + g;
 
           if (Score > MaxScore1)
             {
@@ -578,8 +586,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
             }
         }
 
-      int64_t P;
-      int64_t best;
+      int64_t P = 0;
+      int64_t best = 0;
 
       if (MaxScore0 > MaxScore1)
         {
@@ -640,7 +648,8 @@ void LinearMemoryAligner::diff(int64_t a_start,
     }
 }
 
-void LinearMemoryAligner::set_parameters(int64_t * _scorematrix,
+
+auto LinearMemoryAligner::set_parameters(int64_t * _scorematrix,
                                          int64_t _gap_open_query_left,
                                          int64_t _gap_open_target_left,
                                          int64_t _gap_open_query_interior,
@@ -652,7 +661,7 @@ void LinearMemoryAligner::set_parameters(int64_t * _scorematrix,
                                          int64_t _gap_extension_query_interior,
                                          int64_t _gap_extension_target_interior,
                                          int64_t _gap_extension_query_right,
-                                         int64_t _gap_extension_target_right)
+                                         int64_t _gap_extension_target_right) -> void
 {
   scorematrix = _scorematrix;
 
@@ -677,10 +686,10 @@ void LinearMemoryAligner::set_parameters(int64_t * _scorematrix,
 
 
 
-char * LinearMemoryAligner::align(char * _a_seq,
+auto LinearMemoryAligner::align(char * _a_seq,
                                   char * _b_seq,
                                   int64_t a_len,
-                                  int64_t b_len)
+                                  int64_t b_len) -> char *
 {
   /* copy parameters */
   a_seq = _a_seq;
@@ -702,14 +711,14 @@ char * LinearMemoryAligner::align(char * _a_seq,
   return cigar_string;
 }
 
-void LinearMemoryAligner::alignstats(char * cigar,
+auto LinearMemoryAligner::alignstats(char * cigar,
                                      char * _a_seq,
                                      char * _b_seq,
                                      int64_t * _nwscore,
                                      int64_t * _nwalignmentlength,
                                      int64_t * _nwmatches,
                                      int64_t * _nwmismatches,
-                                     int64_t * _nwgaps)
+                                     int64_t * _nwgaps) -> void
 {
   a_seq = _a_seq;
   b_seq = _b_seq;
@@ -725,7 +734,7 @@ void LinearMemoryAligner::alignstats(char * cigar,
 
   char * p = cigar;
 
-  int64_t g;
+  int64_t g = 0;
 
   while (*p)
     {
@@ -737,12 +746,17 @@ void LinearMemoryAligner::alignstats(char * cigar,
         {
         case 'M':
           nwalignmentlength += run;
-          for(int64_t k = 0; k < run; k++)
+          for (int64_t k = 0; k < run; k++)
             {
               nwscore += subst_score(a_pos, b_pos);
 
-              if (chrmap_4bit[(int)(a_seq[a_pos])] &
-                  chrmap_4bit[(int)(b_seq[b_pos])])
+              if (opt_n_mismatch && ((chrmap_4bit[(int) (a_seq[a_pos])] == 15) ||
+                                     (chrmap_4bit[(int) (b_seq[b_pos])] == 15)))
+                {
+                  nwmismatches++;
+                }
+              else if (chrmap_4bit[(int)(a_seq[a_pos])] &
+                       chrmap_4bit[(int)(b_seq[b_pos])])
                 {
                   nwmatches++;
                 }
@@ -802,4 +816,3 @@ void LinearMemoryAligner::alignstats(char * cigar,
   *_nwmismatches = nwmismatches;
   *_nwgaps = nwgaps;
 }
-

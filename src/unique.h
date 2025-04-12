@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -66,17 +66,17 @@ struct uhandle_s;
 
 auto unique_init() -> struct uhandle_s *;
 
-auto unique_exit(struct uhandle_s * u) -> void;
+auto unique_exit(struct uhandle_s * unique_handle) -> void;
 
-auto unique_count(struct uhandle_s * uh,
-                  int k,
+auto unique_count(struct uhandle_s * unique_handle,
+                  int wordlength,
                   int seqlen,
                   char * seq,
                   unsigned int * listlen,
                   unsigned int * * list,
                   int seqmask) -> void;
 
-auto unique_count_shared(struct uhandle_s * uh,
-                         int k,
+auto unique_count_shared(struct uhandle_s * unique_handle,
+                         int wordlength,
                          int listlen,
                          unsigned int * list) -> int;

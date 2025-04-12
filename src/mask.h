@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -71,7 +71,7 @@ constexpr auto MASK_SOFT = 2;
 auto maskfasta() -> void;
 auto fastx_mask() -> void;
 
-auto dust(char * m, int len) -> void;
+auto dust(char * seq, int len) -> void;
 auto hardmask(char * seq, int len) -> void;
 auto dust_all() -> void;
 auto hardmask_all() -> void;

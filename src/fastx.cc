@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,11 +62,20 @@
 */
 
 #include "vsearch5d.h"
+#include "dynlibs.h"
+#include "maps.h"
+#include <cinttypes>  // macros PRIu64 and PRId64
+#include <climits>  // LONG_MAX
+#include <cstdint>  // int64_t, uint64_t
+#include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t, std::fread, std::fileno
+#include <cstdlib>  // std::exit, EXIT_FAILURE
+#include <cstring>  // std::memcpy, std::memcmp
+
 
 /* file compression and format detector */
 /* basic file buffering function for fastq and fastx parsers */
 
-#define FASTX_BUFFER_ALLOC 8192
+constexpr uint64_t fastx_buffer_alloc = 8192;
 
 #ifdef HAVE_BZLIB_H
 #define BZ_VERBOSE_0 0
@@ -78,24 +87,24 @@
 #define BZ_LESS_MEM 1  /* slower decompression but requires less memory */
 #endif
 
-#define FORMAT_PLAIN 1
-#define FORMAT_BZIP  2
-#define FORMAT_GZIP  3
+constexpr int format_plain = 1;
+constexpr int format_bzip = 2;
+constexpr int format_gzip = 3;
 
 static unsigned char MAGIC_GZIP[] = "\x1f\x8b";
 static unsigned char MAGIC_BZIP[] = "BZ";
 
 
-void buffer_init(struct fastx_buffer_s * buffer)
+auto buffer_init(struct fastx_buffer_s * buffer) -> void
 {
-  buffer->alloc = FASTX_BUFFER_ALLOC;
-  buffer->data = (char*) xmalloc(buffer->alloc);
+  buffer->alloc = fastx_buffer_alloc;
+  buffer->data = (char *) xmalloc(buffer->alloc);
   buffer->data[0] = 0;
   buffer->length = 0;
   buffer->position = 0;
 }
 
-void buffer_free(struct fastx_buffer_s * buffer)
+auto buffer_free(struct fastx_buffer_s * buffer) -> void
 {
   if (buffer->data)
     {
@@ -107,7 +116,7 @@ void buffer_free(struct fastx_buffer_s * buffer)
   buffer->position = 0;
 }
 
-void buffer_makespace(struct fastx_buffer_s * buffer, uint64_t x)
+auto buffer_makespace(struct fastx_buffer_s * buffer, uint64_t x) -> void
 {
   /* make sure there is space for x more chars in buffer */
 
@@ -116,17 +125,17 @@ void buffer_makespace(struct fastx_buffer_s * buffer, uint64_t x)
       /* alloc space for x more characters,
          but round up to nearest block size */
       buffer->alloc =
-        ((buffer->length + x + FASTX_BUFFER_ALLOC - 1) / FASTX_BUFFER_ALLOC)
-        * FASTX_BUFFER_ALLOC;
-      buffer->data = (char*) xrealloc(buffer->data, buffer->alloc);
+        ((buffer->length + x + fastx_buffer_alloc - 1) / fastx_buffer_alloc)
+        * fastx_buffer_alloc;
+      buffer->data = (char *) xrealloc(buffer->data, buffer->alloc);
     }
 }
 
-void buffer_extend(struct fastx_buffer_s * dest_buffer,
+auto buffer_extend(struct fastx_buffer_s * dest_buffer,
                    char * source_buf,
-                   uint64_t len)
+                   uint64_t len) -> void
 {
-  buffer_makespace(dest_buffer, len+1);
+  buffer_makespace(dest_buffer, len + 1);
   memcpy(dest_buffer->data + dest_buffer->length,
          source_buf,
          len);
@@ -134,7 +143,7 @@ void buffer_extend(struct fastx_buffer_s * dest_buffer,
   dest_buffer->data[dest_buffer->length] = 0;
 }
 
-void fastx_filter_header(fastx_handle h, bool truncateatspace)
+auto fastx_filter_header(fastx_handle h, bool truncateatspace) -> void
 {
   /* filter and truncate header */
 
@@ -143,8 +152,8 @@ void fastx_filter_header(fastx_handle h, bool truncateatspace)
 
   while (true)
     {
-      unsigned char c = *p++;
-      unsigned int m = char_header_action[c];
+      unsigned char const c = *p++;
+      unsigned int const m = char_header_action[c];
 
       switch(m)
         {
@@ -233,7 +242,7 @@ void fastx_filter_header(fastx_handle h, bool truncateatspace)
   h->header_buffer.length = q - h->header_buffer.data;
 }
 
-fastx_handle fastx_open(const char * filename)
+auto fastx_open(const char * filename) -> fastx_handle
 {
   auto * h = (fastx_handle) xmalloc(sizeof(struct fastx_s));
 
@@ -275,15 +284,15 @@ fastx_handle fastx_open(const char * filename)
 
   if (opt_gzip_decompress)
     {
-      h->format = FORMAT_GZIP;
+      h->format = format_gzip;
     }
   else if (opt_bzip2_decompress)
     {
-      h->format = FORMAT_BZIP;
+      h->format = format_bzip;
     }
   else if (h->is_pipe)
     {
-      h->format = FORMAT_PLAIN;
+      h->format = format_plain;
     }
   else
     {
@@ -293,19 +302,19 @@ fastx_handle fastx_open(const char * filename)
 
       unsigned char magic[2];
 
-      h->format = FORMAT_PLAIN;
+      h->format = format_plain;
 
-      size_t bytes_read = fread(&magic, 1, 2, h->fp);
+      size_t const bytes_read = fread(&magic, 1, 2, h->fp);
 
       if (bytes_read >= 2)
         {
           if (memcmp(magic, MAGIC_GZIP, 2) == 0)
             {
-              h->format = FORMAT_GZIP;
+              h->format = format_gzip;
             }
           else if (memcmp(magic, MAGIC_BZIP, 2) == 0)
             {
-              h->format = FORMAT_BZIP;
+              h->format = format_bzip;
             }
         }
       else
@@ -324,7 +333,7 @@ fastx_handle fastx_open(const char * filename)
         }
     }
 
-  if (h->format == FORMAT_GZIP)
+  if (h->format == format_gzip)
     {
       /* GZIP: Keep original file open, then open as gzipped file as well */
 #ifdef HAVE_ZLIB_H
@@ -342,7 +351,7 @@ fastx_handle fastx_open(const char * filename)
 #endif
     }
 
-  if (h->format == FORMAT_BZIP)
+  if (h->format == format_bzip)
     {
       /* BZIP2: Keep original file open, then open as bzipped file as well */
 #ifdef HAVE_BZLIB_H
@@ -370,7 +379,7 @@ fastx_handle fastx_open(const char * filename)
 
   /* start filling up file buffer */
 
-  uint64_t rest = fastx_file_fill_buffer(h);
+  uint64_t const rest = fastx_file_fill_buffer(h);
 
   /* examine first char and see if it starts with > or @ */
 
@@ -400,17 +409,17 @@ fastx_handle fastx_open(const char * filename)
 
           switch(h->format)
             {
-            case FORMAT_PLAIN:
+            case format_plain:
               break;
 
-            case FORMAT_GZIP:
+            case format_gzip:
 #ifdef HAVE_ZLIB_H
               (*gzclose_p)(h->fp_gz);
               h->fp_gz = nullptr;
               break;
 #endif
 
-            case FORMAT_BZIP:
+            case format_bzip:
 #ifdef HAVE_BZLIB_H
               (*BZ2_bzReadClose_p)(&bzError, h->fp_bz);
               h->fp_bz = nullptr;
@@ -452,7 +461,7 @@ fastx_handle fastx_open(const char * filename)
 
   h->stripped_all = 0;
 
-  for(uint64_t & i : h->stripped)
+  for (uint64_t & i : h->stripped)
     {
       i = 0;
     }
@@ -464,29 +473,29 @@ fastx_handle fastx_open(const char * filename)
   return h;
 }
 
-bool fastx_is_fastq(fastx_handle h)
+auto fastx_is_fastq(fastx_handle h) -> bool
 {
   return h->is_fastq || h->is_empty;
 }
 
-bool fastx_is_empty(fastx_handle h)
+auto fastx_is_empty(fastx_handle h) -> bool
 {
   return h->is_empty;
 }
 
-bool fastx_is_pipe(fastx_handle h)
+auto fastx_is_pipe(fastx_handle h) -> bool
 {
   return h->is_pipe;
 }
 
-void fastx_close(fastx_handle h)
+auto fastx_close(fastx_handle h) -> void
 {
   /* Warn about stripped chars */
 
   if (h->stripped_all)
     {
       fprintf(stderr, "WARNING: %" PRIu64 " invalid characters stripped from %s file:", h->stripped_all, (h->is_fastq ? "FASTQ" : "FASTA"));
-      for (int i=0; i<256;i++)
+      for (int i = 0; i < 256; i++)
         {
           if (h->stripped[i])
             {
@@ -494,7 +503,7 @@ void fastx_close(fastx_handle h)
             }
         }
       fprintf(stderr, "\n");
-      fprintf(stderr, "REMINDER: vsearch does not support amino acid sequences\n");
+      fprintf(stderr, "REMINDER: vsearch5d does not support amino acid sequences\n");
 
       if (opt_log)
         {
@@ -507,27 +516,27 @@ void fastx_close(fastx_handle h)
                 }
             }
           fprintf(fp_log, "\n");
-          fprintf(fp_log, "REMINDER: vsearch does not support amino acid sequences\n");
+          fprintf(fp_log, "REMINDER: vsearch5d does not support amino acid sequences\n");
         }
     }
 
 #ifdef HAVE_BZLIB_H
-  int bz_error;
+  int bz_error = 0;
 #endif
 
   switch(h->format)
     {
-    case FORMAT_PLAIN:
+    case format_plain:
       break;
 
-    case FORMAT_GZIP:
+    case format_gzip:
 #ifdef HAVE_ZLIB_H
       (*gzclose_p)(h->fp_gz);
       h->fp_gz = nullptr;
       break;
 #endif
 
-    case FORMAT_BZIP:
+    case format_bzip:
 #ifdef HAVE_BZLIB_H
       (*BZ2_bzReadClose_p)(&bz_error, h->fp_bz);
       h->fp_bz = nullptr;
@@ -557,10 +566,10 @@ void fastx_close(fastx_handle h)
   h=nullptr;
 }
 
-uint64_t fastx_file_fill_buffer(fastx_handle h)
+auto fastx_file_fill_buffer(fastx_handle h) -> uint64_t
 {
   /* read more data if necessary */
-  uint64_t rest = h->file_buffer.length - h->file_buffer.position;
+  uint64_t const rest = h->file_buffer.length - h->file_buffer.position;
 
   if (rest > 0)
     {
@@ -586,7 +595,7 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
 
       switch(h->format)
         {
-        case FORMAT_PLAIN:
+        case format_plain:
           bytes_read = fread(h->file_buffer.data
                              + h->file_buffer.position,
                              1,
@@ -594,7 +603,7 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
                              h->fp);
           break;
 
-        case FORMAT_GZIP:
+        case format_gzip:
 #ifdef HAVE_ZLIB_H
           bytes_read = (*gzread_p)(h->fp_gz,
                                    h->file_buffer.data
@@ -607,7 +616,7 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
           break;
 #endif
 
-        case FORMAT_BZIP:
+        case format_bzip:
 #ifdef HAVE_BZLIB_H
           bytes_read = (*BZ2_bzRead_p)(& bzError,
                                        h->fp_bz,
@@ -631,10 +640,10 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
       if (! h->is_pipe)
         {
 #ifdef HAVE_ZLIB_H
-          if (h->format == FORMAT_GZIP)
+          if (h->format == format_gzip)
             {
               /* Circumvent the missing gzoffset function in zlib 1.2.3 and earlier */
-              int fd = dup(fileno(h->fp));
+              int const fd = dup(fileno(h->fp));
               h->file_position = xlseek(fd, 0, SEEK_CUR);
               close(fd);
             }
@@ -650,9 +659,9 @@ uint64_t fastx_file_fill_buffer(fastx_handle h)
     }
 }
 
-bool fastx_next(fastx_handle h,
+auto fastx_next(fastx_handle h,
                 bool truncateatspace,
-                const unsigned char * char_mapping)
+                const unsigned char * char_mapping) -> bool
 {
   if (h->is_fastq)
     {
@@ -664,7 +673,7 @@ bool fastx_next(fastx_handle h,
     }
 }
 
-uint64_t fastx_get_position(fastx_handle h)
+auto fastx_get_position(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -677,7 +686,7 @@ uint64_t fastx_get_position(fastx_handle h)
 }
 
 
-uint64_t fastx_get_size(fastx_handle h)
+auto fastx_get_size(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -690,7 +699,7 @@ uint64_t fastx_get_size(fastx_handle h)
 }
 
 
-uint64_t fastx_get_lineno(fastx_handle h)
+auto fastx_get_lineno(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -703,7 +712,7 @@ uint64_t fastx_get_lineno(fastx_handle h)
 }
 
 
-uint64_t fastx_get_seqno(fastx_handle h)
+auto fastx_get_seqno(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -715,7 +724,7 @@ uint64_t fastx_get_seqno(fastx_handle h)
     }
 }
 
-char * fastx_get_header(fastx_handle h)
+auto fastx_get_header(fastx_handle h) -> char *
 {
   if (h->is_fastq)
     {
@@ -727,7 +736,7 @@ char * fastx_get_header(fastx_handle h)
     }
 }
 
-char * fastx_get_sequence(fastx_handle h)
+auto fastx_get_sequence(fastx_handle h) -> char *
 {
   if (h->is_fastq)
     {
@@ -739,7 +748,7 @@ char * fastx_get_sequence(fastx_handle h)
     }
 }
 
-uint64_t fastx_get_header_length(fastx_handle h)
+auto fastx_get_header_length(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -751,7 +760,7 @@ uint64_t fastx_get_header_length(fastx_handle h)
     }
 }
 
-uint64_t fastx_get_sequence_length(fastx_handle h)
+auto fastx_get_sequence_length(fastx_handle h) -> uint64_t
 {
   if (h->is_fastq)
     {
@@ -764,7 +773,7 @@ uint64_t fastx_get_sequence_length(fastx_handle h)
 }
 
 
-char * fastx_get_quality(fastx_handle h)
+auto fastx_get_quality(fastx_handle h) -> char *
 {
   if (h->is_fastq)
     {
@@ -776,7 +785,7 @@ char * fastx_get_quality(fastx_handle h)
     }
 }
 
-int64_t fastx_get_abundance(fastx_handle h)
+auto fastx_get_abundance(fastx_handle h) -> int64_t
 {
   if (h->is_fastq)
     {

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,6 +62,21 @@
 */
 
 #include "vsearch5d.h"
+#include "align_simd.h"
+#include "dbindex.h"
+#include "maps.h"
+#include "mask.h"
+#include "minheap.h"
+#include "otutable.h"
+#include "udb.h"
+#include "unique.h"
+#include <algorithm>  // std::min
+#include <cinttypes>  // macros PRIu64 and PRId64
+#include <cstdint> // uint64_t, int64_t
+#include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t
+#include <cstring>  // std::strlen, std::memset, std::strcpy
+#include <pthread.h>
+
 
 static struct searchinfo_s * si_plus;
 static struct searchinfo_s * si_minus;
@@ -101,18 +116,18 @@ static FILE * fp_tsegout = nullptr;
 static int count_matched = 0;
 static int count_notmatched = 0;
 
-void search_output_results(int hit_count,
+auto search_output_results(int hit_count,
                            struct hit * hits,
                            char * query_head,
                            int qseqlen,
                            char * qsequence,
                            char * qsequence_rc,
-                           int qsize)
+                           int qsize) -> void
 {
   xpthread_mutex_lock(&mutex_output);
 
   /* show results */
-  int64_t toreport = MIN(opt_maxhits, hit_count);
+  auto const toreport = std::min<int64_t>(opt_maxhits, hit_count);
 
   if (fp_alnout)
     {
@@ -144,7 +159,7 @@ void search_output_results(int hit_count,
 
   if (toreport)
     {
-      double top_hit_id = hits[0].id;
+      double const top_hit_id = hits[0].id;
 
       if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
         {
@@ -153,7 +168,7 @@ void search_output_results(int hit_count,
                        qsize);
         }
 
-      for(int t = 0; t < toreport; t++)
+      for (int t = 0; t < toreport; t++)
         {
           struct hit * hp = hits + t;
 
@@ -294,7 +309,7 @@ void search_output_results(int hit_count,
     }
 
   /* update matching db sequences */
-  for (int i=0; i < hit_count; i++)
+  for (int i = 0; i < hit_count; i++)
     {
       if (hits[i].accepted || hits[i].weak)
         {
@@ -305,11 +320,12 @@ void search_output_results(int hit_count,
   xpthread_mutex_unlock(&mutex_output);
 }
 
-int search_query(int64_t t)
+
+auto search_query(int64_t t) -> int
 {
   for (int s = 0; s < opt_strand; s++)
     {
-      struct searchinfo_s * si = s ? si_minus+t : si_plus+t;
+      struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
 
       /* mask query */
       if (opt_qmask == MASK_DUST)
@@ -325,8 +341,8 @@ int search_query(int64_t t)
       search_onequery(si, opt_qmask);
     }
 
-  struct hit * hits;
-  int hit_count;
+  struct hit * hits = nullptr;
+  int hit_count = 0;
 
   search_joinhits(si_plus + t,
                   opt_strand > 1 ? si_minus + t : nullptr,
@@ -342,7 +358,7 @@ int search_query(int64_t t)
                         si_plus[t].qsize);
 
   /* free memory for alignment strings */
-  for(int i=0; i<hit_count; i++)
+  for (int i = 0; i < hit_count; i++)
     {
       if (hits[i].aligned)
         {
@@ -355,7 +371,8 @@ int search_query(int64_t t)
   return hit_count;
 }
 
-void search_thread_run(int64_t t)
+
+auto search_thread_run(int64_t t) -> void
 {
   while (true)
     {
@@ -366,15 +383,15 @@ void search_thread_run(int64_t t)
                      chrmap_no_change))
         {
           char * qhead = fastx_get_header(query_fastx_h);
-          int query_head_len = fastx_get_header_length(query_fastx_h);
+          int const query_head_len = fastx_get_header_length(query_fastx_h);
           char * qseq = fastx_get_sequence(query_fastx_h);
-          int qseqlen = fastx_get_sequence_length(query_fastx_h);
-          int query_no = fastx_get_seqno(query_fastx_h);
-          int qsize = fastx_get_abundance(query_fastx_h);
+          int const qseqlen = fastx_get_sequence_length(query_fastx_h);
+          int const query_no = fastx_get_seqno(query_fastx_h);
+          int const qsize = fastx_get_abundance(query_fastx_h);
 
           for (int s = 0; s < opt_strand; s++)
             {
-              struct searchinfo_s * si = s ? si_minus+t : si_plus+t;
+              struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
 
               si->query_head_len = query_head_len;
               si->qseqlen = qseqlen;
@@ -387,15 +404,15 @@ void search_thread_run(int64_t t)
               if (si->query_head_len + 1 > si->query_head_alloc)
                 {
                   si->query_head_alloc = si->query_head_len + 2001;
-                  si->query_head = (char*)
-                    xrealloc(si->query_head, (size_t)(si->query_head_alloc));
+                  si->query_head = (char *)
+                    xrealloc(si->query_head, (size_t) (si->query_head_alloc));
                 }
 
               if (si->qseqlen + 1 > si->seq_alloc)
                 {
                   si->seq_alloc = si->qseqlen + 2001;
-                  si->qsequence = (char*)
-                    xrealloc(si->qsequence, (size_t)(si->seq_alloc));
+                  si->qsequence = (char *)
+                    xrealloc(si->qsequence, (size_t) (si->seq_alloc));
                 }
             }
 
@@ -404,7 +421,7 @@ void search_thread_run(int64_t t)
           strcpy(si_plus[t].qsequence, qseq);
 
           /* get progress as amount of input file read */
-          uint64_t progress = fastx_get_position(query_fastx_h);
+          uint64_t const progress = fastx_get_position(query_fastx_h);
 
           /* let other threads read input */
           xpthread_mutex_unlock(&mutex_input);
@@ -418,7 +435,7 @@ void search_thread_run(int64_t t)
                                  si_plus[t].qseqlen);
             }
 
-          int match = search_query(t);
+          int const match = search_query(t);
 
           /* lock mutex for update of global data and output */
           xpthread_mutex_lock(&mutex_output);
@@ -446,11 +463,12 @@ void search_thread_run(int64_t t)
     }
 }
 
-void search_thread_init(struct searchinfo_s * si)
+
+auto search_thread_init(struct searchinfo_s * si) -> void
 {
   /* thread specific initialiation */
   si->uh = unique_init();
-  si->kmers = (count_t *) xmalloc(seqcount * sizeof(count_t) + 32);
+  si->kmers = (count_t *) xmalloc((seqcount * sizeof(count_t)) + 32);
   si->m = minheap_init(tophits);
   si->hits = (struct hit *) xmalloc
     (sizeof(struct hit) * (tophits) * opt_strand);
@@ -459,11 +477,6 @@ void search_thread_init(struct searchinfo_s * si)
   si->query_head = nullptr;
   si->seq_alloc = 0;
   si->qsequence = nullptr;
-#ifdef COMPARENONVECTORIZED
-  si->nw = nw_init();
-#else
-  si->nw = nullptr;
-#endif
   si->s = search16_init(opt_match,
                         opt_mismatch,
                         opt_gap_open_query_left,
@@ -480,13 +493,11 @@ void search_thread_init(struct searchinfo_s * si)
                         opt_gap_extension_target_right);
 }
 
-void search_thread_exit(struct searchinfo_s * si)
+
+auto search_thread_exit(struct searchinfo_s * si) -> void
 {
   /* thread specific clean up */
   search16_exit(si->s);
-#ifdef COMPARENONVECTORIZED
-  nw_exit(si->nw);
-#endif
   unique_exit(si->uh);
   xfree(si->hits);
   minheap_exit(si->m);
@@ -503,14 +514,15 @@ void search_thread_exit(struct searchinfo_s * si)
 
 
 
-void * search_thread_worker(void * vp)
+auto search_thread_worker(void * vp) -> void *
 {
   auto t = (int64_t) vp;
   search_thread_run(t);
   return nullptr;
 }
 
-void search_thread_worker_run()
+
+auto search_thread_worker_run() -> void
 {
   /* initialize threads, start them, join them and return */
 
@@ -518,25 +530,25 @@ void search_thread_worker_run()
   xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   /* init and create worker threads, put them into stand-by mode */
-  for(int t=0; t<opt_threads; t++)
+  for (int t = 0; t < opt_threads; t++)
     {
-      search_thread_init(si_plus+t);
+      search_thread_init(si_plus + t);
       if (si_minus)
         {
-          search_thread_init(si_minus+t);
+          search_thread_init(si_minus + t);
         }
-      xpthread_create(pthread+t, &attr,
-                      search_thread_worker, (void*)(int64_t)t);
+      xpthread_create(pthread + t, &attr,
+                      search_thread_worker, (void *) (int64_t) t);
     }
 
   /* finish and clean up worker threads */
-  for(int t=0; t<opt_threads; t++)
+  for (int t = 0; t < opt_threads; t++)
     {
       xpthread_join(pthread[t], nullptr);
-      search_thread_exit(si_plus+t);
+      search_thread_exit(si_plus + t);
       if (si_minus)
         {
-          search_thread_exit(si_minus+t);
+          search_thread_exit(si_minus + t);
         }
     }
 
@@ -544,8 +556,7 @@ void search_thread_worker_run()
 }
 
 
-
-void search_prep(char * cmdline, char * progheader)
+auto search_prep(char * cmdline, char * progheader) -> void
 {
   /* open output files */
 
@@ -680,7 +691,7 @@ void search_prep(char * cmdline, char * progheader)
 
   /* check if it may be an UDB file */
 
-  bool is_udb = udb_detect_isudb(opt_db);
+  bool const is_udb = udb_detect_isudb(opt_db);
 
   if (is_udb)
     {
@@ -721,13 +732,11 @@ void search_prep(char * cmdline, char * progheader)
 
   tophits = opt_maxrejects + opt_maxaccepts + MAXDELAYED;
 
-  if (tophits > seqcount)
-    {
-      tophits = seqcount;
-    }
+  tophits = std::min(tophits, seqcount);
 }
 
-void search_done()
+
+auto search_done() -> void
 {
   /* clean up, global */
 
@@ -781,7 +790,8 @@ void search_done()
   show_rusage();
 }
 
-void usearch_global(char * cmdline, char * progheader)
+
+auto usearch_global(char * cmdline, char * progheader) -> void
 {
   search_prep(cmdline, progheader);
 
@@ -850,7 +860,7 @@ void usearch_global(char * cmdline, char * progheader)
 
   fastx_close(query_fastx_h);
 
-  if (!opt_quiet)
+  if (! opt_quiet)
     {
       fprintf(stderr, "Matching unique query sequences: %d of %d",
               qmatches, queries);
@@ -898,10 +908,13 @@ void usearch_global(char * cmdline, char * progheader)
 
 
   // Add OTUs with no matches to OTU table
-  if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
-    for(int64_t i=0; i<seqcount; i++)
-      if (! dbmatched[i])
+  if (opt_otutabout || opt_mothur_shared_out || opt_biomout) {
+    for (int64_t i = 0; i < seqcount; i++) {
+      if (! dbmatched[i]) {
         otutable_add(nullptr, db_getheader(i), 0);
+      }
+    }
+  }
 
   if (opt_biomout)
     {
@@ -928,7 +941,7 @@ void usearch_global(char * cmdline, char * progheader)
 
   if (opt_dbmatched || opt_dbnotmatched)
     {
-      for(int64_t i=0; i<seqcount; i++)
+      for (int64_t i = 0; i < seqcount; i++)
         {
           if (dbmatched[i])
             {

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -68,6 +68,6 @@
 auto otutable_init() -> void;
 auto otutable_done() -> void;
 auto otutable_add(char * query_header, char * target_header, int64_t abundance) -> void;
-auto otutable_print_otutabout(std::FILE * fp) -> void;
-auto otutable_print_mothur_shared_out(std::FILE * fp) -> void;
-auto otutable_print_biomout(std::FILE * fp) -> void;
+auto otutable_print_otutabout(std::FILE * output_handle) -> void;
+auto otutable_print_mothur_shared_out(std::FILE * output_handle) -> void;
+auto otutable_print_biomout(std::FILE * output_handle) -> void;

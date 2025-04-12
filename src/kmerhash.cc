@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,7 +62,10 @@
 */
 
 #include "vsearch5d.h"
+#include "maps.h"
+#include <cstring>  // std::memset
 #include <vector>
+
 
 #define HASH CityHash64
 
@@ -81,7 +84,7 @@ struct kh_handle_s
   int maxpos;
 };
 
-struct kh_handle_s * kh_init()
+auto kh_init() -> struct kh_handle_s *
 {
   auto * kh =
     (struct kh_handle_s *) xmalloc(sizeof(struct kh_handle_s));
@@ -96,7 +99,7 @@ struct kh_handle_s * kh_init()
   return kh;
 }
 
-void kh_exit(struct kh_handle_s * kh)
+auto kh_exit(struct kh_handle_s * kh) -> void
 {
   if (kh->hash)
     {
@@ -105,13 +108,13 @@ void kh_exit(struct kh_handle_s * kh)
   xfree(kh);
 }
 
-inline void kh_insert_kmer(struct kh_handle_s * kh,
+inline auto kh_insert_kmer(struct kh_handle_s * kh,
                            int k,
                            unsigned int kmer,
-                           unsigned int pos)
+                           unsigned int pos) -> void
 {
   /* find free bucket in hash */
-  unsigned int j = HASH((char*)&kmer, (k+3)/4) & kh->hash_mask;
+  unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
   while(kh->hash[j].pos)
     {
       j = (j + 1) & kh->hash_mask;
@@ -121,10 +124,10 @@ inline void kh_insert_kmer(struct kh_handle_s * kh,
   kh->hash[j].pos = pos;
 }
 
-void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
+auto kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len) -> void
 {
-  int kmers = 1 << (2 * k);
-  unsigned int kmer_mask = kmers - 1;
+  int const kmers = 1U << (2U * k);
+  unsigned int const kmer_mask = kmers - 1;
 
   /* reallocate hash table if necessary */
 
@@ -139,7 +142,7 @@ void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
     }
 
   kh->size = 1;
-  while(kh->size < 2 * len)
+  while (kh->size < 2 * len)
     {
       kh->size *= 2;
     }
@@ -157,7 +160,7 @@ void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
 
   for (int pos = 0; pos < len; pos++)
     {
-      int c = *s++;
+      int const c = *s++;
 
       bad <<= 2ULL;
       bad |= maskmap[c];
@@ -167,7 +170,7 @@ void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
       kmer |= chrmap_2bit[c];
       kmer &= kmer_mask;
 
-      if (!bad)
+      if (! bad)
         {
           /* 1-based pos of start of kmer */
           kh_insert_kmer(kh, k, kmer, pos - k + 1 + 1);
@@ -175,12 +178,12 @@ void kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len)
     }
 }
 
-int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
+auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) -> int
 {
   std::vector<int> diag_counts(kh->maxpos, 0);
 
-  int kmers = 1 << (2 * k);
-  unsigned int kmer_mask = kmers - 1;
+  int const kmers = 1U << (2U * k);
+  unsigned int const kmer_mask = kmers - 1;
 
   unsigned int bad = kmer_mask;
   unsigned int kmer = 0;
@@ -190,7 +193,7 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
 
   for (int pos = 0; pos < len; pos++)
     {
-      int c = *s--;
+      int const c = *s--;
 
       bad <<= 2ULL;
       bad |= maskmap[c];
@@ -200,16 +203,16 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
       kmer |= chrmap_2bit[chrmap_complement[c]];
       kmer &= kmer_mask;
 
-      if (!bad)
+      if (! bad)
         {
           /* find matching buckets in hash */
-          unsigned int j = HASH((char*)&kmer, (k+3)/4) & kh->hash_mask;
+          unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
           while(kh->hash[j].pos)
             {
               if (kh->hash[j].kmer == kmer)
                 {
-                  int fpos = kh->hash[j].pos - 1;
-                  int diag = fpos - (pos - k + 1);
+                  int const fpos = kh->hash[j].pos - 1;
+                  int const diag = fpos - (pos - k + 1);
                   if (diag >= 0)
                     {
                       diag_counts[diag]++;
@@ -224,11 +227,11 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
   int best_diag = -1;
   int good_diags = 0;
 
-  for(int d = 0; d < kh->maxpos - k + 1; d++)
+  for (int d = 0; d < kh->maxpos - k + 1; d++)
     {
-      int diag_len = kh->maxpos - d;
-      int minmatch = MAX(1, diag_len - k + 1 - k * MAX(diag_len / 20, 0));
-      int c = diag_counts[d];
+      int const diag_len = kh->maxpos - d;
+      int const minmatch = MAX(1, diag_len - k + 1 - (k * MAX(diag_len / 20, 0)));
+      int const c = diag_counts[d];
 
       if (c >= minmatch)
         {
@@ -252,16 +255,16 @@ int kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len)
     }
 }
 
-void kh_find_diagonals(struct kh_handle_s * kh,
+auto kh_find_diagonals(struct kh_handle_s * kh,
                        int k,
                        char * seq,
                        int len,
-                       int * diags)
+                       int * diags) -> void
 {
   memset(diags, 0, (kh->maxpos+len) * sizeof(int));
 
-  int kmers = 1 << (2 * k);
-  unsigned int kmer_mask = kmers - 1;
+  int const kmers = 1U << (2U * k);
+  unsigned int const kmer_mask = kmers - 1;
 
   unsigned int bad = kmer_mask;
   unsigned int kmer = 0;
@@ -269,7 +272,7 @@ void kh_find_diagonals(struct kh_handle_s * kh,
 
   for (int pos = 0; pos < len; pos++)
     {
-      int c = *s--;
+      int const c = *s--;
 
       bad <<= 2ULL;
       bad |= chrmap_mask_ambig[c];
@@ -279,16 +282,16 @@ void kh_find_diagonals(struct kh_handle_s * kh,
       kmer |= chrmap_2bit[chrmap_complement[c]];
       kmer &= kmer_mask;
 
-      if (!bad)
+      if (! bad)
         {
           /* find matching buckets in hash */
-          unsigned int j = HASH((char*)&kmer, (k+3)/4) & kh->hash_mask;
+          unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
           while(kh->hash[j].pos)
             {
               if (kh->hash[j].kmer == kmer)
                 {
-                  int fpos = kh->hash[j].pos - 1;
-                  int diag = len + fpos - (pos - k + 1);
+                  int const fpos = kh->hash[j].pos - 1;
+                  int const diag = len + fpos - (pos - k + 1);
                   if (diag >= 0)
                     {
                       diags[diag]++;

@@ -61,4 +61,5 @@
 
 */
 
-auto shuffle(struct Parameters const & parameters) -> void;
+auto fastq_join(struct Parameters const & parameters) -> void;
+auto fastq_join2(struct Parameters const & parameters) -> void;

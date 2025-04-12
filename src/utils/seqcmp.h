@@ -61,4 +61,4 @@
 
 */
 
-auto shuffle(struct Parameters const & parameters) -> void;
+auto seqcmp(char * lhs, char * rhs, int length) -> int;

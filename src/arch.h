@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -66,9 +66,9 @@
 
 
 #ifdef _WIN32
-typedef struct __stat64 xstat_t;
+using xstat_t = struct __stat64;
 #else
-typedef struct stat xstat_t;
+using xstat_t = struct stat;
 #endif
 
 auto arch_get_memused() -> uint64_t;
@@ -81,9 +81,9 @@ auto xmalloc(std::size_t size) -> void *;
 auto xrealloc(void * ptr, std::size_t size) -> void *;
 auto xfree(void * ptr) -> void;
 
-auto xfstat(int fd, xstat_t * buf) -> int;
+auto xfstat(int file_descriptor, xstat_t * buf) -> int;
 auto xstat(const char * path, xstat_t  * buf) -> int;
-auto xlseek(int fd, uint64_t offset, int whence) -> uint64_t;
+auto xlseek(int file_descriptor, uint64_t offset, int whence) -> uint64_t;
 auto xftello(std::FILE * stream) -> uint64_t;
 
 auto xopen_read(const char * path) -> int;

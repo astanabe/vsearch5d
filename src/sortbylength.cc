@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -160,14 +160,15 @@ auto find_median_length(std::vector<sortinfo_length_s> const &deck) -> double {
 }
 
 
-auto output_median_length(std::vector<struct sortinfo_length_s> const & deck) -> void {
+auto output_median_length(std::vector<struct sortinfo_length_s> const & deck,
+                          struct Parameters const & parameters) -> void {
     // Banker's rounding (round half to even)
   auto const median = find_median_length(deck);
-  if (not opt_quiet)
+  if (not parameters.opt_quiet)
     {
       std::fprintf(stderr, "Median length: %.0f\n", median);
     }
-  if (opt_log != nullptr)
+  if (parameters.opt_log != nullptr)
     {
       std::fprintf(fp_log, "Median length: %.0f\n", median);
     }
@@ -176,9 +177,8 @@ auto output_median_length(std::vector<struct sortinfo_length_s> const & deck) ->
 
 auto truncate_deck(std::vector<struct sortinfo_length_s> &deck,
                    long int const n_first_sequences) -> void {
-  auto const final_size = std::min(deck.size(),
-                                   static_cast<unsigned long>(n_first_sequences));
-  deck.resize(final_size);
+  if (deck.size() > static_cast<unsigned long>(n_first_sequences))
+    deck.resize(n_first_sequences);
 }
 
 
@@ -196,18 +196,18 @@ auto output_sorted_fasta(std::vector<struct sortinfo_length_s> const & deck,
 }
 
 
-auto sortbylength() -> void
+auto sortbylength(struct Parameters const & parameters) -> void
 {
-  if (opt_output == nullptr) {
+  if (parameters.opt_output == nullptr) {
     fatal("FASTA output file for sortbylength must be specified with --output");
   }
 
-  auto * fp_output = fopen_output(opt_output);
+  auto * fp_output = fopen_output(parameters.opt_output);
   if (fp_output == nullptr) {
     fatal("Unable to open sortbylength output file for writing");
   }
 
-  db_read(opt_sortbylength, 0);
+  db_read(parameters.opt_sortbylength, 0);
   show_rusage();
 
   auto deck = create_deck();
@@ -215,10 +215,10 @@ auto sortbylength() -> void
 
   sort_deck(deck);
 
-  output_median_length(deck);
+  output_median_length(deck, parameters);
   show_rusage();
 
-  truncate_deck(deck, opt_topn);
+  truncate_deck(deck, parameters.opt_topn);
   output_sorted_fasta(deck, fp_output);
   show_rusage();
 

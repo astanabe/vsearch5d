@@ -5,7 +5,7 @@ RUN apk add --no-cache \
         libstdc++ zlib-dev bzip2-dev \
         autoconf automake make g++ && \
     ./autogen.sh && \
-    ./configure CFLAGS="-O3 -fomit-frame-pointer -finline-functions" CXXFLAGS="-O3 -fomit-frame-pointer -finline-functions" && \
+    ./configure CFLAGS="-O2 -fomit-frame-pointer -finline-functions" CXXFLAGS="-O2 -fomit-frame-pointer -finline-functions" && \
     make clean && \
     make && \
     make install && \

@@ -2,13 +2,13 @@
 
   VSEARCH5D: a modified version of VSEARCH
 
-  Copyright (C) 2016-2024, Akifumi S. Tanabe
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
 
   Contact: Akifumi S. Tanabe
   https://github.com/astanabe/vsearch5d
 
   Original version of VSEARCH
-  Copyright (C) 2014-2024, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
 
@@ -62,83 +62,68 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/maps.hpp"
+#include <cassert>
+#include <cstdio>  // std::FILE, std::size_t, std::fclose
+#include <vector>
 
 
-auto fasta2fastq() -> void
+auto fasta2fastq(struct Parameters const & parameters) -> void
 {
-  const char max_ascii_value { static_cast<char>(opt_fastq_asciiout + opt_fastq_qmaxout) };
+  auto const max_ascii_value = static_cast<char>(parameters.opt_fastq_asciiout + parameters.opt_fastq_qmaxout);
 
-  if (opt_fastqout == nullptr)
-    {
-      fatal("Output FASTQ file not specified with the --fastqout option");
-    }
+  assert(parameters.opt_fastqout != nullptr);  // check performed in <getopt.h>
 
-  fastx_handle h { fasta_open(opt_fasta2fastq) };
-  if (h == nullptr)
-    {
-      fatal("Unable to open FASTA file for reading");
-    }
+  auto * fp_input = fasta_open(parameters.opt_fasta2fastq);
+  assert(fp_input != nullptr);  // check performed in fasta_open(fastx_open())
 
-  std::FILE * fp_fastqout { fopen_output(opt_fastqout) };
+  auto * fp_fastqout = fopen_output(parameters.opt_fastqout);
   if (fp_fastqout == nullptr)
     {
       fatal("Unable to open FASTQ output file for writing");
     }
 
-  int count {0};
-  size_t alloc {0};
-  char * quality {nullptr};
+  static constexpr auto initial_length = 1024U;
+  std::vector<char> quality(initial_length, max_ascii_value);
 
-  progress_init("Converting FASTA file to FASTQ", fasta_get_size(h));
+  progress_init("Converting FASTA file to FASTQ", fasta_get_size(fp_input));
 
-  while(fasta_next(h, false, chrmap_no_change))
+  auto counter = 0;
+  while (fasta_next(fp_input, false, chrmap_no_change_vector.data()))
     {
       /* get sequence length and allocate more mem if necessary */
 
-      const uint64_t length { fastq_get_sequence_length(h) };
+      auto const length = fastq_get_sequence_length(fp_input);
 
-      if (alloc < length + 1)
+      if (quality.size() < length + 1)
         {
-          alloc = length + 1;
-          quality = (char*) xrealloc(quality, alloc);
+          quality.resize(length + 1, max_ascii_value);
         }
 
-      /* set quality values */
+      // note: adding '\0' and the end of the quality string is not necessary,
+      // fastq_print_general() uses 'length' for both sequence and quality
 
-      for(uint64_t i = 0; i < length; i++)
-        {
-          quality[i] = max_ascii_value;
-        }
+      ++counter;
 
-      quality[length] = 0;
-
-      ++count;
-
-      /* write to fasta file */
-
+      /* write to fastq file */
       fastq_print_general(fp_fastqout,
-                          fastq_get_sequence(h),
-                          length,
-                          fasta_get_header(h),
-                          fasta_get_header_length(h),
-                          quality,
-                          fastq_get_abundance(h),
-                          count,
+                          fastq_get_sequence(fp_input),
+                          static_cast<int>(length),
+                          fasta_get_header(fp_input),
+                          static_cast<int>(fasta_get_header_length(fp_input)),
+                          quality.data(),
+                          static_cast<int>(fastq_get_abundance(fp_input)),
+                          counter,
                           -1.0);
 
-      progress_update(fasta_get_position(h));
+      progress_update(fasta_get_position(fp_input));
     }
 
   progress_done();
 
-  /* clean up */
-
-  if (quality != nullptr) {
-    xfree(quality);
+  if (fp_fastqout != nullptr) {
+    static_cast<void>(std::fclose(fp_fastqout));
   }
 
-  fclose(fp_fastqout);
-
-  fasta_close(h);
-
+  fasta_close(fp_input);
 }
