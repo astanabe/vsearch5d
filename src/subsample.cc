@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,6 +61,7 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/fatal.hpp"
 #include <algorithm>  // std::count_if
 #include <cassert>
 #include <cinttypes>  // macros PRIu64 and PRId64
@@ -117,21 +117,26 @@ struct file_types {
 
 //   std::random_device r;
 //   std::default_random_engine generator(r());
-//   std::vector<int> v1 = {1000, 100, 10, 1};
-//   std::discrete_distribution<int> distribution(v1.begin(), v1.end());
+//   std::vector<int> weights = {1000, 100, 10, 1};
+//   std::discrete_distribution<unsigned long long> distribution(weights.begin(), weights.end());
 
-//   std::vector<int> v2(v1.size());
+//   std::vector<int> v2(weights.size());
 
-//   for (auto i=0ULL; i<nreads; ++i) {
-//     int const number = distribution(generator);
+//   for (auto i = 0ULL; i < nreads; ++i) {
+//     auto const number = distribution(generator);
 //     ++v2[number];
 //   }
 
-//   for (auto i=0UL; i<v2.size(); ++i)
+//   for (auto i = 0UL; i < v2.size(); ++i)
 //     std::cout << i << ": " << v1[i] << " " << v2[i] << "\n";
 
 //   return 0;
 // }
+
+
+// refactoring: "RTK: efficient rarefaction analysis of large datasets"
+//  a fast C++11 rarefaction tool https://github.com/hildebra/Rarefaction
+//  maybe they use a better approach than the std::discrete_distribution?
 
 
 auto open_output_files(struct file_types & ouput_files) -> void {
@@ -361,7 +366,7 @@ auto close_output_files(struct file_types const & ouput_files) -> void {
 
 
 auto subsample(struct Parameters const & parameters) -> void {
-  struct file_types ouput_files;
+  struct file_types ouput_files;  // refactoring: direct initialization {}; then struct can be const
   ouput_files.fasta.kept.name = parameters.opt_fastaout;
   ouput_files.fasta.lost.name = parameters.opt_fastaout_discarded;
   ouput_files.fastq.kept.name = parameters.opt_fastqout;

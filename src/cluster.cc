@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -65,14 +64,17 @@
 #include "align_simd.h"
 #include "attributes.h"
 #include "dbindex.h"
+#include "linmemalign.h"
 #include "mask.h"
 #include "minheap.h"
 #include "msa.h"
 #include "otutable.h"
 #include "unique.h"
+#include "utils/fatal.hpp"
+#include "utils/xpthread.hpp"
 #include <algorithm>  // std::count, std::minmax_element, std::max_element, std::min
+#include <array>
 #include <cinttypes>  // macros PRIu64 and PRId64
-#include <climits>  // INT_MAX, LONG_MAX
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose
 #include <cstdlib>  // std::qsort
@@ -138,64 +140,65 @@ using thread_info_t = struct thread_info_s;
 
 static thread_info_t * ti;
 
+
 inline auto compare_byclusterno(const void * a, const void * b) -> int
 {
-  auto * x = (clusterinfo_t *) a;
-  auto * y = (clusterinfo_t *) b;
-  if (x->clusterno < y->clusterno)
+  auto * lhs = (clusterinfo_t *) a;
+  auto * rhs = (clusterinfo_t *) b;
+
+  if (lhs->clusterno < rhs->clusterno)
     {
       return -1;
     }
-  else if (x->clusterno > y->clusterno)
+  if (lhs->clusterno > rhs->clusterno)
     {
       return +1;
     }
-  else if (x->seqno < y->seqno)
+
+  if (lhs->seqno < rhs->seqno)
     {
       return -1;
     }
-  else if (x->seqno > y->seqno)
+  if (lhs->seqno > rhs->seqno)
     {
       return +1;
     }
-  else
-    {
-      return 0;
-    }
+  return 0;
 }
+
 
 inline auto compare_byclusterabundance(const void * a, const void * b) -> int
 {
-  auto * x = (clusterinfo_t *) a;
-  auto * y = (clusterinfo_t *) b;
-  if (cluster_abundance[x->clusterno] > cluster_abundance[y->clusterno])
+  auto * lhs = (clusterinfo_t *) a;
+  auto * rhs = (clusterinfo_t *) b;
+
+  if (cluster_abundance[lhs->clusterno] > cluster_abundance[rhs->clusterno])
     {
       return -1;
     }
-  else if (cluster_abundance[x->clusterno] < cluster_abundance[y->clusterno])
+  if (cluster_abundance[lhs->clusterno] < cluster_abundance[rhs->clusterno])
     {
       return +1;
     }
-  else if (x->clusterno < y->clusterno)
+
+  if (lhs->clusterno < rhs->clusterno)
     {
       return -1;
     }
-  else if (x->clusterno > y->clusterno)
+  if (lhs->clusterno > rhs->clusterno)
     {
       return +1;
     }
-  else if (x->seqno < y->seqno)
+
+  if (lhs->seqno < rhs->seqno)
     {
       return -1;
     }
-  else if (x->seqno > y->seqno)
+  if (lhs->seqno > rhs->seqno)
     {
       return +1;
     }
-  else
-    {
-      return 0;
-    }
+  return 0;
 }
 
 
@@ -209,18 +212,19 @@ inline auto cluster_query_core(struct searchinfo_s * si) -> void
   si->query_head = db_getheader(seqno);
   si->qsize = db_getabundance(seqno);
   si->qseqlen = db_getsequencelen(seqno);
-  if (si->strand)
+  if (si->strand != 0)
     {
       reverse_complement(si->qsequence, db_getsequence(seqno), si->qseqlen);
     }
   else
     {
-      strcpy(si->qsequence, db_getsequence(seqno));
+      std::strcpy(si->qsequence, db_getsequence(seqno));
     }
 
   /* perform search */
   search_onequery(si, opt_qmask);
 }
+
 
 inline auto cluster_worker(int64_t t) -> void
 {
@@ -234,6 +238,7 @@ inline auto cluster_worker(int64_t t) -> void
         }
     }
 }
+
 
 auto threads_worker(void * vp) -> void *
 {
@@ -258,6 +263,7 @@ auto threads_worker(void * vp) -> void *
   xpthread_mutex_unlock(&tip->mutex);
   return nullptr;
 }
+
 
 auto threads_wakeup(int queries) -> void
 {
@@ -296,6 +302,7 @@ auto threads_wakeup(int queries) -> void
     }
 }
 
+
 auto threads_init() -> void
 {
   xpthread_attr_init(&attr);
@@ -314,6 +321,7 @@ auto threads_init() -> void
       xpthread_create(&tip->thread, &attr, threads_worker, (void *) (int64_t) t);
     }
 }
+
 
 auto threads_exit() -> void
 {
@@ -337,6 +345,7 @@ auto threads_exit() -> void
   xfree(ti);
   xpthread_attr_destroy(&attr);
 }
+
 
 auto cluster_query_init(struct searchinfo_s * si) -> void
 {
@@ -382,15 +391,15 @@ auto cluster_query_exit(struct searchinfo_s * si) -> void
   unique_exit(si->uh);
   minheap_exit(si->m);
 
-  if (si->qsequence)
+  if (si->qsequence != nullptr)
     {
       xfree(si->qsequence);
     }
-  if (si->hits)
+  if (si->hits != nullptr)
     {
       xfree(si->hits);
     }
-  if (si->kmers)
+  if (si->kmers != nullptr)
     {
       xfree(si->kmers);
     }
@@ -400,9 +409,9 @@ auto cluster_query_exit(struct searchinfo_s * si) -> void
 auto relabel_otu(int clusterno, char * sequence, int seqlen) -> char *
 {
   char * label = nullptr;
-  if (opt_relabel)
+  if (opt_relabel != nullptr)
     {
-      int const size = strlen(opt_relabel) + 21;
+      int const size = std::strlen(opt_relabel) + 21;
       label = (char *) xmalloc(size);
       snprintf(label, size, "%s%d", opt_relabel, clusterno + 1);
     }
@@ -436,9 +445,9 @@ auto cluster_core_results_hit(struct hit * best,
 {
   ++count_matched;
 
-  if (opt_otutabout or opt_mothur_shared_out or opt_biomout)
+  if ((opt_otutabout != nullptr) or (opt_mothur_shared_out != nullptr) or (opt_biomout != nullptr))
     {
-      if (opt_relabel or opt_relabel_self or opt_relabel_sha1 or opt_relabel_md5)
+      if ((opt_relabel != nullptr) or opt_relabel_self or opt_relabel_sha1 or opt_relabel_md5)
         {
           char * label = relabel_otu(clusterno,
                                      db_getsequence(best->target),
@@ -454,7 +463,7 @@ auto cluster_core_results_hit(struct hit * best,
         }
     }
 
-  if (fp_uc)
+  if (fp_uc != nullptr)
     {
       results_show_uc_one(fp_uc,
                           best, query_head,
@@ -462,21 +471,21 @@ auto cluster_core_results_hit(struct hit * best,
                           clusterno);
     }
 
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       results_show_alnout(fp_alnout,
                           best, 1, query_head,
                           qsequence, qseqlen);
     }
 
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       results_show_samout(fp_samout,
                           best, 1, query_head,
                           qsequence, qsequence_rc);
     }
 
-  if (fp_fastapairs)
+  if (fp_fastapairs != nullptr)
     {
       results_show_fastapairs_one(fp_fastapairs,
                                   best,
@@ -485,7 +494,7 @@ auto cluster_core_results_hit(struct hit * best,
                                   qsequence_rc);
     }
 
-  if (fp_qsegout)
+  if (fp_qsegout != nullptr)
     {
       results_show_qsegout_one(fp_qsegout,
                                best,
@@ -495,32 +504,32 @@ auto cluster_core_results_hit(struct hit * best,
                                qsequence_rc);
     }
 
-  if (fp_tsegout)
+  if (fp_tsegout != nullptr)
     {
       results_show_tsegout_one(fp_tsegout,
                                best);
     }
 
-  if (fp_userout)
+  if (fp_userout != nullptr)
     {
       results_show_userout_one(fp_userout, best, query_head,
                                qsequence, qseqlen, qsequence_rc);
     }
 
-  if (fp_blast6out)
+  if (fp_blast6out != nullptr)
     {
       results_show_blast6out_one(fp_blast6out, best, query_head,
                                  qseqlen);
     }
 
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fasta_print_general(fp_matched,
                           nullptr,
                           qsequence,
                           qseqlen,
                           query_head,
-                          strlen(query_head),
+                          std::strlen(query_head),
                           qsize,
                           count_matched,
                           -1.0,
@@ -538,9 +547,9 @@ auto cluster_core_results_nohit(int clusterno,
 {
   ++count_notmatched;
 
-  if (opt_otutabout or opt_mothur_shared_out or opt_biomout)
+  if ((opt_otutabout != nullptr) or (opt_mothur_shared_out != nullptr) or (opt_biomout != nullptr))
     {
-      if (opt_relabel or opt_relabel_self or opt_relabel_sha1 or opt_relabel_md5)
+      if ((opt_relabel != nullptr) or opt_relabel_self or opt_relabel_sha1 or opt_relabel_md5)
         {
           char * label = relabel_otu(clusterno, qsequence, qseqlen);
           otutable_add(query_head, label, qsize);
@@ -552,41 +561,41 @@ auto cluster_core_results_nohit(int clusterno,
         }
     }
 
-  if (opt_uc)
+  if (opt_uc != nullptr)
     {
       fprintf(fp_uc, "S\t%d\t%d\t*\t*\t*\t*\t*\t", clusters, qseqlen);
       header_fprint_strip(fp_uc,
                           query_head,
-                          strlen(query_head),
+                          std::strlen(query_head),
                           opt_xsize,
                           opt_xee,
                           opt_xlength);
       fprintf(fp_uc, "\t*\n");
     }
 
-  if (opt_output_no_hits)
+  if (opt_output_no_hits != 0)
     {
-      if (fp_userout)
+      if (fp_userout != nullptr)
         {
           results_show_userout_one(fp_userout, nullptr, query_head,
                                    qsequence, qseqlen, qsequence_rc);
         }
 
-      if (fp_blast6out)
+      if (fp_blast6out != nullptr)
         {
           results_show_blast6out_one(fp_blast6out, nullptr, query_head,
                                      qseqlen);
         }
     }
 
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fasta_print_general(fp_notmatched,
                           nullptr,
                           qsequence,
                           qseqlen,
                           query_head,
-                          strlen(query_head),
+                          std::strlen(query_head),
                           qsize,
                           count_notmatched,
                           -1.0,
@@ -597,21 +606,18 @@ auto cluster_core_results_nohit(int clusterno,
 
 auto compare_kmersample(const void * a, const void * b) -> int
 {
-  unsigned int const x = * (unsigned int *) a;
-  unsigned int const y = * (unsigned int *) b;
+  unsigned int const lhs = * (unsigned int *) a;
+  unsigned int const rhs = * (unsigned int *) b;
 
-  if (x < y)
+  if (lhs < rhs)
     {
       return -1;
     }
-  else if (x > y)
+  if (lhs > rhs)
     {
       return +1;
     }
-  else
-    {
-      return 0;
-    }
+  return 0;
 }
 
 
@@ -625,8 +631,8 @@ auto cluster_core_parallel() -> void
 
   /* allocate memory for the search information for each query;
      and initialize it */
-  si_plus  = (struct searchinfo_s *) xmalloc(max_queries *
-                                             sizeof(struct searchinfo_s));
+  si_plus = (struct searchinfo_s *) xmalloc(max_queries *
+                                            sizeof(struct searchinfo_s));
   if (opt_strand > 1)
     {
       si_minus = (struct searchinfo_s *) xmalloc(max_queries *
@@ -645,23 +651,29 @@ auto cluster_core_parallel() -> void
 
   std::vector<int> extra_list(max_queries);
 
-  LinearMemoryAligner lma;
-  int64_t * scorematrix = lma.scorematrix_create(opt_match, opt_mismatch);
-  lma.set_parameters(scorematrix,
-                     opt_gap_open_query_left,
-                     opt_gap_open_target_left,
-                     opt_gap_open_query_interior,
-                     opt_gap_open_target_interior,
-                     opt_gap_open_query_right,
-                     opt_gap_open_target_right,
-                     opt_gap_extension_query_left,
-                     opt_gap_extension_target_left,
-                     opt_gap_extension_query_interior,
-                     opt_gap_extension_target_interior,
-                     opt_gap_extension_query_right,
-                     opt_gap_extension_target_right);
+  struct Scoring scoring;
+  scoring.match = opt_match;
+  scoring.mismatch = opt_mismatch;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_open_query_left = opt_gap_open_query_left;
+  scoring.gap_open_target_left = opt_gap_open_target_left;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_open_target_interior = opt_gap_open_target_interior;
+  scoring.gap_open_query_right = opt_gap_open_query_right;
+  scoring.gap_open_target_right = opt_gap_open_target_right;
+  scoring.gap_extension_query_left = opt_gap_extension_query_left;
+  scoring.gap_extension_target_left = opt_gap_extension_target_left;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_extension_target_interior = opt_gap_extension_target_interior;
+  scoring.gap_extension_query_right = opt_gap_extension_query_right;
+  scoring.gap_extension_target_right = opt_gap_extension_target_right;
 
-  int lastlength = INT_MAX;
+
+  LinearMemoryAligner lma(scoring);
+
+
+  auto lastlength = std::numeric_limits<int>::max();
 
   int seqno = 0;
 
@@ -669,7 +681,7 @@ auto cluster_core_parallel() -> void
 
   progress_init("Clustering", db_getnucleotidecount());
 
-  while(seqno < seqcount)
+  while (seqno < seqcount)
     {
       /* prepare work for the threads in sia[i] */
       /* read query sequences into the search info (si) for each thread */
@@ -683,7 +695,7 @@ auto cluster_core_parallel() -> void
               int const length = db_getsequencelen(seqno);
 
 #if 1
-              if (opt_cluster_smallmem and (not opt_usersort) and (length > lastlength))
+              if ((opt_cluster_smallmem != nullptr) and (opt_usersort == 0) and (length > lastlength))
                 {
                   fatal("Sequences not sorted by length and --usersort not specified.");
                 }
@@ -718,28 +730,28 @@ auto cluster_core_parallel() -> void
 
           for (int s = 0; s < opt_strand; s++)
             {
-              struct searchinfo_s * si = s ? si_m : si_p;
+              struct searchinfo_s * si = (s != 0) ? si_m : si_p;
 
               int added = 0;
 
-              if (extra_count)
+              if (extra_count != 0)
                 {
                   /* Check if there is a hit with one of the non-matching
                      extra sequences just analysed in this round */
 
                   for (int j = 0; j < extra_count; j++)
                     {
-                      struct searchinfo_s * sic = si_plus + extra_list[j];
+                      struct searchinfo_s const * sic = si_plus + extra_list[j];
 
                       /* find the number of shared unique kmers */
-                      unsigned int const shared
-                        = unique_count_shared(si->uh,
+                      auto const shared
+                        = unique_count_shared(*si->uh,
                                               opt_wordlength,
                                               sic->kmersamplecount,
                                               sic->kmersample);
 
                       /* check if min number of shared kmers is satisfied */
-                      if (search_enough_kmers(si, shared))
+                      if (search_enough_kmers(*si, shared))
                         {
                           unsigned int const length = sic->qseqlen;
 
@@ -799,7 +811,7 @@ auto cluster_core_parallel() -> void
 
               /* now go through the hits and determine final status of each */
 
-              if (added)
+              if (added != 0)
                 {
                   si->rejects = 0;
                   si->accepts = 0;
@@ -824,7 +836,7 @@ auto cluster_core_parallel() -> void
                         {
                           /* Test accept/reject criteria before alignment */
                           unsigned int const target = hit->target;
-                          if (search_acceptable_unaligned(si, target))
+                          if (search_acceptable_unaligned(*si, target))
                             {
                               /* perform vectorized alignment */
                               /* but only using 1 sequence ! */
@@ -865,7 +877,7 @@ auto cluster_core_parallel() -> void
 
                                   char * tseq = db_getsequence(target);
 
-                                  if (nwcigar)
+                                  if (nwcigar != nullptr)
                                     {
                                       xfree(nwcigar);
                                     }
@@ -911,8 +923,8 @@ auto cluster_core_parallel() -> void
                                 (nwalignmentlength - hit->nwdiff) /
                                 nwalignmentlength;
 
-                              hit->shortest = MIN(si->qseqlen, tseqlen);
-                              hit->longest = MAX(si->qseqlen, tseqlen);
+                              hit->shortest = std::min(si->qseqlen, static_cast<int>(tseqlen));
+                              hit->longest = std::max(si->qseqlen, static_cast<int>(tseqlen));
 
                               /* trim alignment and compute numbers
                                  excluding terminal gaps */
@@ -929,7 +941,7 @@ auto cluster_core_parallel() -> void
                       if (not hit->rejected)
                         {
                           /* test accept/reject criteria after alignment */
-                          if (search_acceptable_aligned(si, hit))
+                          if (search_acceptable_aligned(*si, hit))
                             {
                               ++si->accepts;
                             }
@@ -945,7 +957,7 @@ auto cluster_core_parallel() -> void
                   int new_hit_count = si->hit_count;
                   for (int t = si->hit_count - 1; t >= 0; t--)
                     {
-                      struct hit * hit = si->hits + t;
+                      struct hit const * hit = si->hits + t;
                       if (not hit->accepted and not hit->rejected)
                         {
                           new_hit_count = t;
@@ -972,7 +984,7 @@ auto cluster_core_parallel() -> void
 
           int const myseqno = si_p->query_no;
 
-          if (best)
+          if (best != nullptr)
             {
               /* a hit was found, cluster current sequence with hit */
               int const target = best->target;
@@ -983,7 +995,7 @@ auto cluster_core_parallel() -> void
                                        si_p->query_head,
                                        si_p->qseqlen,
                                        si_p->qsequence,
-                                       best->strand ? si_m->qsequence : nullptr,
+                                       (best->strand != 0) ? si_m->qsequence : nullptr,
                                        si_p->qsize);
 
               /* update cluster info about this sequence */
@@ -1023,12 +1035,12 @@ auto cluster_core_parallel() -> void
           /* free alignments */
           for (int s = 0; s < opt_strand; s++)
             {
-              struct searchinfo_s * si = s ? si_m : si_p;
+              struct searchinfo_s const * si = (s != 0) ? si_m : si_p;
               for (int j = 0; j < si->hit_count; j++)
                 {
                   if (si->hits[j].aligned)
                     {
-                      if (si->hits[j].nwalignment)
+                      if (si->hits[j].nwalignment != nullptr)
                         {
                           xfree(si->hits[j].nwalignment);
                         }
@@ -1064,30 +1076,29 @@ auto cluster_core_parallel() -> void
   /* terminate threads and clean up */
   threads_exit();
 
-  xfree(scorematrix);
 }
 
 
 auto cluster_core_serial() -> void
 {
-  struct searchinfo_s si_p[1];
-  struct searchinfo_s si_m[1];
+  std::array<struct searchinfo_s, 1> si_p {{}};  // refactoring: direct initialization?
+  std::array<struct searchinfo_s, 1> si_m {{}};
 
-  cluster_query_init(si_p);
+  cluster_query_init(si_p.data());
   if (opt_strand > 1)
     {
-      cluster_query_init(si_m);
+      cluster_query_init(si_m.data());
     }
 
-  int lastlength = INT_MAX;
+  auto lastlength = std::numeric_limits<int>::max();
 
   progress_init("Clustering", seqcount);
-  for (int seqno=0; seqno<seqcount; seqno++)
+  for (int seqno = 0; seqno < seqcount; seqno++)
     {
       int const length = db_getsequencelen(seqno);
 
 #if 1
-      if (opt_cluster_smallmem and (not opt_usersort) and (length > lastlength))
+      if ((opt_cluster_smallmem != nullptr) and (opt_usersort == 0) and (length > lastlength))
         {
           fatal("Sequences not sorted by length and --usersort not specified.");
         }
@@ -1095,37 +1106,37 @@ auto cluster_core_serial() -> void
 
       lastlength = length;
 
-      si_p->query_no = seqno;
-      si_p->strand = 0;
-      cluster_query_core(si_p);
+      si_p[0].query_no = seqno;
+      si_p[0].strand = 0;
+      cluster_query_core(si_p.data());
 
       if (opt_strand > 1)
         {
-          si_m->query_no = seqno;
-          si_m->strand = 1;
-          cluster_query_core(si_m);
+          si_m[0].query_no = seqno;
+          si_m[0].strand = 1;
+          cluster_query_core(si_m.data());
         }
 
       struct hit * best = nullptr;
       if (opt_sizeorder)
         {
-          best = search_findbest2_bysize(si_p, si_m);
+          best = search_findbest2_bysize(si_p.data(), si_m.data());
         }
       else
         {
-          best = search_findbest2_byid(si_p, si_m);
+          best = search_findbest2_byid(si_p.data(), si_m.data());
         }
 
-      if (best)
+      if (best != nullptr)
         {
           int const target = best->target;
           cluster_core_results_hit(best,
                                    clusterinfo[target].clusterno,
-                                   si_p->query_head,
-                                   si_p->qseqlen,
-                                   si_p->qsequence,
-                                   best->strand ? si_m->qsequence : nullptr,
-                                   si_p->qsize);
+                                   si_p[0].query_head,
+                                   si_p[0].qseqlen,
+                                   si_p[0].qsequence,
+                                   (best->strand != 0) ? si_m[0].qsequence : nullptr,
+                                   si_p[0].qsize);
           clusterinfo[seqno].seqno = seqno;
           clusterinfo[seqno].clusterno = clusterinfo[target].clusterno;
           clusterinfo[seqno].cigar = best->nwalignment;
@@ -1140,23 +1151,23 @@ auto cluster_core_serial() -> void
           clusterinfo[seqno].strand = 0;
           dbindex_addsequence(seqno, opt_qmask);
           cluster_core_results_nohit(clusters,
-                                     si_p->query_head,
-                                     si_p->qseqlen,
-                                     si_p->qsequence,
+                                     si_p[0].query_head,
+                                     si_p[0].qseqlen,
+                                     si_p[0].qsequence,
                                      nullptr,
-                                     si_p->qsize);
+                                     si_p[0].qsize);
           ++clusters;
         }
 
       /* free alignments */
       for (int s = 0; s < opt_strand; s++)
         {
-          struct searchinfo_s * si = s ? si_m : si_p;
+          struct searchinfo_s const * si = (s != 0) ? si_m.data() : si_p.data();
           for (int i = 0; i < si->hit_count; i++)
             {
               if (si->hits[i].aligned)
                 {
-                  if (si->hits[i].nwalignment)
+                  if (si->hits[i].nwalignment != nullptr)
                     {
                       xfree(si->hits[i].nwalignment);
                     }
@@ -1168,10 +1179,10 @@ auto cluster_core_serial() -> void
     }
   progress_done();
 
-  cluster_query_exit(si_p);
+  cluster_query_exit(si_p.data());
   if (opt_strand > 1)
     {
-      cluster_query_exit(si_m);
+      cluster_query_exit(si_m.data());
     }
 }
 
@@ -1180,28 +1191,28 @@ auto cluster(char * dbname,
              char * cmdline,
              char * progheader) -> void
 {
-  if (opt_centroids)
+  if (opt_centroids != nullptr)
     {
       fp_centroids = fopen_output(opt_centroids);
-      if (not fp_centroids)
+      if (fp_centroids == nullptr)
         {
           fatal("Unable to open centroids file for writing");
         }
     }
 
-  if (opt_uc)
+  if (opt_uc != nullptr)
     {
       fp_uc = fopen_output(opt_uc);
-      if (not fp_uc)
+      if (fp_uc == nullptr)
         {
           fatal("Unable to open uc file for writing");
         }
     }
 
-  if (opt_alnout)
+  if (opt_alnout != nullptr)
     {
       fp_alnout = fopen_output(opt_alnout);
-      if (not fp_alnout)
+      if (fp_alnout == nullptr)
         {
           fatal("Unable to open alignment output file for writing");
         }
@@ -1210,100 +1221,100 @@ auto cluster(char * dbname,
       fprintf(fp_alnout, "%s\n", progheader);
     }
 
-  if (opt_samout)
+  if (opt_samout != nullptr)
     {
       fp_samout = fopen_output(opt_samout);
-      if (not fp_samout)
+      if (fp_samout == nullptr)
         {
           fatal("Unable to open SAM output file for writing");
         }
     }
 
-  if (opt_userout)
+  if (opt_userout != nullptr)
     {
       fp_userout = fopen_output(opt_userout);
-      if (not fp_userout)
+      if (fp_userout == nullptr)
         {
           fatal("Unable to open user-defined output file for writing");
         }
     }
 
-  if (opt_blast6out)
+  if (opt_blast6out != nullptr)
     {
       fp_blast6out = fopen_output(opt_blast6out);
-      if (not fp_blast6out)
+      if (fp_blast6out == nullptr)
         {
           fatal("Unable to open blast6-like output file for writing");
         }
     }
 
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fp_fastapairs = fopen_output(opt_fastapairs);
-      if (not fp_fastapairs)
+      if (fp_fastapairs == nullptr)
         {
           fatal("Unable to open fastapairs output file for writing");
         }
     }
 
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fp_qsegout = fopen_output(opt_qsegout);
-      if (not fp_qsegout)
+      if (fp_qsegout == nullptr)
         {
           fatal("Unable to open qsegout output file for writing");
         }
     }
 
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fp_tsegout = fopen_output(opt_tsegout);
-      if (not fp_tsegout)
+      if (fp_tsegout == nullptr)
         {
           fatal("Unable to open tsegout output file for writing");
         }
     }
 
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fp_matched = fopen_output(opt_matched);
-      if (not fp_matched)
+      if (fp_matched == nullptr)
         {
           fatal("Unable to open matched output file for writing");
         }
     }
 
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fp_notmatched = fopen_output(opt_notmatched);
-      if (not fp_notmatched)
+      if (fp_notmatched == nullptr)
         {
           fatal("Unable to open notmatched output file for writing");
         }
     }
 
-  if (opt_otutabout)
+  if (opt_otutabout != nullptr)
     {
       fp_otutabout = fopen_output(opt_otutabout);
-      if (not fp_otutabout)
+      if (fp_otutabout == nullptr)
         {
           fatal("Unable to open OTU table (text format) output file for writing");
         }
     }
 
-  if (opt_mothur_shared_out)
+  if (opt_mothur_shared_out != nullptr)
     {
       fp_mothur_shared_out = fopen_output(opt_mothur_shared_out);
-      if (not fp_mothur_shared_out)
+      if (fp_mothur_shared_out == nullptr)
         {
           fatal("Unable to open OTU table (mothur format) output file for writing");
         }
     }
 
-  if (opt_biomout)
+  if (opt_biomout != nullptr)
     {
       fp_biomout = fopen_output(opt_biomout);
-      if (not fp_biomout)
+      if (fp_biomout == nullptr)
         {
           fatal("Unable to open OTU table (biom 1.0 format) output file for writing");
         }
@@ -1319,7 +1330,7 @@ auto cluster(char * dbname,
     {
       dust_all();
     }
-  else if ((opt_qmask == MASK_SOFT) and (opt_hardmask))
+  else if ((opt_qmask == MASK_SOFT) and (opt_hardmask != 0))
     {
       hardmask_all();
     }
@@ -1328,11 +1339,11 @@ auto cluster(char * dbname,
 
   seqcount = db_getsequencecount();
 
-  if (opt_cluster_fast)
+  if (opt_cluster_fast != nullptr)
     {
       db_sortbylength();
     }
-  else if (opt_cluster_size or opt_cluster_unoise)
+  else if ((opt_cluster_size != nullptr) or (opt_cluster_unoise != nullptr))
     {
       db_sortbyabundance();
     }
@@ -1357,7 +1368,7 @@ auto cluster(char * dbname,
   std::vector<clusterinfo_t> clusterinfo_v(seqcount);
   clusterinfo = clusterinfo_v.data();
 
-  if (opt_log)
+  if (opt_log != nullptr)
     {
       uint64_t const slots = 1ULL << (static_cast<uint64_t>(opt_wordlength) << 1ULL);
       fprintf(fp_log, "\n");
@@ -1397,6 +1408,7 @@ auto cluster(char * dbname,
       ++cluster_size[clusterno];
     }
 
+  // refactoring: isolate in a function (returns struct abundance_stats)
   auto const minmax_elements = std::minmax_element(cluster_abundance_v.cbegin(),
                                                    cluster_abundance_v.cend());
   auto const abundance_min = cluster_abundance_v.empty() ? 0 : *std::get<0>(minmax_elements);
@@ -1429,13 +1441,11 @@ auto cluster(char * dbname,
 
   /* allocate memory for full file name of the clusters files */
   std::FILE * fp_clusters = nullptr;
-  char * fn_clusters = nullptr;
-  int fn_clusters_size = 0;
-  if (opt_clusters)
-    {
-      fn_clusters_size += strlen(opt_clusters) + 25;
-      fn_clusters = (char *) xmalloc(fn_clusters_size);
-    }
+  static constexpr auto space_for_cluster_id = 25;  // up to 25 digits
+  std::vector<char> fn_clusters;
+  if (opt_clusters != nullptr) {
+    fn_clusters.reserve(std::strlen(opt_clusters) + space_for_cluster_id);
+  }
 
   int lastcluster = -1;
   int ordinal = 0;
@@ -1451,7 +1461,7 @@ auto cluster(char * dbname,
           /* performed with first sequence only in each cluster */
           /* the first sequence is always the centroid */
 
-          if (opt_centroids)
+          if (opt_centroids != nullptr)
             {
               fasta_print_general(fp_centroids,
                                   nullptr,
@@ -1467,7 +1477,7 @@ auto cluster(char * dbname,
                                   nullptr, 0.0);
             }
 
-          if (opt_uc)
+          if (opt_uc != nullptr)
             {
               fprintf(fp_uc, "C\t%d\t%" PRId64 "\t*\t*\t*\t*\t*\t",
                       clusterno,
@@ -1481,7 +1491,7 @@ auto cluster(char * dbname,
               fprintf(fp_uc, "\t*\n");
             }
 
-          if (opt_clusters)
+          if (opt_clusters != nullptr)
             {
               /* close previous (except for first time) and open new file */
               if (lastcluster != -1)
@@ -1490,13 +1500,13 @@ auto cluster(char * dbname,
                 }
 
               ordinal = 0;
-              snprintf(fn_clusters,
-                       fn_clusters_size,
+              snprintf(fn_clusters.data(),
+                       fn_clusters.capacity(),
                        "%s%d",
                        opt_clusters,
                        clusterno);
-              fp_clusters = fopen_output(fn_clusters);
-              if (not fp_clusters)
+              fp_clusters = fopen_output(fn_clusters.data());
+              if (fp_clusters == nullptr)
                 {
                   fatal("Unable to open clusters file for writing");
                 }
@@ -1507,7 +1517,7 @@ auto cluster(char * dbname,
 
       /* performed for all sequences */
 
-      if (opt_clusters)
+      if (opt_clusters != nullptr)
         {
           ++ordinal;
           fasta_print_db_relabel(fp_clusters, seqno, ordinal);
@@ -1519,13 +1529,9 @@ auto cluster(char * dbname,
   if (lastcluster != -1)
     {
       /* performed with the last sequence */
-      if (opt_clusters)
+      if (opt_clusters != nullptr)
         {
           fclose(fp_clusters);
-          if (fn_clusters)
-            {
-              xfree(fn_clusters);
-            }
         }
     }
 
@@ -1538,7 +1544,7 @@ auto cluster(char * dbname,
           fprintf(stderr, "Clusters: 0\n");
           fprintf(stderr, "Singletons: 0\n");
         }
-      if (opt_log)
+      if (opt_log != nullptr)
         {
           fprintf(fp_log, "Clusters: 0\n");
           fprintf(fp_log, "Singletons: 0\n");
@@ -1561,7 +1567,7 @@ auto cluster(char * dbname,
                   100.0 * singletons / clusters);
         }
 
-      if (opt_log)
+      if (opt_log != nullptr)
         {
           fprintf(fp_log,
                   "Clusters: %d Size min %" PRId64 ", max %" PRId64 ", avg %.1f\n",
@@ -1578,7 +1584,7 @@ auto cluster(char * dbname,
         }
     }
 
-  if (opt_msaout or opt_consout or opt_profile)
+  if ((opt_msaout != nullptr) or (opt_consout != nullptr) or (opt_profile != nullptr))
     {
       int msa_target_count = 0;
       std::vector<struct msa_target_s> msa_target_list_v(size_max);
@@ -1588,28 +1594,28 @@ auto cluster(char * dbname,
       std::FILE * fp_consout = nullptr;
       std::FILE * fp_profile = nullptr;
 
-      if (opt_msaout)
+      if (opt_msaout != nullptr)
         {
           fp_msaout = fopen_output(opt_msaout);
-          if (not (fp_msaout))
+          if (fp_msaout == nullptr)
             {
               fatal("Unable to open msaout file");
             }
         }
 
-      if (opt_consout)
+      if (opt_consout != nullptr)
         {
           fp_consout = fopen_output(opt_consout);
-          if (not (fp_consout))
+          if (fp_consout == nullptr)
             {
               fatal("Unable to open consout file");
             }
         }
 
-      if (opt_profile)
+      if (opt_profile != nullptr)
         {
           fp_profile = fopen_output(opt_profile);
-          if (not (fp_profile))
+          if (fp_profile == nullptr)
             {
               fatal("Unable to open profile file");
             }
@@ -1660,17 +1666,17 @@ auto cluster(char * dbname,
 
       progress_done();
 
-      if (fp_profile)
+      if (fp_profile != nullptr)
         {
           fclose(fp_profile);
         }
 
-      if (fp_msaout)
+      if (fp_msaout != nullptr)
         {
           fclose(fp_msaout);
         }
 
-      if (fp_consout)
+      if (fp_consout != nullptr)
         {
           fclose(fp_consout);
         }
@@ -1690,19 +1696,19 @@ auto cluster(char * dbname,
 
   // clusterinfo not used after this point
 
-  if (fp_biomout)
+  if (fp_biomout != nullptr)
     {
       otutable_print_biomout(fp_biomout);
       fclose(fp_biomout);
     }
 
-  if (fp_otutabout)
+  if (fp_otutabout != nullptr)
     {
       otutable_print_otutabout(fp_otutabout);
       fclose(fp_otutabout);
     }
 
-  if (fp_mothur_shared_out)
+  if (fp_mothur_shared_out != nullptr)
     {
       otutable_print_mothur_shared_out(fp_mothur_shared_out);
       fclose(fp_mothur_shared_out);
@@ -1710,47 +1716,48 @@ auto cluster(char * dbname,
 
   otutable_done();
 
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fclose(fp_matched);
     }
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fclose(fp_notmatched);
     }
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fclose(fp_fastapairs);
     }
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fclose(fp_qsegout);
     }
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fclose(fp_tsegout);
     }
-  if (fp_blast6out)
+  if (fp_blast6out != nullptr)
     {
       fclose(fp_blast6out);
     }
-  if (fp_userout)
+  if (fp_userout != nullptr)
     {
       fclose(fp_userout);
+      clean_up(); // free userfields allocation
     }
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       fclose(fp_alnout);
     }
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       fclose(fp_samout);
     }
-  if (fp_uc)
+  if (fp_uc != nullptr)
     {
       fclose(fp_uc);
     }
-  if (fp_centroids)
+  if (fp_centroids != nullptr)
     {
       fclose(fp_centroids);
     }

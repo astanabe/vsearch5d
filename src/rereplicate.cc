@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,69 +61,66 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/check_output_filehandle.hpp"
+#include "utils/fatal.hpp"
 #include "utils/maps.hpp"
+#include "utils/open_file.hpp"
 #include <cinttypes> // macros PRIu64 and PRId64
 #include <cstdio>  // std::FILE, std::fprintf
 #include <cstdint>  // int64_t
 
 
-auto rereplicate(struct Parameters & parameters) -> void
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+  
+}  // end of anonymous namespace
+
+
+auto rereplicate(struct Parameters const & parameters) -> void
 {
-  if (parameters.opt_output == nullptr) {
-    fatal("FASTA output file for rereplicate must be specified with --output");
-  }
-
-  auto * fp_output = fopen_output(parameters.opt_output);
-  if (fp_output == nullptr) {
-    fatal("Unable to open FASTA output file for writing");
-  }
-
-  opt_xsize = true;
-  parameters.opt_xsize = true;
-  fastx_handle file_handle = fasta_open(parameters.opt_rereplicate);
-  auto const filesize = static_cast<int64_t>(fasta_get_size(file_handle));
+  auto const output_handle = open_output_file(parameters.opt_output);
+  check_mandatory_output_handle(parameters.opt_output, (not output_handle));
+  auto * input_handle = fasta_open(parameters.opt_rereplicate);
+  auto const filesize = static_cast<int64_t>(fasta_get_size(input_handle));
 
   progress_init("Rereplicating", filesize);
 
   int64_t n_amplicons = 0;
-  int64_t missing = 0;
+  auto missing_abundance = false;
   int64_t n_reads = 0;
   auto const truncateatspace = not parameters.opt_notrunclabels;
-  while (fasta_next(file_handle, truncateatspace, chrmap_no_change_vector.data()))
+  while (fasta_next(input_handle, truncateatspace, chrmap_no_change_vector.data()))
     {
       ++n_amplicons;
-      int64_t abundance = fasta_get_abundance_and_presence(file_handle);
+      auto abundance = fasta_get_abundance_and_presence(input_handle);
       if (abundance == 0)
         {
-          ++missing;
+          missing_abundance = true;
           abundance = 1;
         }
 
-      for(int64_t i = 0; i < abundance; ++i)
+      for (int64_t i = 0; i < abundance; ++i)
         {
           ++n_reads;
-          if (parameters.opt_output != nullptr)
-            {
-              fasta_print_general(fp_output,
-                                  nullptr,
-                                  fasta_get_sequence(file_handle),
-                                  static_cast<int>(fasta_get_sequence_length(file_handle)),
-                                  fasta_get_header(file_handle),
-                                  static_cast<int>(fasta_get_header_length(file_handle)),
-                                  1,
-                                  static_cast<int>(n_reads),
-                                  -1.0,
-                                  -1, -1, nullptr, 0.0);
-            }
+          fasta_print_general(output_handle.get(),
+                              nullptr,
+                              fasta_get_sequence(input_handle),
+                              static_cast<int>(fasta_get_sequence_length(input_handle)),
+                              fasta_get_header(input_handle),
+                              static_cast<int>(fasta_get_header_length(input_handle)),
+                              1,
+                              static_cast<int>(n_reads),
+                              -1.0,
+                              -1, -1, nullptr, 0.0);
         }
 
-      progress_update(fasta_get_position(file_handle));
+      progress_update(fasta_get_position(input_handle));
     }
   progress_done();
 
   if (not parameters.opt_quiet)
     {
-      if (missing != 0)
+      if (missing_abundance)
         {
           std::fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
         }
@@ -133,15 +129,12 @@ auto rereplicate(struct Parameters & parameters) -> void
 
   if (parameters.opt_log != nullptr)
     {
-      if (missing != 0)
+      if (missing_abundance)
         {
           std::fprintf(stderr, "WARNING: Missing abundance information for some input sequences, assumed 1\n");
         }
       std::fprintf(fp_log, "Rereplicated %" PRId64 " reads from %" PRId64 " amplicons\n", n_reads, n_amplicons);
     }
 
-  fasta_close(file_handle);
-  if (fp_output != nullptr) {
-    static_cast<void>(std::fclose(fp_output));
-  }
+  fasta_close(input_handle);
 }

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,47 +60,78 @@
 
 */
 
-#include "maps.h"
+#ifndef LINMEMALIGN_HPP
+#define LINMEMALIGN_HPP
+
 #include <cstdio>  // std::FILE, std::size_t
 #include <cstdint>  // int64_t
+#include <vector>
+
+
+struct Scoring {
+  // aligned nucleotides
+  int64_t match = 0;
+  int64_t mismatch = 0;
+
+  // general gap penalties
+  int64_t gap_open_query_interior = 0;  // q
+  int64_t gap_extension_query_interior = 0; // r
+
+  // specific gap penalties
+  int64_t gap_open_query_left = 0;           // go_q_l
+  int64_t gap_open_target_left = 0;          // go_t_l
+  //      gap_open_query_interior            // go_q_i
+  int64_t gap_open_target_interior = 0;      // go_t_i
+  int64_t gap_open_query_right = 0;          // go_q_r
+  int64_t gap_open_target_right = 0;         // go_t_r
+  int64_t gap_extension_query_left = 0;      // ge_q_l
+  int64_t gap_extension_target_left = 0;     // ge_t_l
+  //      gap_extension_query_interior       // ge_q_i
+  int64_t gap_extension_target_interior = 0; // ge_t_i
+  int64_t gap_extension_query_right = 0;     // ge_q_r
+  int64_t gap_extension_target_right = 0;    // ge_t_r
+};
 
 
 class LinearMemoryAligner
 {
-  char op;
-  int64_t op_run;
-  int64_t cigar_alloc;
-  int64_t cigar_length;
-  char * cigar_string;
+private:
+  static constexpr auto matrix_size = 16U;
+  char op = '\0';
+  int64_t op_run = 0;
+  int64_t cigar_alloc = 0;
+  int64_t cigar_length = 0;
+  std::vector<char> cigar_string;
 
-  char * a_seq;
-  char * b_seq;
+  char * a_seq = nullptr;
+  char * b_seq = nullptr;
 
-  int64_t * scorematrix;
-
-  int64_t q;
-  int64_t r;
+  // initialize a 16x16 matrix
+  std::vector<std::vector<int64_t>> scorematrix = std::vector<std::vector<int64_t>>(matrix_size, std::vector<int64_t>(matrix_size));
 
   /* gap penalties for open/extension query/target left/interior/right */
-  int64_t go_q_l;
-  int64_t go_t_l;
-  int64_t go_q_i;
-  int64_t go_t_i;
-  int64_t go_q_r;
-  int64_t go_t_r;
-  int64_t ge_q_l;
-  int64_t ge_t_l;
-  int64_t ge_q_i;
-  int64_t ge_t_i;
-  int64_t ge_q_r;
-  int64_t ge_t_r;
+  int64_t go_q_l = 0;
+  int64_t go_t_l = 0;
+  int64_t go_q_i = 0;
+  int64_t go_t_i = 0;
+  int64_t go_q_r = 0;
+  int64_t go_t_r = 0;
+  int64_t ge_q_l = 0;
+  int64_t ge_t_l = 0;
+  int64_t ge_q_i = 0;
+  int64_t ge_t_i = 0;
+  int64_t ge_q_r = 0;
+  int64_t ge_t_r = 0;
 
-  std::size_t vector_alloc;
+  std::size_t vector_alloc = 0;
 
-  int64_t * HH;
-  int64_t * EE;
-  int64_t * XX;
-  int64_t * YY;
+  std::vector<int64_t> HH;
+  std::vector<int64_t> EE;
+  std::vector<int64_t> XX;
+  std::vector<int64_t> YY;
+
+  // initializers
+  auto scorematrix_fill(struct Scoring const & scoring) -> void;
 
   auto cigar_reset() -> void;
 
@@ -109,14 +139,7 @@ class LinearMemoryAligner
 
   auto cigar_add(char _op, int64_t run) -> void;
 
-  auto subst_score(int64_t lhs_pos, int64_t rhs_pos) -> int64_t
-  {
-    /* return substitution score for replacing symbol at position lhs_pos in a
-       with symbol at position rhs_pos in b */
-    constexpr auto offset = 16;
-    return scorematrix[(chrmap_4bit[(int) (b_seq[rhs_pos])] * offset) +
-                       chrmap_4bit[(int) (a_seq[lhs_pos])]];
-  }
+  auto subst_score(char lhs, char rhs) -> int64_t;
 
   auto diff(int64_t a_start,
             int64_t b_start,
@@ -129,31 +152,12 @@ class LinearMemoryAligner
             bool b_left,      /* includes left end of b  */
             bool b_right) -> void;    /* includes right end of b */
 
-  auto alloc_vectors(std::size_t x) -> void;
+  auto alloc_vectors(std::size_t size) -> void;
 
-  auto show_matrix() -> void;
 
 public:
 
-  LinearMemoryAligner();
-
-  ~LinearMemoryAligner();
-
-  auto scorematrix_create(int64_t match, int64_t mismatch) -> int64_t *;
-
-  auto set_parameters(int64_t * _scorematrix,
-                      int64_t _gap_open_query_left,
-                      int64_t _gap_open_target_left,
-                      int64_t _gap_open_query_interior,
-                      int64_t _gap_open_target_interior,
-                      int64_t _gap_open_query_right,
-                      int64_t _gap_open_target_right,
-                      int64_t _gap_extension_query_left,
-                      int64_t _gap_extension_target_left,
-                      int64_t _gap_extension_query_interior,
-                      int64_t _gap_extension_target_interior,
-                      int64_t _gap_extension_query_right,
-                      int64_t _gap_extension_target_right) -> void;
+  explicit LinearMemoryAligner(struct Scoring const & scoring);
 
   auto align(char * _a_seq,
              char * _b_seq,
@@ -168,5 +172,6 @@ public:
                   int64_t * nwmatches,
                   int64_t * nwmismatches,
                   int64_t * nwgaps) -> void;
-
 };
+
+#endif // LINMEMALIGN_HPP

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,6 +61,9 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/check_output_filehandle.hpp"
+#include "utils/fatal.hpp"
+#include "utils/open_file.hpp"
 #include <algorithm>  // std::min, std::shuffle
 #include <cstdio>  // std::FILE, std::size_t
 #include <numeric>  // std::iota
@@ -69,68 +71,65 @@
 #include <vector>
 
 
+// anonymous namespace: limit visibility and usage to this translation unit
 namespace {
-  // anonymous namespace to avoid linker error (multiple definitions
-  // of function with identical names and parameters)
+
   auto create_deck() -> std::vector<int> {
     auto const dbsequencecount = db_getsequencecount();
     std::vector<int> deck(dbsequencecount);
     std::iota(deck.begin(), deck.end(), 0);
     return deck;
   }
-}
 
 
-auto generate_seed(long int const user_seed) -> unsigned int {
-  if (user_seed != 0) {
-    return static_cast<unsigned int>(user_seed);
+  auto generate_seed(long int const user_seed) -> unsigned int {
+    if (user_seed != 0) {
+      return static_cast<unsigned int>(user_seed);
+    }
+    std::random_device number_generator;
+    return number_generator();
   }
-  std::random_device number_generator;
-  return number_generator();
-}
 
 
-auto shuffle_deck(std::vector<int> & deck, long int const user_seed) -> void {
-  static constexpr auto one_hundred_percent = 100ULL;
-  progress_init("Shuffling", one_hundred_percent);
-  auto const seed = generate_seed(user_seed);
-  std::mt19937_64 uniform_generator(seed);
-  std::shuffle(deck.begin(), deck.end(), uniform_generator);
-  progress_done();
-}
-
-
-auto truncate_deck(std::vector<int> & deck,
-                   long int const n_first_sequences) -> void {
-  if (deck.size() > static_cast<unsigned long>(n_first_sequences))
-    deck.resize(n_first_sequences);
-}
-
-
-auto output_shuffled_fasta(std::vector<int> const & deck,
-                           std::FILE * output_file) -> void {
-  progress_init("Writing output", deck.size());
-  auto counter = std::size_t{0};
-  for (auto const sequence_id: deck) {
-    fasta_print_db_relabel(output_file, sequence_id, counter + 1);
-    progress_update(counter);
-    ++counter;
+  auto shuffle_deck(std::vector<int> & deck, long int const user_seed) -> void {
+    static constexpr auto one_hundred_percent = 100ULL;
+    progress_init("Shuffling", one_hundred_percent);
+    auto const seed = generate_seed(user_seed);
+    std::mt19937_64 uniform_generator(seed);
+    std::shuffle(deck.begin(), deck.end(), uniform_generator);
+    progress_done();
   }
-  progress_done();
-}
+
+
+  // refactoring: turn into template, remove conditional
+  auto truncate_deck(std::vector<int> & deck,
+                     long int const n_first_sequences) -> void {
+    // auto const new_size = std::min(deck.size(), n_first_sequences)
+    // deck.resize(new_size);
+    if (deck.size() > static_cast<unsigned long>(n_first_sequences)) {
+      deck.resize(n_first_sequences);
+    }
+  }
+
+
+  auto output_shuffled_fasta(std::vector<int> const & deck,
+                             std::FILE * output_file) -> void {
+    progress_init("Writing output", deck.size());
+    auto counter = std::size_t{0};
+    for (auto const sequence_id: deck) {
+      fasta_print_db_relabel(output_file, sequence_id, counter + 1);
+      progress_update(counter);
+      ++counter;
+    }
+    progress_done();
+  }
+
+}  // end of anonymous namespace
 
 
 auto shuffle(struct Parameters const & parameters) -> void {
-  // pre-conditions
-  if (parameters.opt_output == nullptr) {
-    fatal("Output file for shuffling must be specified with --output");
-  }
-
-  auto * fp_output = fopen_output(parameters.opt_output);
-  if (fp_output == nullptr) {
-    fatal("Unable to open shuffle output file for writing");
-  }
-
+  auto const output_handle = open_output_file(parameters.opt_output);
+  check_mandatory_output_handle(parameters.opt_output, (not output_handle));
   db_read(parameters.opt_shuffle, 0);
   show_rusage();
 
@@ -139,11 +138,8 @@ auto shuffle(struct Parameters const & parameters) -> void {
   show_rusage();
 
   truncate_deck(deck, parameters.opt_topn);
-  output_shuffled_fasta(deck, fp_output);
+  output_shuffled_fasta(deck, output_handle.get());
   show_rusage();
 
   db_free();
-  if (fp_output != nullptr) {
-    static_cast<void>(std::fclose(fp_output));
-  }
 }

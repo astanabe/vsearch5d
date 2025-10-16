@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -65,7 +64,7 @@ auto udb_detect_isudb(const char * filename) -> bool;
 auto udb_read(const char * filename,
               bool create_bitmaps,
               bool parse_abundances) -> void;
-auto udb_fasta() -> void;
-auto udb_info() -> void;
-auto udb_make() -> void;
-auto udb_stats() -> void;
+auto udb_fasta(struct Parameters const & parameters) -> void;
+auto udb_info(struct Parameters const & parameters) -> void;
+auto udb_make(struct Parameters const & parameters) -> void;
+auto udb_stats(struct Parameters const & parameters) -> void;

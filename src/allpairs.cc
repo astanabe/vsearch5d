@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,7 +62,10 @@
 
 #include "vsearch5d.h"
 #include "align_simd.h"
+#include "linmemalign.h"
 #include "mask.h"
+#include "utils/fatal.hpp"
+#include "utils/xpthread.hpp"
 #include <algorithm>  // std::min, std::max
 #include <cstdint>  // int64_t
 #include <cstdio>  // std::fprintf, std::FILE, std:fclose, std::size_t
@@ -100,37 +102,37 @@ static FILE * fp_tsegout = nullptr;
 static int count_matched = 0;
 static int count_notmatched = 0;
 
-inline auto allpairs_hit_compare_typed(struct hit * x, struct hit * y) -> int
+
+inline auto allpairs_hit_compare_typed(struct hit * lhs, struct hit * rhs) -> int
 {
   // high id, then low id
   // early target, then late target
 
-  if (x->id > y->id)
+  if (lhs->id > rhs->id)
     {
       return -1;
     }
-  else if (x->id < y->id)
+  if (lhs->id < rhs->id)
     {
       return +1;
     }
-  else if (x->target < y->target)
+  if (lhs->target < rhs->target)
     {
       return -1;
     }
-  else if (x->target > y->target)
+  if (lhs->target > rhs->target)
     {
       return +1;
     }
-  else
-    {
-      return 0;
-    }
+  return 0;
 }
 
-auto allpairs_hit_compare(const void * a, const void * b) -> int
+
+auto allpairs_hit_compare(const void * lhs, const void * rhs) -> int
 {
-  return allpairs_hit_compare_typed((struct hit *) a, (struct hit *) b);
+  return allpairs_hit_compare_typed((struct hit *) lhs, (struct hit *) rhs);
 }
+
 
 auto allpairs_output_results(int hit_count,
                              struct hit * hits,
@@ -142,7 +144,7 @@ auto allpairs_output_results(int hit_count,
   /* show results */
   auto const toreport = std::min(opt_maxhits, static_cast<int64_t>(hit_count));
 
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       results_show_alnout(fp_alnout,
                           hits,
@@ -152,7 +154,7 @@ auto allpairs_output_results(int hit_count,
                           qseqlen);
     }
 
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       results_show_samout(fp_samout,
                           hits,
@@ -162,20 +164,20 @@ auto allpairs_output_results(int hit_count,
                           qsequence_rc);
     }
 
-  if (toreport)
+  if (toreport != 0)
     {
       double const top_hit_id = hits[0].id;
 
       for (int t = 0; t < toreport; t++)
         {
-          struct hit * hp = hits + t;
+          struct hit const * hp = hits + t;
 
-          if (opt_top_hits_only and (hp->id < top_hit_id))
+          if ((opt_top_hits_only != 0) and (hp->id < top_hit_id))
             {
               break;
             }
 
-          if (fp_fastapairs)
+          if (fp_fastapairs != nullptr)
             {
               results_show_fastapairs_one(fp_fastapairs,
                                           hp,
@@ -184,7 +186,7 @@ auto allpairs_output_results(int hit_count,
                                           qsequence_rc);
             }
 
-          if (fp_qsegout)
+          if (fp_qsegout != nullptr)
             {
               results_show_qsegout_one(fp_qsegout,
                                        hp,
@@ -194,15 +196,15 @@ auto allpairs_output_results(int hit_count,
                                        qsequence_rc);
             }
 
-          if (fp_tsegout)
+          if (fp_tsegout != nullptr)
             {
               results_show_tsegout_one(fp_tsegout,
                                        hp);
             }
 
-          if (fp_uc)
+          if (fp_uc != nullptr)
             {
-              if ((t == 0) or opt_uc_allhits)
+              if ((t == 0) or (opt_uc_allhits != 0))
                 {
                   results_show_uc_one(fp_uc,
                                       hp,
@@ -212,7 +214,7 @@ auto allpairs_output_results(int hit_count,
                 }
             }
 
-          if (fp_userout)
+          if (fp_userout != nullptr)
             {
               results_show_userout_one(fp_userout,
                                        hp,
@@ -222,7 +224,7 @@ auto allpairs_output_results(int hit_count,
                                        qsequence_rc);
             }
 
-          if (fp_blast6out)
+          if (fp_blast6out != nullptr)
             {
               results_show_blast6out_one(fp_blast6out,
                                          hp,
@@ -233,7 +235,7 @@ auto allpairs_output_results(int hit_count,
     }
   else
     {
-      if (fp_uc)
+      if (fp_uc != nullptr)
         {
           results_show_uc_one(fp_uc,
                               nullptr,
@@ -242,9 +244,9 @@ auto allpairs_output_results(int hit_count,
                               0);
         }
 
-      if (opt_output_no_hits)
+      if (opt_output_no_hits != 0)
         {
-          if (fp_userout)
+          if (fp_userout != nullptr)
             {
               results_show_userout_one(fp_userout,
                                        nullptr,
@@ -254,7 +256,7 @@ auto allpairs_output_results(int hit_count,
                                        qsequence_rc);
             }
 
-          if (fp_blast6out)
+          if (fp_blast6out != nullptr)
             {
               results_show_blast6out_one(fp_blast6out,
                                          nullptr,
@@ -264,17 +266,17 @@ auto allpairs_output_results(int hit_count,
         }
     }
 
-  if (hit_count)
+  if (hit_count != 0)
     {
       ++count_matched;
-      if (opt_matched)
+      if (opt_matched != nullptr)
         {
           fasta_print_general(fp_matched,
                               nullptr,
                               qsequence,
                               qseqlen,
                               query_head,
-                              strlen(query_head),
+                              std::strlen(query_head),
                               0,
                               count_matched,
                               -1.0,
@@ -284,14 +286,14 @@ auto allpairs_output_results(int hit_count,
   else
     {
       ++count_notmatched;
-      if (opt_notmatched)
+      if (opt_notmatched != nullptr)
         {
           fasta_print_general(fp_notmatched,
                               nullptr,
                               qsequence,
                               qseqlen,
                               query_head,
-                              strlen(query_head),
+                              std::strlen(query_head),
                               0,
                               count_notmatched,
                               -1.0,
@@ -300,13 +302,13 @@ auto allpairs_output_results(int hit_count,
     }
 }
 
+
 auto allpairs_thread_run(int64_t t) -> void
 {
   (void) t;
 
   struct searchinfo_s searchinfo;
 
-  struct searchinfo_s * si = & searchinfo;
   searchinfo.hits_v.resize(seqcount);
   searchinfo.hits = searchinfo.hits_v.data();
 
@@ -326,23 +328,27 @@ auto allpairs_thread_run(int64_t t) -> void
                         opt_gap_extension_target_right);
 
 
-  LinearMemoryAligner lma;
+  struct Scoring scoring;
+  scoring.match = opt_match;
+  scoring.mismatch = opt_mismatch;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_open_query_left = opt_gap_open_query_left;
+  scoring.gap_open_target_left = opt_gap_open_target_left;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_open_target_interior = opt_gap_open_target_interior;
+  scoring.gap_open_query_right = opt_gap_open_query_right;
+  scoring.gap_open_target_right = opt_gap_open_target_right;
+  scoring.gap_extension_query_left = opt_gap_extension_query_left;
+  scoring.gap_extension_target_left = opt_gap_extension_target_left;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_extension_target_interior = opt_gap_extension_target_interior;
+  scoring.gap_extension_query_right = opt_gap_extension_query_right;
+  scoring.gap_extension_target_right = opt_gap_extension_target_right;
 
-  int64_t * scorematrix = lma.scorematrix_create(opt_match, opt_mismatch);
 
-  lma.set_parameters(scorematrix,
-                     opt_gap_open_query_left,
-                     opt_gap_open_target_left,
-                     opt_gap_open_query_interior,
-                     opt_gap_open_target_interior,
-                     opt_gap_open_query_right,
-                     opt_gap_open_target_right,
-                     opt_gap_extension_query_left,
-                     opt_gap_extension_target_left,
-                     opt_gap_extension_query_interior,
-                     opt_gap_extension_target_interior,
-                     opt_gap_extension_query_right,
-                     opt_gap_extension_target_right);
+  LinearMemoryAligner lma(scoring);
+
 
   /* allocate memory for alignment results */
   auto const maxhits = static_cast<std::size_t>(seqcount);
@@ -383,14 +389,14 @@ auto allpairs_thread_run(int64_t t) -> void
 
           for (int target = searchinfo.query_no + 1; target < seqcount; target++)
             {
-              if (opt_acceptall or search_acceptable_unaligned(si, target))
+              if ((opt_acceptall != 0) or search_acceptable_unaligned(searchinfo, target))
                 {
                   pseqnos[searchinfo.hit_count] = target;
                   ++searchinfo.hit_count;
                 }
             }
 
-          if (searchinfo.hit_count)
+          if (searchinfo.hit_count != 0)
             {
               /* perform alignments */
 
@@ -484,7 +490,7 @@ auto allpairs_thread_run(int64_t t) -> void
                   align_trim(hit);
 
                   /* test accept/reject criteria after alignment */
-                  if (opt_acceptall or search_acceptable_aligned(si, hit))
+                  if ((opt_acceptall != 0) or search_acceptable_aligned(searchinfo, hit))
                     {
                       finalhits[searchinfo.accepts] = *hit;
                       ++searchinfo.accepts;
@@ -508,7 +514,7 @@ auto allpairs_thread_run(int64_t t) -> void
                                   nullptr);
 
           /* update stats */
-          if (searchinfo.accepts)
+          if (searchinfo.accepts != 0)
             {
               ++qmatches;
             }
@@ -538,9 +544,8 @@ auto allpairs_thread_run(int64_t t) -> void
     }
 
   search16_exit(searchinfo.s);
-
-  xfree(scorematrix);
 }
+
 
 auto allpairs_thread_worker(void * void_ptr) -> void *
 {
@@ -548,6 +553,7 @@ auto allpairs_thread_worker(void * void_ptr) -> void *
   allpairs_thread_run(nth_thread);
   return nullptr;
 }
+
 
 auto allpairs_thread_worker_run() -> void
 {
@@ -573,115 +579,112 @@ auto allpairs_thread_worker_run() -> void
 }
 
 
-auto allpairs_global(char * cmdline, char * progheader) -> void
+auto allpairs_global(struct Parameters const & parameters, char * cmdline, char * progheader) -> void
 {
-  opt_strand = 1;
-  opt_uc_allhits = 1;
-
   /* open output files */
 
-  if (opt_alnout)
+  if (opt_alnout != nullptr)
     {
       fp_alnout = fopen_output(opt_alnout);
-      if (not fp_alnout)
+      if (fp_alnout == nullptr)
         {
           fatal("Unable to open alignment output file for writing");
         }
 
-      fprintf(fp_alnout, "%s\n", cmdline);
+      fprintf(fp_alnout, "%s\n", parameters.command_line.c_str());
       fprintf(fp_alnout, "%s\n", progheader);
     }
 
-  if (opt_samout)
+  if (opt_samout != nullptr)
     {
       fp_samout = fopen_output(opt_samout);
-      if (not fp_samout)
+      if (fp_samout == nullptr)
         {
           fatal("Unable to open SAM output file for writing");
         }
     }
 
-  if (opt_userout)
+  if (opt_userout != nullptr)
     {
       fp_userout = fopen_output(opt_userout);
-      if (not fp_userout)
+      if (fp_userout == nullptr)
         {
           fatal("Unable to open user-defined output file for writing");
         }
     }
 
-  if (opt_blast6out)
+  if (opt_blast6out != nullptr)
     {
       fp_blast6out = fopen_output(opt_blast6out);
-      if (not fp_blast6out)
+      if (fp_blast6out == nullptr)
         {
           fatal("Unable to open blast6-like output file for writing");
         }
     }
 
-  if (opt_uc)
+  if (opt_uc != nullptr)
     {
       fp_uc = fopen_output(opt_uc);
-      if (not fp_uc)
+      if (fp_uc == nullptr)
         {
           fatal("Unable to open uc output file for writing");
         }
     }
 
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fp_fastapairs = fopen_output(opt_fastapairs);
-      if (not fp_fastapairs)
+      if (fp_fastapairs == nullptr)
         {
           fatal("Unable to open fastapairs output file for writing");
         }
     }
 
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fp_qsegout = fopen_output(opt_qsegout);
-      if (not fp_qsegout)
+      if (fp_qsegout == nullptr)
         {
           fatal("Unable to open qsegout output file for writing");
         }
     }
 
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fp_tsegout = fopen_output(opt_tsegout);
-      if (not fp_tsegout)
+      if (fp_tsegout == nullptr)
         {
           fatal("Unable to open tsegout output file for writing");
         }
     }
 
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fp_matched = fopen_output(opt_matched);
-      if (not fp_matched)
+      if (fp_matched == nullptr)
         {
           fatal("Unable to open matched output file for writing");
         }
     }
 
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fp_notmatched = fopen_output(opt_notmatched);
-      if (not fp_notmatched)
+      if (fp_notmatched == nullptr)
         {
           fatal("Unable to open notmatched output file for writing");
         }
     }
 
-  db_read(opt_allpairs_global, 0);
+  db_read(parameters.opt_allpairs_global, 0);
 
-  results_show_samheader(fp_samout, cmdline, opt_allpairs_global);
+  results_show_samheader(fp_samout, cmdline, parameters.opt_allpairs_global);
 
-  if (opt_qmask == MASK_DUST)
+  if (parameters.opt_qmask == MASK_DUST)
     {
       dust_all();
     }
-  else if ((opt_qmask == MASK_SOFT) and (opt_hardmask))
+  else if ((parameters.opt_qmask == MASK_SOFT) and parameters.opt_hardmask)
     {
       hardmask_all();
     }
@@ -694,7 +697,7 @@ auto allpairs_global(char * cmdline, char * progheader) -> void
   qmatches = 0;
   queries = 0;
 
-  std::vector<pthread_t> pthread_v(opt_threads);
+  std::vector<pthread_t> pthread_v(parameters.opt_threads);
   pthread = pthread_v.data();
 
   /* init mutexes for input and output */
@@ -702,11 +705,11 @@ auto allpairs_global(char * cmdline, char * progheader) -> void
   xpthread_mutex_init(&mutex_output, nullptr);
 
   progress = 0;
-  progress_init("Aligning", MAX(0, ((int64_t) seqcount) * ((int64_t) seqcount - 1)) / 2);  // refactoring: issue with parenthesis?
+  progress_init("Aligning", std::max(int64_t{0}, ((int64_t) seqcount) * ((int64_t) seqcount - 1)) / 2);  // refactoring: issue with parenthesis?
   allpairs_thread_worker_run();
   progress_done();
 
-  if (not opt_quiet)
+  if (not parameters.opt_quiet)
     {
       fprintf(stderr, "Matching query sequences: %d of %d",
               qmatches, queries);
@@ -717,7 +720,7 @@ auto allpairs_global(char * cmdline, char * progheader) -> void
       fprintf(stderr, "\n");
     }
 
-  if (opt_log)
+  if (parameters.opt_log != nullptr)
     {
       fprintf(fp_log, "Matching query sequences: %d of %d",
               qmatches, queries);
@@ -735,45 +738,49 @@ auto allpairs_global(char * cmdline, char * progheader) -> void
 
   /* clean up, global */
   db_free();
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fclose(fp_matched);
     }
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fclose(fp_notmatched);
     }
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fclose(fp_fastapairs);
     }
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fclose(fp_qsegout);
     }
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fclose(fp_tsegout);
     }
-  if (fp_uc)
+  if (fp_uc != nullptr)
     {
       fclose(fp_uc);
     }
-  if (fp_blast6out)
+  if (fp_blast6out != nullptr)
     {
       fclose(fp_blast6out);
     }
-  if (fp_userout)
+  if (fp_userout != nullptr)
     {
       fclose(fp_userout);
     }
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       fclose(fp_alnout);
     }
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       fclose(fp_samout);
     }
   show_rusage();
+
+  if (fp_userout != nullptr) {
+    clean_up(); // free userfields allocation
+  }
 }

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -71,12 +70,12 @@ auto unique_exit(struct uhandle_s * unique_handle) -> void;
 auto unique_count(struct uhandle_s * unique_handle,
                   int wordlength,
                   int seqlen,
-                  char * seq,
+                  char const * seq,
                   unsigned int * listlen,
-                  unsigned int * * list,
+                  unsigned int const * * list,
                   int seqmask) -> void;
 
-auto unique_count_shared(struct uhandle_s * unique_handle,
+auto unique_count_shared(struct uhandle_s const & unique_handle,
                          int wordlength,
                          int listlen,
-                         unsigned int * list) -> int;
+                         unsigned int const * list) -> unsigned int;

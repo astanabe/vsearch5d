@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -89,30 +88,25 @@ auto elem_smaller(elem_t * lhs, elem_t * rhs) -> int
     {
       return 1;
     }
-  else
-    if (lhs->count > rhs->count)
-      {
-        return 0;
-      }
-    else
-      if (lhs->length > rhs->length)
-        {
-          return 1;
-        }
-      else
-        if (lhs->length < rhs->length)
-          {
-            return 0;
-          }
-        else
-          if (lhs->seqno > rhs->seqno)
-            {
-              return 1;
-            }
-          else
-            {
-              return 0;
-            }
+  if (lhs->count > rhs->count)
+    {
+      return 0;
+    }
+
+  if (lhs->length > rhs->length)
+    {
+      return 1;
+    }
+  if (lhs->length < rhs->length)
+    {
+      return 0;
+    }
+
+  if (lhs->seqno > rhs->seqno)
+    {
+      return 1;
+    }
+  return 0;
 }
 
 
@@ -128,35 +122,29 @@ auto minheap_compare(const void * lhs_a, const void * rhs_b) -> int
     {
       return -1;
     }
-  else
-    if (lhs->count > rhs->count)
-      {
-        return +1;
-      }
-    else
-      if (lhs->length > rhs->length)
-        {
-          return -1;
-        }
-      else
-        if (lhs->length < rhs->length)
-          {
-            return +1;
-          }
-        else
-          if (lhs->seqno > rhs->seqno)
-            {
-              return -1;
-            }
-          else
-            if (lhs->seqno < rhs->seqno)
-              {
-                return +1;
-              }
-            else
-              {
-                return 0;
-              }
+  if (lhs->count > rhs->count)
+    {
+      return +1;
+    }
+
+  if (lhs->length > rhs->length)
+    {
+      return -1;
+    }
+  if (lhs->length < rhs->length)
+    {
+      return +1;
+    }
+
+  if (lhs->seqno > rhs->seqno)
+    {
+      return -1;
+    }
+  if (lhs->seqno < rhs->seqno)
+    {
+      return +1;
+    }
+  return 0;
 }
 
 
@@ -190,7 +178,7 @@ auto minheap_replaceroot(minheap_t * a_minheap, elem_t tmp) -> void
   while (nth_child < a_minheap->count)
     {
       /* if two children: swap with the one with smallest value */
-      if ((nth_child + 1 < a_minheap->count) &&
+      if ((nth_child + 1 < a_minheap->count) and
           (elem_smaller(a_minheap->array + nth_child + 1, a_minheap->array + nth_child) != 0))
         {
           ++nth_child;
@@ -208,7 +196,7 @@ auto minheap_replaceroot(minheap_t * a_minheap, elem_t tmp) -> void
 
       /* step down */
       parent = nth_child;
-      nth_child = 2 * parent + 1;
+      nth_child = (2 * parent) + 1;
     }
 
   a_minheap->array[parent] = tmp;
@@ -221,9 +209,10 @@ auto minheap_add(minheap_t * a_minheap, elem_t * n) -> void
     {
       /* space for another item at end; swap upwards */
 
-      int index = a_minheap->count++;
+      int index = a_minheap->count;
+      ++a_minheap->count;
       int pos = (index - 1) / 2;
-      while ((index > 0) && (elem_smaller(n, a_minheap->array + pos) != 0))
+      while ((index > 0) and (elem_smaller(n, a_minheap->array + pos) != 0))
         {
           a_minheap->array[index] = a_minheap->array[pos];
           index = pos;
@@ -269,11 +258,8 @@ auto minheap_sort(minheap_t * a_minheap) -> void
 auto minheap_poplast(minheap_t * a_minheap) -> elem_t
 {
   /* return top element and restore order */
-  static const elem_t zero = {0, 0, 0};
-
-  if (a_minheap->count != 0) {
-    return a_minheap->array[--a_minheap->count];
+  if (a_minheap->count == 0) {
+    return elem_t{0, 0, 0};
   }
-
-  return zero;
+  return a_minheap->array[--a_minheap->count];
 }

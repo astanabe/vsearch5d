@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,7 +61,11 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
+#include "align_simd.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
+#include <algorithm>  // std::min, std::max
+#include <array>
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::printf, std::snprintf
 #include <cstring>  // std::memcpy, std::memmove, std::memset, std::strcpy, std::strlen
@@ -78,16 +81,27 @@
   maximize score
 */
 
+constexpr auto matrix_size = 16;
 constexpr auto CHANNELS = 8;
 constexpr auto CDEPTH = 4;
+constexpr auto maxseqlenproduct = 25000000LL;
+
+
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+
+  constexpr std::array<char, 16> sym_nt_4bit = {{'-', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'}};
+
+}  // end of anonymous namespace
+
 
 /*
   Due to memory usage, limit the product of the length of the sequences.
   If the product of the query length and any target sequence length
   is above the limit, the alignment will not be computed and a score
-  of SHRT_MAX will be returned as the score.
+  of SHORT_MAX (+32,767) will be returned as the score.
   If an overflow occurs during alignment computation, a score of
-  SHRT_MAX will also be returned.
+  SHORT_MAX (+32,767) will also be returned.
 
   The limit is set to 5 000 * 5 000 = 25 000 000. This will allocate up to
   200 MB per thread. It will align pairs of sequences less than 5000 nt long
@@ -95,12 +109,8 @@ constexpr auto CDEPTH = 4;
   the linear memory aligner.
 */
 
-#include "align_simd.h"
 
-
-constexpr auto MAXSEQLENPRODUCT = 25000000LL;
-
-static int64_t scorematrix[16][16];
+static std::array<std::array<int64_t, matrix_size>, matrix_size> scorematrix {{}};
 
 /*
   The macros below usually operate on 128-bit vectors of 8 signed
@@ -116,11 +126,11 @@ static int64_t scorematrix[16][16];
 
 using VECTOR_SHORT = __vector signed short;
 
-const __vector unsigned char perm_merge_long_low =
+constexpr __vector unsigned char perm_merge_long_low =
   {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17};
 
-const __vector unsigned char perm_merge_long_high =
+constexpr __vector unsigned char perm_merge_long_high =
   {0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
 
@@ -145,9 +155,10 @@ const __vector unsigned char perm_merge_long_high =
 
 using VECTOR_SHORT = int16x8_t;
 
-const uint16x8_t neon_mask =
+constexpr uint16x8_t neon_mask =
   {0x0003, 0x000c, 0x0030, 0x00c0, 0x0300, 0x0c00, 0x3000, 0xc000};
 
+// warning: ISO C++ forbids compound-literals [-Wpedantic] (line below) (clang specific?)
 #define v_init(a,b,c,d,e,f,g,h) (const VECTOR_SHORT){a,b,c,d,e,f,g,h}
 #define v_load(a) vld1q_s16((const int16_t *)(a))
 #define v_store(a, b) vst1q_s16((int16_t *)(a), (b))
@@ -202,37 +213,38 @@ using VECTOR_SHORT = __m128i;
 
 struct s16info_s
 {
-  VECTOR_SHORT matrix[32];
-  VECTOR_SHORT * hearray;
-  VECTOR_SHORT * dprofile;
-  VECTOR_SHORT ** qtable;
-  unsigned short * dir;
-  char * qseq;
-  uint64_t diralloc;
+  std::array<VECTOR_SHORT, 32> matrix {{}};
+  VECTOR_SHORT * hearray = nullptr;
+  VECTOR_SHORT * dprofile = nullptr;
+  VECTOR_SHORT ** qtable = nullptr;
+  unsigned short * dir = nullptr;
+  char * qseq = nullptr;
+  uint64_t diralloc = 0;
 
-  char * cigar;
-  char * cigarend;
-  int64_t cigaralloc;
-  int opcount;
-  char op;
+  char * cigar = nullptr;
+  char * cigarend = nullptr;
+  int64_t cigaralloc = 0;
+  int opcount = 0;
+  char op = '\0';
 
-  int qlen;
-  int maxdlen;
-  CELL penalty_gap_open_query_left;
-  CELL penalty_gap_open_target_left;
-  CELL penalty_gap_open_query_interior;
-  CELL penalty_gap_open_target_interior;
-  CELL penalty_gap_open_query_right;
-  CELL penalty_gap_open_target_right;
-  CELL penalty_gap_extension_query_left;
-  CELL penalty_gap_extension_target_left;
-  CELL penalty_gap_extension_query_interior;
-  CELL penalty_gap_extension_target_interior;
-  CELL penalty_gap_extension_query_right;
-  CELL penalty_gap_extension_target_right;
+  int qlen = 0;
+  int maxdlen = 0;
+  CELL penalty_gap_open_query_left = 0;
+  CELL penalty_gap_open_target_left = 0;
+  CELL penalty_gap_open_query_interior = 0;
+  CELL penalty_gap_open_target_interior = 0;
+  CELL penalty_gap_open_query_right = 0;
+  CELL penalty_gap_open_target_right = 0;
+  CELL penalty_gap_extension_query_left = 0;
+  CELL penalty_gap_extension_target_left = 0;
+  CELL penalty_gap_extension_query_interior = 0;
+  CELL penalty_gap_extension_target_interior = 0;
+  CELL penalty_gap_extension_query_right = 0;
+  CELL penalty_gap_extension_target_right = 0;
 };
 
-auto _mm_print(VECTOR_SHORT x) -> void
+
+auto _mm_print(VECTOR_SHORT const x) -> void
 {
   auto * y = (unsigned short *) &x;
   for (int i = 0; i < 8; i++)
@@ -241,7 +253,8 @@ auto _mm_print(VECTOR_SHORT x) -> void
     }
 }
 
-auto _mm_print2(VECTOR_SHORT x) -> void
+
+auto _mm_print2(VECTOR_SHORT const x) -> void
 {
   auto * y = (signed short *) &x;
   for (int i = 0; i < 8; i++)
@@ -250,13 +263,13 @@ auto _mm_print2(VECTOR_SHORT x) -> void
     }
 }
 
-auto dprofile_dump16(CELL * dprofile) -> void
+
+auto dprofile_dump16(CELL const * dprofile) -> void
 {
-  char * s = sym_nt_4bit;
   printf("\ndprofile:\n");
-  for (int i = 0; i < 16; i++)
+  for (int i = 0; i < matrix_size; i++)
     {
-      printf("%c: ", s[i]);
+      printf("%c: ", sym_nt_4bit[i]);
       for (int k = 0; k < CDEPTH; k++)
         {
           printf("[");
@@ -270,22 +283,24 @@ auto dprofile_dump16(CELL * dprofile) -> void
     }
 }
 
-auto dumpscorematrix(CELL * m) -> void
+
+auto dumpscorematrix(CELL const * score_matrix) -> void
 {
-  for (int i = 0; i < 16; i++)
+  for (auto i = 0; i < matrix_size; ++i)
     {
-      printf("%2d %c", i, sym_nt_4bit[i]);
-      for (int j = 0; j < 16; j++)
+      std::printf("%2d %c", i, sym_nt_4bit[i]);
+      for (auto j = 0; j < matrix_size; ++j)
         {
-          printf(" %2d", m[(16 * i) + j]);
+          std::printf(" %2d", score_matrix[(matrix_size * i) + j]);
         }
-      printf("\n");
+      std::printf("\n");
     }
 }
 
+
 auto dprofile_fill16(CELL * dprofile_word,
                      CELL * score_matrix_word,
-                     BYTE * dseq) -> void
+                     BYTE const * dseq) -> void
 {
 #if 0
   dumpscorematrix(score_matrix_word);
@@ -293,20 +308,20 @@ auto dprofile_fill16(CELL * dprofile_word,
   for (int j = 0; j < CDEPTH; j++)
     {
       for (int z = 0; z < CHANNELS; z++)
-        fprintf(stderr, " [%c]", sym_nt_4bit[dseq[j * CHANNELS + z]]);
-      fprintf(stderr, "\n");
+        std::fprintf(stderr, " [%c]", sym_nt_4bit[dseq[j * CHANNELS + z]]);
+      std::fprintf(stderr, "\n");
     }
 #endif
 
   for (int j = 0; j < CDEPTH; j++)
     {
-      int d[CHANNELS];
+      std::array<int, CHANNELS> d {{}};
       for (int z = 0; z < CHANNELS; z++)
         {
           d[z] = dseq[(j * CHANNELS) + z] << 4U;
         }
 
-      for (int i = 0; i < 16; i += 8)
+      for (int i = 0; i < matrix_size; i += 8)
         {
 
 #ifdef __PPC__
@@ -468,6 +483,7 @@ auto dprofile_fill16(CELL * dprofile_word,
 #endif
 }
 
+
 /*
   The direction bits are set as follows:
   in DIR[0..1] if F>H initially (must go up) (4th pri)
@@ -495,7 +511,7 @@ auto dprofile_fill16(CELL * dprofile_word,
 /* The VSX vec_bperm instruction puts the 16 selected bits of the first
    source into bits 48-63 of the destination. */
 
-const __vector unsigned char perm  = { 120, 112, 104,  96,  88,  80,  72,  64,
+constexpr __vector unsigned char perm  = { 120, 112, 104,  96,  88,  80,  72,  64,
   56,  48,  40,  32,  24,  16,   8,   0 };
 
 #define ALIGNCORE(H, N, F, V, RES, QR_q, R_q, QR_t, R_t, H_MIN, H_MAX)  \
@@ -595,7 +611,7 @@ auto aligncolumns_first(VECTOR_SHORT * Sm,
   VECTOR_SHORT E;
   VECTOR_SHORT HE;
   VECTOR_SHORT HF;
-  VECTOR_SHORT * vp = nullptr;
+  VECTOR_SHORT const * vp = nullptr;
 
   VECTOR_SHORT h_min = v_zero;
   VECTOR_SHORT h_max = v_zero;
@@ -720,6 +736,7 @@ auto aligncolumns_first(VECTOR_SHORT * Sm,
   *_h_max = h_max;
 }
 
+
 auto aligncolumns_rest(VECTOR_SHORT * Sm,
                        VECTOR_SHORT * hep,
                        VECTOR_SHORT ** qp,
@@ -756,7 +773,7 @@ auto aligncolumns_rest(VECTOR_SHORT * Sm,
   VECTOR_SHORT E;
   VECTOR_SHORT HE;
   VECTOR_SHORT HF;
-  VECTOR_SHORT * vp = nullptr;
+  VECTOR_SHORT const * vp = nullptr;
 
   VECTOR_SHORT h_min = v_zero;
   VECTOR_SHORT h_max = v_zero;
@@ -857,45 +874,45 @@ auto aligncolumns_rest(VECTOR_SHORT * Sm,
   *_h_max = h_max;
 }
 
-inline auto pushop(s16info_s * s, char newop) -> void
+
+inline auto pushop(s16info_s * s, char const newop) -> void
 {
-  if (newop == s->op)
+  if (newop == s->op) {
+    ++s->opcount;
+    return;
+  }
+  *--s->cigarend = s->op;
+  if (s->opcount > 1)
     {
-      s->opcount++;
+      static constexpr auto size = 11;
+      std::array<char, size> buffer {{}};
+      const auto length = std::snprintf(buffer.data(), size, "%d", s->opcount);
+      s->cigarend -= length;
+      std::memcpy(s->cigarend, buffer.data(), length);
     }
-  else
-    {
-      *--s->cigarend = s->op;
-      if (s->opcount > 1)
-        {
-          const int size = 11;
-          char buf[size];
-          int const len = snprintf(buf, size, "%d", s->opcount);
-          s->cigarend -= len;
-          memcpy(s->cigarend, buf, len);
-        }
-      s->op = newop;
-      s->opcount = 1;
-    }
+  s->op = newop;
+  s->opcount = 1;
 }
+
 
 inline auto finishop(s16info_s * s) -> void
 {
-  if (s->op && s->opcount)
+  if ((s->op != 0) and (s->opcount != 0))
     {
       *--s->cigarend = s->op;
       if (s->opcount > 1)
         {
-          const int size = 11;
-          char buf[size];
-          int const len = snprintf(buf, size, "%d", s->opcount);
-          s->cigarend -= len;
-          memcpy(s->cigarend, buf, len);
+          static constexpr auto size = 11;
+          std::array<char, size> buffer {{}};
+          const auto length = std::snprintf(buffer.data(), size, "%d", s->opcount);
+          s->cigarend -= length;
+          std::memcpy(s->cigarend, buffer.data(), length);
         }
       s->op = 0;
       s->opcount = 0;
     }
 }
+
 
 auto backtrack16(s16info_s * s,
                  char * dseq,
@@ -910,7 +927,7 @@ auto backtrack16(s16info_s * s,
   unsigned short * dirbuffer = s->dir;
   uint64_t const dirbuffersize = s->qlen * s->maxdlen * 4;
   uint64_t const qlen = s->qlen;
-  char * qseq = s->qseq;
+  char const * qseq = s->qseq;
 
   uint64_t const maskup      = 3ULL << (2 * channel + 0);
   uint64_t const maskleft    = 3ULL << (2 * channel + 16);
@@ -926,8 +943,8 @@ auto backtrack16(s16info_s * s,
       for (uint64_t j = 0; j < dlen; j++)
         {
           uint64_t d = *((uint64_t *) (dirbuffer +
-                                       (offset + 16 * s->qlen * (j / 4) +
-                                        16 * i + 4 * (j & 3)) % dirbuffersize));
+                                       (offset + matrix_size * s->qlen * (j / 4) +
+                                        matrix_size * i + 4 * (j & 3)) % dirbuffersize));
           if (d & maskup)
             {
               if (d & maskleft)
@@ -954,8 +971,8 @@ auto backtrack16(s16info_s * s,
       for (uint64_t j = 0; j < dlen; j++)
         {
           uint64_t d = *((uint64_t *) (dirbuffer +
-                                       (offset + 16 * s->qlen * (j / 4) +
-                                        16 * i + 4 * (j & 3)) % dirbuffersize));
+                                       (offset + matrix_size * s->qlen * (j / 4) +
+                                        matrix_size * i + 4 * (j & 3)) % dirbuffersize));
           if (d & maskextup)
             {
               if (d & maskextleft)
@@ -989,25 +1006,32 @@ auto backtrack16(s16info_s * s,
   s->op = 0;
   s->opcount = 1;
 
-  while ((i >= 0) && (j >= 0))
+  while ((i >= 0) and (j >= 0))
     {
       ++aligned;
 
+      // future refactoring:
+      // d = *(block1)
+      // block1 = dirbuffer + (block2 % dirbuffersize);
+      // block2 = (offset + block3 + block4 + block5);
+      // block3 = 16 * s->qlen * (j / 4);
+      // block4 = 16 * i;
+      // block5 = 4 * (j & 3);
       uint64_t const d = *((uint64_t *) (dirbuffer +
-                                   (offset + (16 * s->qlen * (j / 4)) +
-                                    (16 * i) + (4 * (j & 3))) % dirbuffersize));
+                                         ((offset + (matrix_size * s->qlen * (j / 4)) +
+                                           (matrix_size * i) + (4 * (j & 3))) % dirbuffersize)));
 
-      if ((s->op == 'I') && (d & maskextleft))
+      if ((s->op == 'I') and ((d & maskextleft) != 0U))
         {
           --j;
           pushop(s, 'I');
         }
-      else if ((s->op == 'D') && (d & maskextup))
+      else if ((s->op == 'D') and ((d & maskextup) != 0U))
         {
           --i;
           pushop(s, 'D');
         }
-      else if (d & maskleft)
+      else if ((d & maskleft) != 0U)
         {
           if (s->op != 'I')
             {
@@ -1016,7 +1040,7 @@ auto backtrack16(s16info_s * s,
           --j;
           pushop(s, 'I');
         }
-      else if (d & maskup)
+      else if ((d & maskup) != 0U)
         {
           if (s->op != 'D')
             {
@@ -1027,13 +1051,17 @@ auto backtrack16(s16info_s * s,
         }
       else
         {
-          if (chrmap_4bit[(int) (qseq[i])] & chrmap_4bit[(int) (dseq[j])])
+          if (is_equivalent_4bit(qseq[i], dseq[j]))
             {
-              if (opt_n_mismatch && ((chrmap_4bit[(int) (qseq[i])] == 15) ||
-                                     (chrmap_4bit[(int) (dseq[j])] == 15)))
-                ++mismatches;
+              if (opt_n_mismatch and ((map_4bit(qseq[i]) == 15) or
+                                     (map_4bit(dseq[j]) == 15)))
+                {
+                  ++mismatches;
+                }
               else
-                ++matches;
+                {
+                  ++matches;
+                }
             }
           else
             {
@@ -1045,7 +1073,7 @@ auto backtrack16(s16info_s * s,
         }
     }
 
-  while(i >= 0)
+  while (i >= 0)
     {
       ++aligned;
       if (s->op != 'D')
@@ -1056,7 +1084,7 @@ auto backtrack16(s16info_s * s,
       pushop(s, 'D');
     }
 
-  while(j >= 0)
+  while (j >= 0)
     {
       ++aligned;
       if (s->op != 'I')
@@ -1071,13 +1099,14 @@ auto backtrack16(s16info_s * s,
 
   /* move cigar to beginning of allocated memory area */
   int const cigarlen = s->cigar + s->qlen + s->maxdlen - s->cigarend;
-  memmove(s->cigar, s->cigarend, cigarlen + 1);
+  std::memmove(s->cigar, s->cigarend, cigarlen + 1);
 
   * paligned = aligned;
   * pmatches = matches;
   * pmismatches = mismatches;
   * pgaps = gaps;
 }
+
 
 auto search16_init(CELL score_match,
                    CELL score_mismatch,
@@ -1113,16 +1142,16 @@ auto search16_init(CELL score_match,
   s->cigarend = nullptr;
   s->cigaralloc = 0;
 
-  for (int i = 0; i < 16; i++)
+  for (auto i = 0U; i < matrix_size; ++i)
     {
-      for (int j = 0; j < 16; j++)
+      for (auto j = 0U; j < matrix_size; ++j)
         {
           CELL value = 0;
-          if (opt_n_mismatch && ((i == 15) || (j == 15)))
+          if (opt_n_mismatch and ((i == 15U) or (j == 15U)))
             {
               value = opt_mismatch;
             }
-          else if (ambiguous_4bit[i] or ambiguous_4bit[j])
+          else if (is_ambiguous_4bit(i) or is_ambiguous_4bit(j))
             {
               value = 0;
             }
@@ -1134,7 +1163,7 @@ auto search16_init(CELL score_match,
             {
               value = opt_mismatch;
             }
-          ((CELL *) (&s->matrix))[(16 * i) + j] = value;
+          ((CELL *) (s->matrix.data()))[(matrix_size * i) + j] = value;
           scorematrix[i][j] = value;
         }
     }
@@ -1171,45 +1200,47 @@ auto search16_init(CELL score_match,
   return s;
 }
 
+
 auto search16_exit(s16info_s * s) -> void
 {
   /* free mem for dprofile, hearray, dir, qtable */
-  if (s->dir)
+  if (s->dir != nullptr)
     {
       xfree(s->dir);
     }
-  if (s->hearray)
+  if (s->hearray != nullptr)
     {
       xfree(s->hearray);
     }
-  if (s->dprofile)
+  if (s->dprofile != nullptr)
     {
       xfree(s->dprofile);
     }
-  if (s->qtable)
+  if (s->qtable != nullptr)
     {
       xfree(s->qtable);
     }
-  if (s->cigar)
+  if (s->cigar != nullptr)
     {
       xfree(s->cigar);
     }
   xfree(s);
 }
 
+
 auto search16_qprep(s16info_s * s, char * qseq, int qlen) -> void
 {
   s->qlen = qlen;
   s->qseq = qseq;
 
-  if (s->hearray)
+  if (s->hearray != nullptr)
     {
       xfree(s->hearray);
     }
   s->hearray = (VECTOR_SHORT *) xmalloc(2 * s->qlen * sizeof(VECTOR_SHORT));
-  memset(s->hearray, 0, 2 * s->qlen * sizeof(VECTOR_SHORT));
+  std::memset(s->hearray, 0, 2 * s->qlen * sizeof(VECTOR_SHORT));
 
-  if (s->qtable)
+  if (s->qtable != nullptr)
     {
       xfree(s->qtable);
     }
@@ -1217,8 +1248,24 @@ auto search16_qprep(s16info_s * s, char * qseq, int qlen) -> void
 
   for (int i = 0; i < qlen; i++)
     {
-      s->qtable[i] = s->dprofile + 4 * chrmap_4bit[(int) (qseq[i])];
+      s->qtable[i] = s->dprofile + (4 * map_4bit(qseq[i]));
     }
+}
+
+
+
+auto compute_score_min(struct s16info_s const & alignment) -> short {
+  auto const gap_penalty_max = std::max({
+      0,
+      alignment.penalty_gap_open_query_left + alignment.penalty_gap_extension_query_left,
+      alignment.penalty_gap_open_query_interior + alignment.penalty_gap_extension_query_interior,
+      alignment.penalty_gap_open_query_right + alignment.penalty_gap_extension_query_right,
+      alignment.penalty_gap_open_target_left + alignment.penalty_gap_extension_target_left,
+      alignment.penalty_gap_open_target_interior + alignment.penalty_gap_extension_target_interior,
+      alignment.penalty_gap_open_target_right + alignment.penalty_gap_extension_target_right
+    });
+
+  return static_cast<short>(std::numeric_limits<short>::min() + gap_penalty_max);
 }
 
 
@@ -1250,9 +1297,9 @@ auto search16(s16info_s * s,
 
   if (qlen == 0)
     {
-      for (unsigned int cand_id = 0; cand_id < sequences; cand_id++)
+      for (auto cand_id = 0U; cand_id < sequences; cand_id++)
         {
-          unsigned int const seqno = seqnos[cand_id];
+          auto const seqno = seqnos[cand_id];
           int64_t const length = db_getsequencelen(seqno);
 
           paligned[cand_id] = length;
@@ -1267,7 +1314,7 @@ auto search16(s16info_s * s,
           else
             {
               pscores[cand_id] =
-                MAX(- s->penalty_gap_open_target_left -
+                std::max(- s->penalty_gap_open_target_left -
                     (length * s->penalty_gap_extension_target_left),
                     - s->penalty_gap_open_target_right -
                     (length * s->penalty_gap_extension_target_right));
@@ -1276,8 +1323,8 @@ auto search16(s16info_s * s,
           char * cigar = nullptr;
           if (length > 0)
             {
-              int const ret = xsprintf(&cigar, "%ldI", length);
-              if ((ret < 2) or not cigar)
+              auto const ret = xsprintf(&cigar, "%ldI", length);
+              if ((ret < 2) or (cigar == nullptr))
                 {
                   fatal("Unable to allocate enough memory.");
                 }
@@ -1298,12 +1345,9 @@ auto search16(s16info_s * s,
     {
       uint64_t const dlen = db_getsequencelen(seqnos[i]);
       /* skip the very long sequences */
-      if ((int64_t) (s->qlen) * dlen <= MAXSEQLENPRODUCT)
+      if ((int64_t) (s->qlen) * dlen <= maxseqlenproduct)
         {
-          if (dlen > maxdlen)
-            {
-              maxdlen = dlen;
-            }
+          maxdlen = std::max(dlen, maxdlen);
         }
     }
   maxdlen = 4 * ((maxdlen + 3) / 4);
@@ -1313,7 +1357,7 @@ auto search16(s16info_s * s,
   if (dirbuffersize > s->diralloc)
     {
       s->diralloc = dirbuffersize;
-      if (s->dir)
+      if (s->dir != nullptr)
         {
           xfree(s->dir);
         }
@@ -1326,7 +1370,7 @@ auto search16(s16info_s * s,
   if (s->qlen + s->maxdlen + 1 > s->cigaralloc)
     {
       s->cigaralloc = s->qlen + s->maxdlen + 1;
-      if (s->cigar)
+      if (s->cigar != nullptr)
         {
           xfree(s->cigar);
         }
@@ -1352,24 +1396,24 @@ auto search16(s16info_s * s,
   VECTOR_SHORT R_target_interior;
   VECTOR_SHORT QR_target_right;
   VECTOR_SHORT R_target_right;
-  VECTOR_SHORT QR_target[4];
-  VECTOR_SHORT R_target[4];
+  std::array<VECTOR_SHORT, 4> QR_target {{}};
+  std::array<VECTOR_SHORT, 4> R_target {{}};
 
   VECTOR_SHORT * hep = nullptr;
   VECTOR_SHORT ** qp = nullptr;
 
-  BYTE * d_begin[CHANNELS];
-  BYTE * d_end[CHANNELS];
-  uint64_t d_offset[CHANNELS];
-  BYTE * d_address[CHANNELS];
-  uint64_t d_length[CHANNELS];
-  int64_t seq_id[CHANNELS];
-  bool overflow[CHANNELS];
+  std::array<BYTE *, CHANNELS> d_begin {{}};
+  std::array<BYTE *, CHANNELS> d_end {{}};
+  std::array<uint64_t, CHANNELS> d_offset {{}};
+  std::array<BYTE *, CHANNELS> d_address {{}};
+  std::array<uint64_t, CHANNELS> d_length {{}};
+  std::array<int64_t, CHANNELS> seq_id {{}};
+  std::array<bool, CHANNELS> overflow {{}};
 
-  VECTOR_SHORT dseqalloc[CDEPTH];
-  VECTOR_SHORT S[4];
+  std::array<VECTOR_SHORT, CDEPTH> dseqalloc {{}};
+  std::array<VECTOR_SHORT, 4> S {{}};
 
-  BYTE * dseq = (BYTE *) & dseqalloc;
+  BYTE * dseq = (BYTE *) dseqalloc.data();
   BYTE zero = 0;
 
   uint64_t next_id = 0;
@@ -1413,29 +1457,8 @@ auto search16(s16info_s * s,
       overflow[c] = false;
     }
 
-  short gap_penalty_max = 0;
-
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_query_left +
-                        s->penalty_gap_extension_query_left);
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_query_interior +
-                        s->penalty_gap_extension_query_interior);
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_query_right +
-                        s->penalty_gap_extension_query_right);
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_target_left +
-                        s->penalty_gap_extension_target_left);
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_target_interior +
-                        s->penalty_gap_extension_target_interior);
-  gap_penalty_max = MAX(gap_penalty_max,
-                        s->penalty_gap_open_target_right +
-                        s->penalty_gap_extension_target_right);
-
-  short const score_min = std::numeric_limits<short>::min() + gap_penalty_max;
-  short const score_max = std::numeric_limits<short>::max();
+  auto const score_min = compute_score_min(*s);
+  auto const score_max = std::numeric_limits<short>::max();
 
   for (int i = 0; i < 4; i++)
     {
@@ -1469,7 +1492,7 @@ auto search16(s16info_s * s,
                 {
                   if (d_begin[c] < d_end[c])
                     {
-                      dseq[(CHANNELS * j) + c] = chrmap_4bit[*(d_begin[c]++)];
+                      dseq[(CHANNELS * j) + c] = map_4bit(*(d_begin[c]++));
                     }
                   else
                     {
@@ -1482,7 +1505,7 @@ auto search16(s16info_s * s,
                 }
             }
 
-          dprofile_fill16(dprofile, (CELL*) s->matrix, dseq);
+          dprofile_fill16(dprofile, (CELL*) s->matrix.data(), dseq);
 
           /* create vectors of gap penalties for target depending on whether
              any of the database sequences ended in these four columns */
@@ -1509,7 +1532,7 @@ auto search16(s16info_s * s,
                   VECTOR_SHORT TT = T0;
                   for (int c = 0; c < CHANNELS; c++)
                     {
-                      if ((d_begin[c] == d_end[c]) &&
+                      if ((d_begin[c] == d_end[c]) and
                           (j >= ((d_length[c] + 3) % 4)))
                         {
                           MM = v_xor(MM, TT);
@@ -1526,7 +1549,7 @@ auto search16(s16info_s * s,
           VECTOR_SHORT h_min;
           VECTOR_SHORT h_max;
 
-          aligncolumns_rest(S, hep, qp,
+          aligncolumns_rest(S.data(), hep, qp,
                             QR_query_interior, R_query_interior,
                             QR_query_right, R_query_right,
                             QR_target[0], R_target[0],
@@ -1576,7 +1599,7 @@ auto search16(s16info_s * s,
                     {
                       if (d_begin[c] < d_end[c])
                         {
-                          dseq[(CHANNELS * j) + c] = chrmap_4bit[*(d_begin[c]++)];
+                          dseq[(CHANNELS * j) + c] = map_4bit(*(d_begin[c]++));
                         }
                       else
                         {
@@ -1603,7 +1626,7 @@ auto search16(s16info_s * s,
                       char * dbseq = (char *) d_address[c];
                       int64_t const dbseqlen = d_length[c];
                       int64_t const z = (dbseqlen + 3) % 4;
-                      int64_t const score = ((CELL *) S)[(z * CHANNELS) + c];
+                      int64_t const score = ((CELL *) S.data())[(z * CHANNELS) + c];
 
                       if (overflow[c])
                         {
@@ -1623,7 +1646,7 @@ auto search16(s16info_s * s,
                                       pmismatches + cand_id,
                                       pgaps + cand_id);
                           pcigar[cand_id] =
-                            (char *) xmalloc(strlen(s->cigar)+1);
+                            (char *) xmalloc(std::strlen(s->cigar)+1);
                           strcpy(pcigar[cand_id], s->cigar);
                         }
 
@@ -1634,11 +1657,11 @@ auto search16(s16info_s * s,
 
                   int64_t length = 0;
 
-                  while ((length == 0) && (next_id < sequences))
+                  while ((length == 0) and (next_id < sequences))
                     {
                       cand_id = next_id++;
                       length = db_getsequencelen(seqnos[cand_id]);
-                      if ((length == 0) or (s->qlen * length > MAXSEQLENPRODUCT))
+                      if ((length == 0) or (s->qlen * length > maxseqlenproduct))
                         {
                           pscores[cand_id] = std::numeric_limits<short>::max();
                           paligned[cand_id] = 0;
@@ -1664,20 +1687,20 @@ auto search16(s16info_s * s,
 
                       ((CELL *) &H0)[c] = 0;
                       ((CELL *) &H1)[c] = - s->penalty_gap_open_query_left
-                        - 1 * s->penalty_gap_extension_query_left;
+                        - (1 * s->penalty_gap_extension_query_left);
                       ((CELL *) &H2)[c] = - s->penalty_gap_open_query_left
-                        - 2 * s->penalty_gap_extension_query_left;
+                        - (2 * s->penalty_gap_extension_query_left);
                       ((CELL *) &H3)[c] = - s->penalty_gap_open_query_left
-                        - 3 * s->penalty_gap_extension_query_left;
+                        - (3 * s->penalty_gap_extension_query_left);
 
                       ((CELL *) &F0)[c] = - s->penalty_gap_open_query_left
-                        - 1 * s->penalty_gap_extension_query_left;
+                        - (1 * s->penalty_gap_extension_query_left);
                       ((CELL *) &F1)[c] = - s->penalty_gap_open_query_left
-                        - 2 * s->penalty_gap_extension_query_left;
+                        - (2 * s->penalty_gap_extension_query_left);
                       ((CELL *) &F2)[c] = - s->penalty_gap_open_query_left
-                        - 3 * s->penalty_gap_extension_query_left;
+                        - (3 * s->penalty_gap_extension_query_left);
                       ((CELL *) &F3)[c] = - s->penalty_gap_open_query_left
-                        - 4 * s->penalty_gap_extension_query_left;
+                        - (4 * s->penalty_gap_extension_query_left);
 
                       /* fill channel */
 
@@ -1686,7 +1709,7 @@ auto search16(s16info_s * s,
                           if (d_begin[c] < d_end[c])
                             {
                               dseq[(CHANNELS * j) + c] =
-                                chrmap_4bit[*(d_begin[c]++)];
+                                map_4bit(*(d_begin[c]++));
                             }
                           else
                             {
@@ -1732,7 +1755,7 @@ auto search16(s16info_s * s,
           M_QR_query_interior = v_and(M, QR_query_interior);
           M_QR_query_right = v_and(M, QR_query_right);
 
-          dprofile_fill16(dprofile, (CELL *) s->matrix, dseq);
+          dprofile_fill16(dprofile, (CELL *) s->matrix.data(), dseq);
 
           /* create vectors of gap penalties for target depending on whether
              any of the database sequences ended in these four columns */
@@ -1759,7 +1782,7 @@ auto search16(s16info_s * s,
                   VECTOR_SHORT TT = T0;
                   for (int c = 0; c < CHANNELS; c++)
                     {
-                      if ((d_begin[c] == d_end[c]) &&
+                      if ((d_begin[c] == d_end[c]) and
                           (j >= ((d_length[c] + 3) % 4)))
                         {
                           MM = v_xor(MM, TT);
@@ -1776,7 +1799,7 @@ auto search16(s16info_s * s,
           VECTOR_SHORT h_min;
           VECTOR_SHORT h_max;
 
-          aligncolumns_first(S, hep, qp,
+          aligncolumns_first(S.data(), hep, qp,
                              QR_query_interior, R_query_interior,
                              QR_query_right, R_query_right,
                              QR_target[0], R_target[0],

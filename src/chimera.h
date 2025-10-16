@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,4 +62,4 @@
 
 constexpr auto maxparents = 20; /* max, could be fewer */
 
-auto chimera() -> void;
+auto chimera(struct Parameters const & parameters) -> void;

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,30 +60,86 @@
 
 */
 
-#ifndef MAPS_H
-#define MAPS_H
+// Operating System specific commands to swap bytes
+// C++23 refactoring: replace with std::byteswap()
 
-constexpr auto two_bit_capacity = 4U;
-constexpr auto four_bit_capacity = 16U;
-constexpr auto byte_capacity = 256U;
 
-extern char sym_nt_2bit[two_bit_capacity + 1];
-extern char sym_nt_4bit[four_bit_capacity + 1];
+#if defined(_MSC_VER) || defined(_WIN32)
 
-extern unsigned int ambiguous_4bit[four_bit_capacity];
+#include <cstdint>  // uint16_t, uint32_t, uint64_t
+#include <stdlib.h>
 
-extern unsigned int char_header_action[byte_capacity];
-extern unsigned int char_fasta_action[byte_capacity];
-extern unsigned int char_fq_action_seq[byte_capacity];
-extern unsigned int char_fq_action_qual[byte_capacity];
-extern unsigned int chrmap_2bit[byte_capacity];
-extern unsigned int chrmap_4bit[byte_capacity];
-extern unsigned int chrmap_mask_ambig[byte_capacity];
-extern unsigned int chrmap_mask_lower[byte_capacity];
-extern const unsigned char chrmap_complement[byte_capacity];
-extern const unsigned char chrmap_normalize[byte_capacity];
-extern const unsigned char chrmap_upcase[byte_capacity];
-extern const unsigned char chrmap_no_change[byte_capacity];
-extern const unsigned char chrmap_identity[byte_capacity];
+auto bswap_16(uint16_t bsx) noexcept -> uint16_t {
+  return _byteswap_ushort(bsx);
+}
 
-#endif // MAPS_H
+auto bswap_32(uint32_t bsx) noexcept -> uint32_t {
+  return _byteswap_ulong(bsx);
+}
+
+auto bswap_64(uint64_t bsx) noexcept -> uint64_t {
+  return _byteswap_uint64(bsx);
+}
+
+
+#elif defined(__APPLE__)
+
+// Mac OS X / Darwin features
+#include <cstdint>  // uint16_t, uint32_t, uint64_t
+#include <libkern/OSByteOrder.h>
+
+auto bswap_16(uint16_t bsx) noexcept -> uint16_t {
+  return OSSwapInt16(bsx);
+}
+
+auto bswap_32(uint32_t bsx) noexcept -> uint32_t {
+  return OSSwapInt32(bsx);
+}
+
+auto bswap_64(uint64_t bsx) noexcept -> uint64_t {
+  return OSSwapInt64(bsx);
+}
+
+
+#elif defined(__FreeBSD__)
+
+#include <cstdint>  // uint16_t, uint32_t, uint64_t
+#include <sys/endian.h>
+
+auto bswap_16(uint16_t bsx) noexcept -> uint16_t {
+  return bswap16(bsx);
+}
+
+auto bswap_32(uint32_t bsx) noexcept -> uint32_t {
+  return bswap32(bsx);
+}
+
+auto bswap_64(uint64_t bsx) noexcept -> uint64_t {
+  return bswap64(bsx);
+}
+
+
+#elif defined(__NetBSD__)
+
+#include <cstdint>  // uint16_t, uint32_t, uint64_t
+#include <sys/types.h>
+#include <machine/bswap.h>
+
+auto bswap_16(uint16_t bsx) noexcept -> uint16_t {
+  return bswap16(bsx);
+}
+
+auto bswap_32(uint32_t bsx) noexcept -> uint32_t {
+  return bswap32(bsx);
+}
+
+auto bswap_64(uint64_t bsx) noexcept -> uint64_t {
+  return bswap64(bsx);
+}
+
+
+#else
+
+// other operating systems?
+
+#endif

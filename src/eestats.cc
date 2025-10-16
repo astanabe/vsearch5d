@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,19 +61,20 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
 #include <algorithm>  // std::max, std::min
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cmath>  // std::pow
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose
 #include <cstdlib>  // std::exit, EXIT_FAILURE
-#include <cstring>  // std::memset
+#include <cstring>  // refactoring: not used?
 #include <limits>
 #include <vector>
 
 
-inline auto fastq_get_qual_eestats(char q) -> int
+inline auto fastq_get_qual_eestats(char const q) -> int
 {
   int const qual = q - opt_fastq_ascii;
 
@@ -84,7 +84,7 @@ inline auto fastq_get_qual_eestats(char q) -> int
               "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
               PRId64 ")\n",
               qual, opt_fastq_qmin);
-      if (fp_log)
+      if (fp_log != nullptr)
         {
           fprintf(stderr,
                   "\n\nFatal error: FASTQ quality value (%d) below qmin (%"
@@ -103,7 +103,7 @@ inline auto fastq_get_qual_eestats(char q) -> int
               "By default, quality values range from 0 to 41.\n"
               "To allow higher quality values, "
               "please use the option --fastq_qmax %d\n", qual);
-      if (fp_log)
+      if (fp_log != nullptr)
         {
           fprintf(fp_log,
                   "\n\nFatal error: FASTQ quality value (%d) above qmax (%"
@@ -120,34 +120,34 @@ inline auto fastq_get_qual_eestats(char q) -> int
 }
 
 
-auto q2p(int quality_value) -> double
+auto q2p(int const quality_value) -> double
 {
   static constexpr auto base = 10.0;
   return std::pow(base, -quality_value / base);
 }
 
-auto ee_start(int pos, int resolution) -> int64_t
+auto ee_start(int const pos, int const resolution) -> int64_t
 {
   return pos * (resolution * (pos + 1) + 2) / 2;
 }
 
 
-auto fastq_eestats() -> void
+auto fastq_eestats(struct Parameters const & parameters) -> void
 {
-  if (not opt_output) {
+  if (opt_output == nullptr) {
     fatal("Output file for fastq_eestats must be specified with --output");
   }
 
-  fastx_handle h = fastq_open(opt_fastq_eestats);
+  fastx_handle h = fastq_open(parameters.opt_fastq_eestats);
 
   uint64_t const filesize = fastq_get_size(h);
 
   std::FILE * fp_output = nullptr;
 
-  if (opt_output)
+  if (opt_output != nullptr)
     {
       fp_output = fopen_output(opt_output);
-      if (not fp_output)
+      if (fp_output == nullptr)
         {
           fatal("Unable to open output file for writing");
         }
@@ -173,12 +173,12 @@ auto fastq_eestats() -> void
   int64_t len_min = std::numeric_limits<long>::max();
   int64_t len_max = 0;
 
-  while (fastq_next(h, false, chrmap_upcase))
+  while (fastq_next(h, false, chrmap_upcase_vector.data()))
     {
       ++seq_count;
 
       int64_t const len = fastq_get_sequence_length(h);
-      char * q = fastq_get_quality(h);
+      char const * q = fastq_get_quality(h);
 
       /* update length statistics */
 
@@ -408,22 +408,22 @@ auto fastq_eestats() -> void
 }
 
 
-auto fastq_eestats2() -> void
+auto fastq_eestats2(struct Parameters const & parameters) -> void
 {
-  if (! opt_output) {
+  if (opt_output == nullptr) {
     fatal("Output file for fastq_eestats2 must be specified with --output");
   }
 
-  fastx_handle h = fastq_open(opt_fastq_eestats2);
+  fastx_handle h = fastq_open(parameters.opt_fastq_eestats2);
 
   uint64_t const filesize = fastq_get_size(h);
 
   std::FILE * fp_output = nullptr;
 
-  if (opt_output)
+  if (opt_output != nullptr)
     {
       fp_output = fopen_output(opt_output);
-      if (! fp_output)
+      if (fp_output == nullptr)
         {
           fatal("Unable to open output file for writing");
         }
@@ -439,12 +439,12 @@ auto fastq_eestats2() -> void
 
   std::vector<uint64_t> count_table;
 
-  while (fastq_next(h, false, chrmap_upcase))
+  while (fastq_next(h, false, chrmap_upcase_vector.data()))
     {
       ++seq_count;
 
-      uint64_t const len = fastq_get_sequence_length(h);
-      char * q = fastq_get_quality(h);
+      auto const len = fastq_get_sequence_length(h);
+      auto const * q = fastq_get_quality(h);
 
       /* update length statistics */
 
@@ -452,8 +452,8 @@ auto fastq_eestats2() -> void
         {
           longest = len;
           // opt_length_cutoffs_longest is an int between 1 and INT_MAX
-          int const high = MIN(longest, (uint64_t) (opt_length_cutoffs_longest));
-          int const new_len_steps = 1 + MAX(0, ((high - opt_length_cutoffs_shortest)
+          int const high = std::min(longest, (uint64_t) (opt_length_cutoffs_longest));
+          auto const new_len_steps = 1 + std::max(0, ((high - opt_length_cutoffs_shortest)
                                           / opt_length_cutoffs_increment));
 
           if (new_len_steps > len_steps)
@@ -467,7 +467,7 @@ auto fastq_eestats2() -> void
 
       symbols += len;
 
-      double ee = 0.0;
+      auto ee = 0.0;
 
       for (uint64_t i = 0; i < len; i++)
         {
@@ -545,7 +545,7 @@ auto fastq_eestats2() -> void
       fprintf(fp_output, "\n");
     }
 
-  if (fp_log)
+  if (fp_log != nullptr)
     {
       fprintf(fp_log,
               "%" PRIu64 " reads, max len %" PRIu64 ", avg %.1f\n\n",

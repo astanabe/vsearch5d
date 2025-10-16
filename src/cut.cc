@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,7 +61,9 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/fatal.hpp"
 #include "utils/maps.hpp"
+#include "utils/progress.hpp"
 #include <algorithm>  // std::count, std::for_each, std::equal
 #include <cassert>
 #include <cinttypes>  // macros PRId64
@@ -74,40 +75,42 @@
 #include <vector>
 
 
-struct statistics {
-  int fragment_no = 0;
-  int fragment_rev_no = 0;
-  int fragment_discarded_no = 0;
-  int fragment_discarded_rev_no = 0;
-  int64_t cut = 0;
-  int64_t uncut = 0;
-  int64_t matches = 0;
-};
-
-struct a_file {
-  char * name = nullptr;
-  std::FILE * handle = nullptr;
-};
-
-struct a_strand {
-  a_file forward;
-  a_file reverse;
-};
-
-struct file_purpose {
-  a_strand cut;
-  a_strand discarded;
-};
-
-struct restriction_pattern {
-  std::string pattern;
-  std::string coded_pattern;
-  int cut_fwd;
-  int cut_rev;
-};
-
-
+// anonymous namespace: limit visibility and usage to this translation unit
 namespace {
+
+  struct statistics {
+    int fragment_no = 0;
+    int fragment_rev_no = 0;
+    int fragment_discarded_no = 0;
+    int fragment_discarded_rev_no = 0;
+    int64_t cut = 0;
+    int64_t uncut = 0;
+    int64_t matches = 0;
+  };
+
+  struct a_file {
+    char * name = nullptr;
+    std::FILE * handle = nullptr;
+  };
+
+  struct a_strand {
+    a_file forward;
+    a_file reverse;
+  };
+
+  struct file_purpose {
+    a_strand cut;
+    a_strand discarded;
+  };
+
+  struct restriction_pattern {
+    std::string pattern;
+    std::string coded_pattern;
+    int cut_fwd;
+    int cut_rev;
+  };
+
+
   auto cut_a_sequence(fastx_handle input_handle,
                       struct restriction_pattern const & restriction,
                       struct file_purpose const & fastaout,
@@ -115,7 +118,7 @@ namespace {
                       std::vector<char> & rc_buffer) -> void
   {
     auto const pattern_length = static_cast<int>(restriction.pattern.size());
-    char * seq = fasta_get_sequence(input_handle);
+    char const * seq = fasta_get_sequence(input_handle);
     auto const seq_length = static_cast<int>(fasta_get_sequence_length(input_handle));
     // failed refactoring: use transform to create a coded std::string
     // and find() to search for pattern occurrences, IUPAC chars make it
@@ -138,9 +141,7 @@ namespace {
                                       restriction.coded_pattern.cend(),
                                       std::next(seq, i),
                                       [](char const & lhs, char const & rhs) -> bool {
-                                        auto const lhs_unsigned = static_cast<unsigned char>(lhs);
-                                        auto const rhs_unsigned = chrmap_4bit_vector[static_cast<unsigned char>(rhs)];
-                                        return ((lhs_unsigned & rhs_unsigned) != 0);  // see maps.hpp
+                                        return is_equivalent_4bit_rhs(lhs, rhs);
                                       });
 
         if (not match) {
@@ -377,9 +378,7 @@ namespace {
   auto reencode_restriction_pattern(std::string raw_pattern) -> std::string {
     auto pattern = remove_restriction_sites(std::move(raw_pattern));
     auto encode_characters = [](char const & character) -> char {
-      auto const symbol_uchar = static_cast<unsigned char>(character);
-      auto const coded_symbol_uchar = chrmap_4bit_vector[symbol_uchar];
-      return static_cast<char>(coded_symbol_uchar);
+      return map_4bit(character);
     };
     std::transform(pattern.cbegin(), pattern.cend(),
                    pattern.begin(), encode_characters);
@@ -395,9 +394,8 @@ namespace {
 
 
   auto search_illegal_characters(std::string const & pattern) -> void {
-    auto character_is_illegal = [](char const & character) {
-      auto const unsigned_character = static_cast<unsigned char>(character);
-      if (chrmap_4bit_vector[unsigned_character] == 0) {
+    auto character_is_illegal = [](char const & character) -> void {
+      if (map_4bit(character) == '\0') {
         fatal("Illegal character in cut pattern");
       }
     };
@@ -441,13 +439,13 @@ namespace {
       }
     }
   }
-}
+}  // end of anonymous namespace
 
 
 auto cut(struct Parameters const & parameters) -> void {
   ckeck_if_output_is_set(parameters);
 
-  fastx_handle input_handle = fasta_open(parameters.opt_cut);
+  auto * input_handle = fasta_open(parameters.opt_cut);
   assert(input_handle != nullptr);  // verified by fasta_open()
 
   auto const fastaout = open_output_files(parameters);
@@ -470,7 +468,7 @@ auto cut(struct Parameters const & parameters) -> void {
   search_illegal_characters(restriction.pattern);
 
   auto const filesize = fasta_get_size(input_handle);
-  progress_init("Cutting sequences", filesize);
+  Progress progress("Cutting sequences", filesize, parameters);
 
   struct statistics counters;
   std::vector<char> rc_buffer;
@@ -478,10 +476,8 @@ auto cut(struct Parameters const & parameters) -> void {
     {
       cut_a_sequence(input_handle, restriction, fastaout, counters, rc_buffer);
 
-      progress_update(fasta_get_position(input_handle));
+      progress.update(fasta_get_position(input_handle));
     }
-
-  progress_done();
 
   output_stats_message(parameters, counters);
   output_stats_message(parameters, counters, parameters.opt_log);

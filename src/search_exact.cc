@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,9 +61,12 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
 #include "mask.h"
 #include "otutable.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
+#include "utils/xpthread.hpp"
+#include <algorithm>  // std::min
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cstdint> // int64_t, uint64_t
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t
@@ -87,10 +89,10 @@ static fastx_handle query_fastx_h;
 static pthread_mutex_t mutex_input;
 static pthread_mutex_t mutex_output;
 static int qmatches;
-static uint64 qmatches_abundance;
+static uint64_t qmatches_abundance;
 static int queries;
-static uint64 queries_abundance;
-static uint64 * dbmatched;
+static uint64_t queries_abundance;
+static uint64_t * dbmatched;
 static FILE * fp_samout = nullptr;
 static FILE * fp_alnout = nullptr;
 static FILE * fp_userout = nullptr;
@@ -113,7 +115,7 @@ static int count_notmatched = 0;
 
 auto add_hit(struct searchinfo_s * si, uint64_t seqno) -> void
 {
-  if (search_acceptable_unaligned(si, seqno))
+  if (search_acceptable_unaligned(*si, seqno))
     {
       struct hit * hp = si->hits + si->hit_count;
       si->hit_count++;
@@ -133,7 +135,7 @@ auto add_hit(struct searchinfo_s * si, uint64_t seqno) -> void
       hp->mismatches = 0;
 
       int const ret = xsprintf(&hp->nwalignment, "%dM", si->qseqlen);
-      if ((ret == -1) || (! hp->nwalignment))
+      if ((ret == -1) || (hp->nwalignment == nullptr))
         {
           fatal("Out of memory");
         }
@@ -163,7 +165,7 @@ auto add_hit(struct searchinfo_s * si, uint64_t seqno) -> void
       hp->accepted = false;
       hp->rejected = false;
       hp->weak = false;
-      (void) search_acceptable_aligned(si, hp);
+      (void) search_acceptable_aligned(*si, hp);
     }
 }
 
@@ -171,7 +173,7 @@ auto search_exact_onequery(struct searchinfo_s * si) -> void
 {
   dbhash_search_info_s info;
 
-  char * seq = si->qsequence;
+  char const * seq = si->qsequence;
   uint64_t const seqlen = si->qseqlen;
   std::vector<char> normalized(seqlen + 1);
   string_normalize(normalized.data(), seq, seqlen);
@@ -186,8 +188,7 @@ auto search_exact_onequery(struct searchinfo_s * si) -> void
     }
 }
 
-auto search_exact_output_results(int hit_count,
-                                 struct hit * hits,
+auto search_exact_output_results(std::vector<struct hit> const & hits,
                                  char * query_head,
                                  int qseqlen,
                                  char * qsequence,
@@ -197,99 +198,99 @@ auto search_exact_output_results(int hit_count,
   xpthread_mutex_lock(&mutex_output);
 
   /* show results */
-  int64_t const toreport = MIN(opt_maxhits, hit_count);
+  auto const n_results_to_report = std::min(opt_maxhits, static_cast<int64_t>(hits.size()));
 
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       results_show_alnout(fp_alnout,
-                          hits,
-                          toreport,
+                          hits.data(),
+                          n_results_to_report,
                           query_head,
                           qsequence,
                           qseqlen);
     }
 
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       results_show_samout(fp_samout,
-                          hits,
-                          toreport,
+                          hits.data(),
+                          n_results_to_report,
                           query_head,
                           qsequence,
                           qsequence_rc);
     }
 
-  if (toreport)
+  if (n_results_to_report != 0)
     {
       double const top_hit_id = hits[0].id;
 
-      if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
+      if ((opt_otutabout != nullptr) || (opt_mothur_shared_out != nullptr) || (opt_biomout != nullptr))
         {
           otutable_add(query_head,
                        db_getheader(hits[0].target),
                        qsize);
         }
 
-      for (int t = 0; t < toreport; t++)
+      for (int t = 0; t < n_results_to_report; t++)
         {
-          struct hit * hp = hits + t;
+          auto const & hit = hits[t];
 
-          if (opt_top_hits_only && (hp->id < top_hit_id))
+          if ((opt_top_hits_only != 0) && (hit.id < top_hit_id))
             {
               break;
             }
 
-          if (fp_fastapairs)
+          if (fp_fastapairs != nullptr)
             {
               results_show_fastapairs_one(fp_fastapairs,
-                                          hp,
+                                          &hit,
                                           query_head,
                                           qsequence,
                                           qsequence_rc);
             }
 
-          if (fp_qsegout)
+          if (fp_qsegout != nullptr)
             {
               results_show_qsegout_one(fp_qsegout,
-                                       hp,
+                                       &hit,
                                        query_head,
                                        qsequence,
                                        qseqlen,
                                        qsequence_rc);
             }
 
-          if (fp_tsegout)
+          if (fp_tsegout != nullptr)
             {
               results_show_tsegout_one(fp_tsegout,
-                                       hp);
+                                       &hit);
             }
 
-          if (fp_uc)
+          if (fp_uc != nullptr)
             {
-              if ((t == 0) || opt_uc_allhits)
+              if ((t == 0) || (opt_uc_allhits != 0))
                 {
                   results_show_uc_one(fp_uc,
-                                      hp,
+                                      &hit,
                                       query_head,
                                       qseqlen,
-                                      hp->target);
+                                      hit.target);
                 }
             }
 
-          if (fp_userout)
+          if (fp_userout != nullptr)
             {
               results_show_userout_one(fp_userout,
-                                       hp,
+                                       &hit,
                                        query_head,
                                        qsequence,
                                        qseqlen,
                                        qsequence_rc);
             }
 
-          if (fp_blast6out)
+          if (fp_blast6out != nullptr)
             {
               results_show_blast6out_one(fp_blast6out,
-                                         hp,
+                                         &hit,
                                          query_head,
                                          qseqlen);
             }
@@ -297,14 +298,14 @@ auto search_exact_output_results(int hit_count,
     }
   else
     {
-      if (opt_otutabout || opt_mothur_shared_out || opt_biomout)
+      if ((opt_otutabout != nullptr) || (opt_mothur_shared_out != nullptr) || (opt_biomout != nullptr))
         {
           otutable_add(query_head,
                        nullptr,
                        qsize);
         }
 
-      if (fp_uc)
+      if (fp_uc != nullptr)
         {
           results_show_uc_one(fp_uc,
                               nullptr,
@@ -313,9 +314,9 @@ auto search_exact_output_results(int hit_count,
                               0);
         }
 
-      if (opt_output_no_hits)
+      if (opt_output_no_hits != 0)
         {
-          if (fp_userout)
+          if (fp_userout != nullptr)
             {
               results_show_userout_one(fp_userout,
                                        nullptr,
@@ -325,7 +326,7 @@ auto search_exact_output_results(int hit_count,
                                        qsequence_rc);
             }
 
-          if (fp_blast6out)
+          if (fp_blast6out != nullptr)
             {
               results_show_blast6out_one(fp_blast6out,
                                          nullptr,
@@ -335,10 +336,10 @@ auto search_exact_output_results(int hit_count,
         }
     }
 
-  if (hit_count)
+  if (not hits.empty())
     {
       ++count_matched;
-      if (opt_matched)
+      if (opt_matched != nullptr)
         {
           fasta_print_general(fp_matched,
                               nullptr,
@@ -355,7 +356,7 @@ auto search_exact_output_results(int hit_count,
   else
     {
       ++count_notmatched;
-      if (opt_notmatched)
+      if (opt_notmatched != nullptr)
         {
           fasta_print_general(fp_notmatched,
                               nullptr,
@@ -371,12 +372,10 @@ auto search_exact_output_results(int hit_count,
     }
 
   /* update matching db sequences */
-  for (int i=0; i < hit_count; i++)
-    {
-      if (hits[i].accepted)
-        {
-          dbmatched[hits[i].target] += opt_sizein ? qsize : 1;
-        }
+    for (auto const & hit : hits) {
+      if (hit.accepted) {
+        dbmatched[hit.target] += opt_sizein ? qsize : 1;
+      }
     }
 
   xpthread_mutex_unlock(&mutex_output);
@@ -386,14 +385,14 @@ auto search_exact_query(int64_t t) -> int
 {
   for (int s = 0; s < opt_strand; s++)
     {
-      struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
+      struct searchinfo_s * si = (s != 0) ? si_minus + t : si_plus + t;
 
       /* mask query */
       if (opt_qmask == MASK_DUST)
         {
           dust(si->qsequence, si->qseqlen);
         }
-      else if ((opt_qmask == MASK_SOFT) && (opt_hardmask))
+      else if ((opt_qmask == MASK_SOFT) && (opt_hardmask != 0))
         {
           hardmask(si->qsequence, si->qseqlen);
         }
@@ -402,16 +401,13 @@ auto search_exact_query(int64_t t) -> int
       search_exact_onequery(si);
     }
 
-  struct hit * hits = nullptr;
-  int hit_count = 0;
+  std::vector<struct hit> hits;
 
   search_joinhits(si_plus + t,
                   opt_strand > 1 ? si_minus + t : nullptr,
-                  & hits,
-                  & hit_count);
+                  hits);
 
-  search_exact_output_results(hit_count,
-                              hits,
+  search_exact_output_results(hits,
                               si_plus[t].query_head,
                               si_plus[t].qseqlen,
                               si_plus[t].qsequence,
@@ -419,17 +415,13 @@ auto search_exact_query(int64_t t) -> int
                               si_plus[t].qsize);
 
   /* free memory for alignment strings */
-  for (int i = 0; i < hit_count; i++)
-    {
-      if (hits[i].aligned)
-        {
-          xfree(hits[i].nwalignment);
-        }
+  for (auto const & hit : hits) {
+    if (hit.aligned) {
+      xfree(hit.nwalignment);
     }
+  }
 
-  xfree(hits);
-
-  return hit_count;
+  return static_cast<int>(hits.size());
 }
 
 auto search_exact_thread_run(int64_t t) -> void
@@ -438,18 +430,18 @@ auto search_exact_thread_run(int64_t t) -> void
     {
       xpthread_mutex_lock(&mutex_input);
 
-      if (fastx_next(query_fastx_h, ! opt_notrunclabels, chrmap_no_change))
+      if (fastx_next(query_fastx_h, (opt_notrunclabels == 0), chrmap_no_change_vector.data()))
         {
-          char * qhead = fastx_get_header(query_fastx_h);
+          char const * qhead = fastx_get_header(query_fastx_h);
           int const query_head_len = fastx_get_header_length(query_fastx_h);
-          char * qseq = fastx_get_sequence(query_fastx_h);
+          char const * qseq = fastx_get_sequence(query_fastx_h);
           int const qseqlen = fastx_get_sequence_length(query_fastx_h);
           int const query_no = fastx_get_seqno(query_fastx_h);
           int const qsize = fastx_get_abundance(query_fastx_h);
 
           for (int s = 0; s < opt_strand; s++)
             {
-              struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
+              struct searchinfo_s * si = (s != 0) ? si_minus + t : si_plus + t;
 
               si->query_head_len = query_head_len;
               si->qseqlen = qseqlen;
@@ -502,7 +494,7 @@ auto search_exact_thread_run(int64_t t) -> void
           queries++;
           queries_abundance += qsize;
 
-          if (match)
+          if (match != 0)
             {
               qmatches++;
               qmatches_abundance += qsize;
@@ -541,11 +533,11 @@ auto search_exact_thread_init(struct searchinfo_s * si) -> void
 auto search_exact_thread_exit(struct searchinfo_s * si) -> void
 {
   /* thread specific clean up */
-  if (si->query_head)
+  if (si->query_head != nullptr)
     {
       xfree(si->query_head);
     }
-  if (si->qsequence)
+  if (si->qsequence != nullptr)
     {
       xfree(si->qsequence);
     }
@@ -569,7 +561,7 @@ auto search_exact_thread_worker_run() -> void
   for (int t = 0; t < opt_threads; t++)
     {
       search_exact_thread_init(si_plus + t);
-      if (si_minus)
+      if (si_minus != nullptr)
         {
           search_exact_thread_init(si_minus + t);
         }
@@ -582,7 +574,7 @@ auto search_exact_thread_worker_run() -> void
     {
       xpthread_join(pthread[t], nullptr);
       search_exact_thread_exit(si_plus + t);
-      if (si_minus)
+      if (si_minus != nullptr)
         {
           search_exact_thread_exit(si_minus + t);
         }
@@ -591,14 +583,14 @@ auto search_exact_thread_worker_run() -> void
   xpthread_attr_destroy(&attr);
 }
 
-auto search_exact_prep(char * cmdline, char * progheader) -> void
+auto search_exact_prep(char const * cmdline, char const * progheader) -> void
 {
   /* open output files */
 
-  if (opt_alnout)
+  if (opt_alnout != nullptr)
     {
       fp_alnout = fopen_output(opt_alnout);
-      if (! fp_alnout)
+      if (fp_alnout == nullptr)
         {
           fatal("Unable to open alignment output file for writing");
         }
@@ -607,127 +599,127 @@ auto search_exact_prep(char * cmdline, char * progheader) -> void
       fprintf(fp_alnout, "%s\n", progheader);
     }
 
-  if (opt_samout)
+  if (opt_samout != nullptr)
     {
       fp_samout = fopen_output(opt_samout);
-      if (! fp_samout)
+      if (fp_samout == nullptr)
         {
           fatal("Unable to open SAM output file for writing");
         }
     }
 
-  if (opt_userout)
+  if (opt_userout != nullptr)
     {
       fp_userout = fopen_output(opt_userout);
-      if (! fp_userout)
+      if (fp_userout == nullptr)
         {
           fatal("Unable to open user-defined output file for writing");
         }
     }
 
-  if (opt_blast6out)
+  if (opt_blast6out != nullptr)
     {
       fp_blast6out = fopen_output(opt_blast6out);
-      if (! fp_blast6out)
+      if (fp_blast6out == nullptr)
         {
           fatal("Unable to open blast6-like output file for writing");
         }
     }
 
-  if (opt_uc)
+  if (opt_uc != nullptr)
     {
       fp_uc = fopen_output(opt_uc);
-      if (! fp_uc)
+      if (fp_uc == nullptr)
         {
           fatal("Unable to open uc output file for writing");
         }
     }
 
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fp_fastapairs = fopen_output(opt_fastapairs);
-      if (! fp_fastapairs)
+      if (fp_fastapairs == nullptr)
         {
           fatal("Unable to open fastapairs output file for writing");
         }
     }
 
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fp_qsegout = fopen_output(opt_qsegout);
-      if (! fp_qsegout)
+      if (fp_qsegout == nullptr)
         {
           fatal("Unable to open qsegout output file for writing");
         }
     }
 
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fp_tsegout = fopen_output(opt_tsegout);
-      if (! fp_tsegout)
+      if (fp_tsegout == nullptr)
         {
           fatal("Unable to open tsegout output file for writing");
         }
     }
 
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fp_matched = fopen_output(opt_matched);
-      if (! fp_matched)
+      if (fp_matched == nullptr)
         {
           fatal("Unable to open matched output file for writing");
         }
     }
 
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fp_notmatched = fopen_output(opt_notmatched);
-      if (! fp_notmatched)
+      if (fp_notmatched == nullptr)
         {
           fatal("Unable to open notmatched output file for writing");
         }
     }
 
-  if (opt_dbmatched)
+  if (opt_dbmatched != nullptr)
     {
       fp_dbmatched = fopen_output(opt_dbmatched);
-      if (! fp_dbmatched)
+      if (fp_dbmatched == nullptr)
         {
           fatal("Unable to open dbmatched output file for writing");
         }
     }
 
-  if (opt_dbnotmatched)
+  if (opt_dbnotmatched != nullptr)
     {
       fp_dbnotmatched = fopen_output(opt_dbnotmatched);
-      if (! fp_dbnotmatched)
+      if (fp_dbnotmatched == nullptr)
         {
           fatal("Unable to open dbnotmatched output file for writing");
         }
     }
 
-  if (opt_otutabout)
+  if (opt_otutabout != nullptr)
     {
       fp_otutabout = fopen_output(opt_otutabout);
-      if (! fp_otutabout)
+      if (fp_otutabout == nullptr)
         {
           fatal("Unable to open OTU table (text format) output file for writing");
         }
     }
 
-  if (opt_mothur_shared_out)
+  if (opt_mothur_shared_out != nullptr)
     {
       fp_mothur_shared_out = fopen_output(opt_mothur_shared_out);
-      if (! fp_mothur_shared_out)
+      if (fp_mothur_shared_out == nullptr)
         {
           fatal("Unable to open OTU table (mothur format) output file for writing");
         }
     }
 
-  if (opt_biomout)
+  if (opt_biomout != nullptr)
     {
       fp_biomout = fopen_output(opt_biomout);
-      if (! fp_biomout)
+      if (fp_biomout == nullptr)
         {
           fatal("Unable to open OTU table (biom 1.0 format) output file for writing");
         }
@@ -741,7 +733,7 @@ auto search_exact_prep(char * cmdline, char * progheader) -> void
     {
       dust_all();
     }
-  else if ((opt_dbmask == MASK_SOFT) && (opt_hardmask))
+  else if ((opt_dbmask == MASK_SOFT) && (opt_hardmask != 0))
     {
       hardmask_all();
     }
@@ -753,8 +745,8 @@ auto search_exact_prep(char * cmdline, char * progheader) -> void
   /* tophits = the maximum number of hits we need to store */
   tophits = seqcount;
 
-  dbmatched = (uint64*) xmalloc(seqcount * sizeof(uint64*));
-  memset(dbmatched, 0, seqcount * sizeof(uint64*));
+  dbmatched = (uint64_t *) xmalloc(seqcount * sizeof(uint64_t *));
+  std::memset(dbmatched, 0, seqcount * sizeof(uint64_t *));
 
   dbhash_open(seqcount);
   dbhash_add_all();
@@ -768,51 +760,52 @@ auto search_exact_done() -> void
   db_free();
   xfree(dbmatched);
 
-  if (opt_dbmatched)
+  if (opt_dbmatched != nullptr)
     {
       fclose(fp_dbmatched);
     }
-  if (opt_dbnotmatched)
+  if (opt_dbnotmatched != nullptr)
     {
       fclose(fp_dbnotmatched);
     }
-  if (opt_matched)
+  if (opt_matched != nullptr)
     {
       fclose(fp_matched);
     }
-  if (opt_notmatched)
+  if (opt_notmatched != nullptr)
     {
       fclose(fp_notmatched);
     }
-  if (opt_fastapairs)
+  if (opt_fastapairs != nullptr)
     {
       fclose(fp_fastapairs);
     }
-  if (opt_qsegout)
+  if (opt_qsegout != nullptr)
     {
       fclose(fp_qsegout);
     }
-  if (opt_tsegout)
+  if (opt_tsegout != nullptr)
     {
       fclose(fp_tsegout);
     }
-  if (fp_uc)
+  if (fp_uc != nullptr)
     {
       fclose(fp_uc);
     }
-  if (fp_blast6out)
+  if (fp_blast6out != nullptr)
     {
       fclose(fp_blast6out);
     }
-  if (fp_userout)
+  if (fp_userout != nullptr)
     {
       fclose(fp_userout);
+      clean_up(); // free userfields allocation
     }
-  if (fp_alnout)
+  if (fp_alnout != nullptr)
     {
       fclose(fp_alnout);
     }
-  if (fp_samout)
+  if (fp_samout != nullptr)
     {
       fclose(fp_samout);
     }
@@ -820,10 +813,9 @@ auto search_exact_done() -> void
   show_rusage();
 }
 
-auto search_exact(char * cmdline, char * progheader) -> void
-{
-  opt_id = 1.0;
 
+auto search_exact(struct Parameters const & parameters, char const * cmdline, char const * progheader) -> void
+{
   search_exact_prep(cmdline, progheader);
 
   otutable_init();
@@ -833,18 +825,19 @@ auto search_exact(char * cmdline, char * progheader) -> void
   qmatches_abundance = 0;
   queries = 0;
   queries_abundance = 0;
-  query_fastx_h = fastx_open(opt_search_exact);
+  query_fastx_h = fastx_open(parameters.opt_search_exact);
 
   /* allocate memory for thread info */
-  std::vector<struct searchinfo_s> si_plus_v(opt_threads);
+  std::vector<struct searchinfo_s> si_plus_v(parameters.opt_threads);
   si_plus = si_plus_v.data();
-  if (opt_strand > 1)
+  std::vector<struct searchinfo_s> si_minus_v;
+  if (parameters.opt_strand)
     {
-      std::vector<struct searchinfo_s> si_minus_v(opt_threads);
+      si_minus_v.resize(parameters.opt_threads);
       si_minus = si_minus_v.data();
     }
 
-  std::vector<pthread_t> pthread_v(opt_threads);
+  std::vector<pthread_t> pthread_v(parameters.opt_threads);
   pthread = pthread_v.data();
 
   /* init mutexes for input and output */
@@ -864,7 +857,7 @@ auto search_exact(char * cmdline, char * progheader) -> void
 
   fastx_close(query_fastx_h);
 
-  if (! opt_quiet)
+  if (! parameters.opt_quiet)
     {
       fprintf(stderr, "Matching unique query sequences: %d of %d",
               qmatches, queries);
@@ -873,7 +866,7 @@ auto search_exact(char * cmdline, char * progheader) -> void
           fprintf(stderr, " (%.2f%%)", 100.0 * qmatches / queries);
         }
       fprintf(stderr, "\n");
-      if (opt_sizein)
+      if (parameters.opt_sizein)
         {
           fprintf(stderr, "Matching total query sequences: %" PRIu64 " of %"
                   PRIu64,
@@ -887,7 +880,7 @@ auto search_exact(char * cmdline, char * progheader) -> void
         }
     }
 
-  if (opt_log)
+  if (parameters.opt_log != nullptr)
     {
       fprintf(fp_log, "Matching unique query sequences: %d of %d",
               qmatches, queries);
@@ -896,7 +889,7 @@ auto search_exact(char * cmdline, char * progheader) -> void
           fprintf(fp_log, " (%.2f%%)", 100.0 * qmatches / queries);
         }
       fprintf(fp_log, "\n");
-      if (opt_sizein)
+      if (parameters.opt_sizein)
         {
           fprintf(fp_log, "Matching total query sequences: %" PRIu64 " of %"
                   PRIu64,
@@ -911,27 +904,27 @@ auto search_exact(char * cmdline, char * progheader) -> void
     }
 
   // Add OTUs with no matches to OTU table
-  if (opt_otutabout || opt_mothur_shared_out || opt_biomout) {
+  if ((opt_otutabout != nullptr) || (opt_mothur_shared_out != nullptr) || (opt_biomout != nullptr)) {
     for (int64_t i = 0; i < seqcount; i++) {
-      if (! dbmatched[i]) {
+      if (dbmatched[i] == 0U) {
         otutable_add(nullptr, db_getheader(i), 0);
       }
     }
   }
 
-  if (fp_biomout)
+  if (fp_biomout != nullptr)
     {
       otutable_print_biomout(fp_biomout);
       fclose(fp_biomout);
     }
 
-  if (fp_otutabout)
+  if (fp_otutabout != nullptr)
     {
       otutable_print_otutabout(fp_otutabout);
       fclose(fp_otutabout);
     }
 
-  if (fp_mothur_shared_out)
+  if (fp_mothur_shared_out != nullptr)
     {
       otutable_print_mothur_shared_out(fp_mothur_shared_out);
       fclose(fp_mothur_shared_out);
@@ -942,14 +935,14 @@ auto search_exact(char * cmdline, char * progheader) -> void
   int count_dbmatched = 0;
   int count_dbnotmatched = 0;
 
-  if (opt_dbmatched || opt_dbnotmatched)
+  if ((opt_dbmatched != nullptr) || (opt_dbnotmatched != nullptr))
     {
       for (int64_t i = 0; i < seqcount; i++)
         {
-          if (dbmatched[i])
+          if (dbmatched[i] != 0U)
             {
               ++count_dbmatched;
-              if (opt_dbmatched)
+              if (opt_dbmatched != nullptr)
                 {
                   fasta_print_general(fp_dbmatched,
                                       nullptr,
@@ -966,7 +959,7 @@ auto search_exact(char * cmdline, char * progheader) -> void
           else
             {
               ++count_dbnotmatched;
-              if (opt_dbnotmatched)
+              if (opt_dbnotmatched != nullptr)
                 {
                   fasta_print_general(fp_dbnotmatched,
                                       nullptr,

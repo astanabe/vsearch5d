@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -67,51 +66,51 @@
 
 /* fasta input */
 
-auto fasta_open_rest(fastx_handle h) -> void;
+auto fasta_open_rest(fastx_handle input_handle) -> void;
 auto fasta_open(const char * filename) -> fastx_handle;
-auto fasta_close(fastx_handle h) -> void;
-auto fasta_next(fastx_handle h,
+auto fasta_close(fastx_handle input_handle) -> void;
+auto fasta_next(fastx_handle input_handle,
                 bool truncateatspace,
                 const unsigned char * char_mapping) -> bool;
-auto fasta_get_position(fastx_handle h) -> uint64_t;
-auto fasta_get_size(fastx_handle h) -> uint64_t;
-auto fasta_get_lineno(fastx_handle h) -> uint64_t;
-auto fasta_get_seqno(fastx_handle h) -> uint64_t;
-auto fasta_get_header(fastx_handle h) -> char *;
-auto fasta_get_sequence(fastx_handle h) -> char *;
-auto fasta_get_header_length(fastx_handle h) -> uint64_t;
-auto fasta_get_sequence_length(fastx_handle h) -> uint64_t;
-auto fasta_get_abundance(fastx_handle h) -> int64_t;
-auto fasta_get_abundance_and_presence(fastx_handle h) -> int64_t;
+auto fasta_get_position(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_size(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_lineno(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_seqno(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_header(fastx_handle input_handle) -> char const *;
+auto fasta_get_sequence(fastx_handle input_handle) -> char const *;
+auto fasta_get_header_length(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_sequence_length(fastx_handle input_handle) -> uint64_t;
+auto fasta_get_abundance(fastx_handle input_handle) -> int64_t;
+auto fasta_get_abundance_and_presence(fastx_handle input_handle) -> int64_t;
 
 /* fasta output */
 
-auto fasta_print(std::FILE * fp,
-                 const char * hdr,
-                 char * seq,
+auto fasta_print(std::FILE * output_handle,
+                 char const * header,
+                 char const * seq,
                  uint64_t len) -> void;
 
 auto fasta_print_general(std::FILE * output_handle,
-                         const char * prefix,
-                         char * seq,
+                         char const * prefix,
+                         char const * seq,
                          int len,
-                         char * header,
+                         char const * header,
                          int header_length,
                          unsigned int abundance,
                          int ordinal,
-                         double ee,
+                         double expected_error,
                          int clustersize,
                          int clusterid,
-                         const char * score_name,
+                         char const * score_name,
                          double score) -> void;
 
-auto fasta_print_db(std::FILE * fp,
+auto fasta_print_db(std::FILE * output_handle,
                     uint64_t seqno) -> void;
 
-auto fasta_print_db_relabel(std::FILE * fp,
+auto fasta_print_db_relabel(std::FILE * output_handle,
                             uint64_t seqno,
                             int ordinal) -> void;
 
-auto fasta_print_db_relabel(std::FILE * fp,
+auto fasta_print_db_relabel(std::FILE * output_handle,
                             uint64_t seqno,
                             std::size_t ordinal) -> void;

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,11 +62,12 @@
 
 #include "vsearch5d.h"
 #include "utils/maps.hpp"
+#include "utils/span.hpp"
 #include <algorithm>  // std::find_if
 #include <cassert>
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cstdint>  // int64_t, uint64_t
-#include <cstdio>  // std::FILE, std::fprintf, std::fclose
+#include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t
 #include <iterator>  // std::distance
 #include <vector>
 
@@ -79,24 +79,25 @@ constexpr long int char_max = std::numeric_limits<char>::max();
 
 constexpr unsigned int n_characters = 256;
 
-struct statistics {
-  std::vector<uint64_t> sequence_chars;
-  std::vector<uint64_t> quality_chars;
-  std::vector<uint64_t> tail_chars;
-  std::vector<int> maxrun;
-  uint64_t total_chars = 0;
-  uint64_t seq_count = 0;
-  unsigned char qmin_n = 255;
-  unsigned char qmax_n = 0;
-  char qmin = '\0';
-  char qmax = '\0';
-  char fastq_ascii = '\0';
-  char fastq_qmin = '\0';
-  char fastq_qmax = '\0';
-};
-
-
+// anonymous namespace: limit visibility and usage to this translation unit
 namespace {
+
+  struct statistics {
+    std::vector<uint64_t> sequence_chars;
+    std::vector<uint64_t> quality_chars;
+    std::vector<uint64_t> tail_chars;
+    std::vector<int> maxrun;
+    uint64_t total_chars = 0;
+    uint64_t seq_count = 0;
+    unsigned char qmin_n = 255;
+    unsigned char qmax_n = 0;
+    char qmin = '\0';
+    char qmax = '\0';
+    char fastq_ascii = '\0';
+    char fastq_qmin = '\0';
+    char fastq_qmax = '\0';
+  };
+
 
   auto guess_quality_offset(struct statistics & stats) -> void {
     static constexpr auto lowerbound = ';';  // char 59 (-5 to offset +64)
@@ -143,7 +144,26 @@ namespace {
     assert(index >= 0);
     assert(index <= char_max);
     stats.qmax = static_cast<char>(index);
-}
+  }
+
+
+  auto search_trailing_homopolymers(Span<char> const symbols, int64_t const tail_length_signed) -> char {
+    // search for trailing homopolymers of length >= 'tail_length'
+    assert(tail_length_signed >= 0);
+    auto const tail_length = static_cast<std::size_t>(tail_length_signed);
+    if (symbols.size() < tail_length) {
+      return '\0';
+    }
+    auto const last_symbol = symbols.back();
+    auto const tail = symbols.last(tail_length);
+    if (std::all_of(
+            tail.begin(), tail.end(),
+            [last_symbol](char const symbol) -> bool { return symbol == last_symbol; })
+        ) {
+      return last_symbol;
+    }
+    return '\0';
+  }
 
 
   auto stats_message(std::FILE * output_stream,
@@ -258,7 +278,7 @@ namespace {
     }
     stats_message(stderr, stats);
   }
-}
+}  // end of anonymous namespace
 
 
 auto fastq_chars(struct Parameters const & parameters) -> void
@@ -278,8 +298,8 @@ auto fastq_chars(struct Parameters const & parameters) -> void
   while (fastq_next(fastq_handle, false, chrmap_upcase_vector.data()))
     {
       auto const seq_length = fastq_get_sequence_length(fastq_handle);
-      auto * seq_ptr = fastq_get_sequence(fastq_handle);
-      auto * qual_ptr = fastq_get_quality(fastq_handle);
+      auto const * seq_ptr = fastq_get_sequence(fastq_handle);
+      auto const * qual_ptr = fastq_get_quality(fastq_handle);
 
       ++stats.seq_count;
       stats.total_chars += seq_length;
@@ -314,26 +334,13 @@ auto fastq_chars(struct Parameters const & parameters) -> void
             }
         }
 
-      if (seq_length >= static_cast<uint64_t>(parameters.opt_fastq_tail))
-        {
-          qual_ptr = std::next(fastq_get_quality(fastq_handle), static_cast<long>(seq_length - 1));
-          auto const tail_char = *qual_ptr;
-          std::advance(qual_ptr, -1);
-          auto tail_len = 1;
-          while (*qual_ptr == tail_char)
-            {
-              std::advance(qual_ptr, -1);
-              ++tail_len;
-              if (tail_len >= parameters.opt_fastq_tail)
-                {
-                  break;
-                }
-            }
-          if (tail_len >= parameters.opt_fastq_tail)
-            {
-              ++stats.tail_chars[tail_char];
-            }
-        }
+      // search for trailing homopolymers in quality strings
+      auto const tail_char =
+        search_trailing_homopolymers(Span<char>{fastq_get_quality(fastq_handle), seq_length},
+                                     parameters.opt_fastq_tail);
+      if (tail_char != '\0') {
+        ++stats.tail_chars[tail_char];
+      }
 
       progress_update(fastq_get_position(fastq_handle));
     }

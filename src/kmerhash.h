@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,17 +60,15 @@
 
 */
 
-struct kh_handle_s;
+#include <vector>
 
-auto kh_init() -> struct kh_handle_s *;
-auto kh_exit(struct kh_handle_s * kh) -> void;
 
-auto kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len) -> void;
+auto kh_insert_kmers(struct kh_handle_s & kmer_hash, int k_offset, char const * seq, int len) -> void;
 
-auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) -> int;
+auto kh_find_best_diagonal(struct kh_handle_s & kmer_hash, int k_offset, char const * seq, int len) -> int;
 
-auto kh_find_diagonals(struct kh_handle_s * kh,
-                       int k,
-                       char * seq,
+auto kh_find_diagonals(struct kh_handle_s & kmer_hash,
+                       int k_offset,
+                       char const * seq,
                        int len,
-                       int * diags) -> void;
+                       std::vector<int> & diags) -> void;

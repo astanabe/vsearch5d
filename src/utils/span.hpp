@@ -1,0 +1,242 @@
+/*
+
+  VSEARCH5D: a modified version of VSEARCH
+
+  Copyright (C) 2016-2025, Akifumi S. Tanabe
+
+  Contact: Akifumi S. Tanabe
+  https://github.com/astanabe/vsearch5d
+
+  Original version of VSEARCH
+  Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
+  All rights reserved.
+
+  This software is dual-licensed and available under a choice
+  of one of two licenses, either under the terms of the GNU
+  General Public License version 3 or the BSD 2-Clause License.
+
+
+  GNU General Public License version 3
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+  The BSD 2-Clause License
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+  1. Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+  COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+#ifndef SPAN_HPP
+#define SPAN_HPP
+
+
+#include <algorithm>  // std::equal, std::lexicographical_compare, std::min
+#include <cassert>
+#include <cstddef>  // std::ptrdiff_t
+#include <cstdlib>  // std::size_t
+#include <iterator> // std::prev, std::next
+
+#ifndef NDEBUG
+#include <limits>
+// C++17 refactoring: [[maybe_unused]]
+constexpr auto max_ptrdiff = std::numeric_limits<std::ptrdiff_t>::max();
+constexpr auto max_size = std::numeric_limits<std::size_t>::max();
+#endif
+
+
+// TODO:
+//  - turn into a View (not allowed to modify the underlying data), not possible because ot strtoll()
+//  - add friend function for custom hashing,
+//  - goal is to be able to build std::map and std::set of Span<char>
+
+
+// simple version of std::span (C++20)
+//
+// only valid for contiguous sequences of elements (vectors or arrays)
+// of any type Type (except std::vector<bool>?)
+
+template <typename Type>
+class Span {
+public:
+  explicit Span(Type * start, std::size_t const length)
+    : start_ {start},
+      length_ {length} {
+    assert(start != nullptr);
+    assert(length <= max_ptrdiff);
+  }
+
+  explicit Span(Type const * start, std::size_t const length)
+    : start_ {const_cast<Type *>(start)},
+      length_ {length} {
+    assert(start != nullptr);
+    assert(length <= max_ptrdiff);
+  }
+
+  // Operators
+  auto operator==(Span<Type> const & other) const -> bool {
+    return size() == other.size()
+      and std::equal(cbegin(), cend(), other.cbegin());
+  }
+  auto operator<(Span<Type> const & other) const -> bool {
+    return std::lexicographical_compare(cbegin(), cend(),
+                                        other.cbegin(), other.cend());
+  }
+
+  // Iterators
+  auto begin() const -> Type * { return data(); }
+  auto cbegin() const -> Type const * { return data(); }
+  auto end() const -> Type * {
+    auto const distance = static_cast<std::ptrdiff_t>(size());
+    return std::next(data(), distance);
+  }
+  auto cend() const -> Type const * {
+    return end();
+  }
+  auto rbegin() const -> std::reverse_iterator<Type *> {
+    return std::reverse_iterator<Type *>(end());
+  }
+  auto crbegin() const -> std::reverse_iterator<Type const *> {
+    return std::reverse_iterator<Type const *>(cend());
+  }
+  auto rend() const -> std::reverse_iterator<Type *> {
+    return std::reverse_iterator<Type *>(begin());
+  }
+  auto crend() const -> std::reverse_iterator<Type const *> {
+    return std::reverse_iterator<Type const *>(cbegin());
+  }
+
+  // Element access
+  // C++17 refactoring: [[nodiscard]]
+  auto front() const -> Type const & {
+    assert(not empty());
+    return *data();
+  }
+  auto back() const -> Type const & {
+    assert(not empty());
+    return *std::prev(end());
+  }
+  auto data() const -> Type * { return start_; }
+  auto operator[](std::size_t const index) const -> Type & {
+    assert(index < size());
+    auto const distance = static_cast<std::ptrdiff_t>(index);
+    return *std::next(data(), distance);
+  }
+
+  // Observers
+  auto size() const -> std::size_t { return length_; }
+  auto size_bytes() const -> std::size_t {
+    assert(size() <= (max_size / sizeof(Type)));
+    return size() * sizeof(Type);
+  }
+  auto empty() const -> bool { return size() == 0; }
+
+  // Subviews
+  auto subspan(std::size_t const offset, std::size_t const count) const -> Span {
+    assert(offset <= size());
+    assert(count <= size() - offset);
+    auto const distance = static_cast<std::ptrdiff_t>(offset);
+    auto * new_start = std::next(data(), distance);
+    return Span{new_start, count};
+  }
+  auto first(std::size_t const count) const -> Span {
+    return subspan(0, count);
+  }
+  auto last(std::size_t const count) const -> Span {
+    assert(count <= size());
+    return subspan(size() - count, count);
+  }
+  auto drop(std::size_t const count) const -> Span {
+    // drop n first items, return empty if n is >= size()
+    auto const offset = std::min(count, size());
+    assert(offset <= size());
+    return subspan(offset, size() - offset);
+  }
+
+private:
+  Type * start_ {};
+  std::size_t length_ {};
+};
+
+
+// tests:
+
+// #include <algorithm>
+// #include <vector>
+
+// auto main() -> int {
+//   std::vector<char> v = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'};
+//   auto s = Span<char>{v.data(), 5};
+//   assert(s.size() == 5);
+//   assert(s.size_bytes() == 5);
+//   assert(! s.empty());
+//   assert(s.front() == 'a');
+//   assert(s.back() == 'e');
+//   assert(s[1] == 'b');
+//   for (auto c: s) {
+//     printf("%c\n", c);
+//   }
+//   printf("\n");
+//   auto report = [](char const &c) -> void { printf("%c\n", c); };
+//   std::for_each(s.begin(), s.end(), report);
+//   printf("\n");
+//   // assert(s[5] == 'f');
+//   auto s1 = Span<char>{v.data(), 0};
+//   std::for_each(s1.begin(), s1.end(), report);
+//   printf("\n");
+//   auto s2 = Span<char>{v.data(), 10};
+//   auto s3 = s2.first(2);
+//   std::for_each(s3.begin(), s3.end(), report);
+//   printf("\n");
+//   auto s4 = s2.first(10);
+//   std::for_each(s4.begin(), s4.end(), report);
+//   printf("\n");
+//   auto s5 = s2.first(0);
+//   std::for_each(s5.begin(), s5.end(), report);
+//   printf("\n");
+//   auto s6 = s2.last(0);
+//   std::for_each(s6.begin(), s6.end(), report);
+//   printf("\n");
+//   auto s7 = s2.last(2);
+//   std::for_each(s7.begin(), s7.end(), report);
+//   printf("\n");
+//   std::for_each(s7.rbegin(), s7.rend(), report);
+//   printf("\n");
+//   std::for_each(s7.crbegin(), s7.crend(), report);
+//   printf("\n");
+// }
+
+#endif // SPAN_HPP

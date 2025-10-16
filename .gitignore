@@ -3,7 +3,6 @@
 *.json
 *.o
 *.pdf
-*.sh
 *.texinfo
 *~
 .cache/
@@ -11,6 +10,8 @@
 .dirstamp
 /autom4te.cache
 /bin
+/docs
+/man/manpages
 /config.h
 /config.log
 /config.status

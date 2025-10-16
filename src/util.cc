@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -64,14 +63,14 @@
 #include "vsearch5d.h"
 #include "city.h"
 #include "md5.h"
+#include "utils/fatal.hpp"
 #include "utils/maps.hpp"
 #include <cassert>
 #include <cinttypes>  // macros PRIu64 and PRId64
-#include <climits>  // ULONG_MAX, RAND_MAX
 #include <cstdarg>  // va_list
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t, std::vsnprintf, std::fopen
-#include <cstdlib>  // std::exit, EXIT_FAILURE
+#include <cstdlib>  // std::exit, EXIT_FAILURE, RAND_MAX
 #include <cstring>  // std::strlen, std::strcmp, std::strcpy, std::strchr
 #include <ctime>  // timeval, gettimeofday
 #include <iterator>  // std::next
@@ -88,7 +87,8 @@ static uint64_t progress_pct;
 static bool progress_show;
 
 
-auto progress_init(const char * prompt, uint64_t size) -> void
+// refactoring: make a progress object, with an .update() method and automatic closure?
+auto progress_init(char const * prompt, uint64_t const size) -> void
 {
   progress_show = (isatty(fileno(stderr)) != 0) and (not opt_quiet) and (not opt_no_progress);
   progress_prompt = prompt;
@@ -103,7 +103,7 @@ auto progress_init(const char * prompt, uint64_t size) -> void
 }
 
 
-auto progress_update(uint64_t progress) -> void
+auto progress_update(uint64_t const progress) -> void
 {
   if ((progress < progress_next) or not progress_show) { return; }
   if (progress_size == 0) {
@@ -126,67 +126,23 @@ auto progress_done() -> void
     {
       std::fprintf(stderr, "  \r%s", progress_prompt);
     }
-  std::fprintf(stderr, " %ld%%\n", one_hundred_percent);
-}
-
-
-__attribute__((noreturn))
-auto fatal(const char * msg) -> void
-{
-  std::fprintf(stderr, "\n\n");
-  std::fprintf(stderr, "Fatal error: %s\n", msg);
-
-  if (fp_log != nullptr)
-    {
-      std::fprintf(fp_log, "\n\n");
-      std::fprintf(fp_log, "Fatal error: %s\n", msg);
-    }
-
-  std::exit(EXIT_FAILURE);
-}
-
-
-__attribute__((noreturn))
-auto fatal(const char * format,
-           const char * message) -> void
-{
-  std::fprintf(stderr, "\n\nFatal error: ");
-  std::fprintf(stderr, format, message);
-  std::fprintf(stderr, "\n");
-
-  if (opt_log != nullptr)
-    {
-      std::fprintf(fp_log, "\n\nFatal error: ");
-      std::fprintf(fp_log, format, message);
-      std::fprintf(fp_log, "\n");
-    }
-
-  std::exit(EXIT_FAILURE);
+  std::fprintf(stderr, " %lu%%\n", one_hundred_percent);
 }
 
 
 auto xstrdup(char const * src) -> char *
 {
   auto const len = std::strlen(src);
-  auto * dest = (char *) xmalloc(len + 1);
+  auto * dest = static_cast<char *>(xmalloc(len + 1));
   return std::strcpy(dest, src);
 }
 
 
-auto xstrchrnul(char * str, int target) -> char *
+auto xsprintf(char * * ret, char const * format, ...) -> int
 {
-  // find the first occurrence to static_cast<char>(target)
-  auto * first_occurrence = std::strchr(str, target);
-
-  if (first_occurrence != nullptr) {
-    return first_occurrence;
-  }
-  return std::next(str, static_cast<long>(std::strlen(str)));
-}
-
-
-auto xsprintf(char * * ret, const char * format, ...) -> int
-{
+  // refactoring: build string with std::string?
+  // refactoring: C variadic function, replace with template variadic function?
+  // Only used with one or two extra arguments, it could be a simple overload
   std::va_list args;
   va_start(args, format);
   auto len = std::vsnprintf(nullptr, 0, format, args);
@@ -195,7 +151,11 @@ auto xsprintf(char * * ret, const char * format, ...) -> int
     {
       fatal("Error with vsnprintf in xsprintf");
     }
-  auto * buffer = (char *) xmalloc(len + 1);
+  auto * buffer = static_cast<char *>(xmalloc(len + 1));
+  if (buffer == nullptr)
+    {
+      fatal("Out of memory");
+    }
   va_start(args, format);
   len = std::vsnprintf(buffer, len + 1, format, args);
   va_end(args);
@@ -204,15 +164,15 @@ auto xsprintf(char * * ret, const char * format, ...) -> int
 }
 
 
-auto hash_cityhash64(char * sequence, uint64_t length) -> uint64_t
+auto hash_cityhash64(char const * sequence, uint64_t const length) -> uint64_t
 {
-  return CityHash64((const char *) sequence, length);
+  return CityHash64(sequence, length);
 }
 
 
-auto hash_cityhash128(char * sequence, uint64_t length) -> uint128
+auto hash_cityhash128(char const * sequence, uint64_t const length) -> uint128
 {
-  return CityHash128((const char *) sequence, length);
+  return CityHash128(sequence, length);
 }
 
 
@@ -237,15 +197,22 @@ auto show_rusage() -> void
 }
 
 
-auto reverse_complement(char * rc_seq, char * seq, int64_t len) -> void
+// refactoring: create reverse_complement.hpp, progressive migration
+// write overloads for span?
+// assert(destination.size() > source.size());
+// std::reverse_copy(source.begin(), source.end(), destination.begin());
+// auto complement = [](char nucleotide) -> char { ... };
+// std::transform(destination.begin(), destination.end(), destination.begin(), complement)
+// destination[length] = '\0';
+auto reverse_complement(char * rc_seq, char const * seq, int64_t const len) -> void
 {
   /* Write the reverse complementary sequence to rc_seq.
      The memory for rc_seq must be long enough for the rc_seq of the sequence
      (identical to the length of seq + 1). */
 
   for (auto i = 0LL; i < len; ++i) {
-    auto const unsigned_char = static_cast<unsigned char>(*std::next(seq, len - 1 - i));
-    auto const complement_char = static_cast<char>(chrmap_complement_vector[unsigned_char]);
+    auto const nucleotide = *std::next(seq, len - 1 - i);
+    auto const complement_char = map_complement(nucleotide);
     *std::next(rc_seq, i) = complement_char;
   }
   *std::next(rc_seq, len) = '\0';
@@ -258,7 +225,7 @@ auto random_init() -> void
 }
 
 
-auto random_int(int64_t upper_limit) -> int64_t
+auto random_int(int64_t const upper_limit) -> int64_t
 {
   /*
     Generate a random integer in the range 0 to n-1, inclusive.
@@ -280,7 +247,7 @@ auto random_int(int64_t upper_limit) -> int64_t
 }
 
 
-auto random_ulong(uint64_t upper_limit) -> uint64_t
+auto random_ulong(uint64_t const upper_limit) -> uint64_t
 {
   /*
     Generate a random integer in the range 0 to n-1, inclusive,
@@ -303,7 +270,7 @@ auto random_ulong(uint64_t upper_limit) -> uint64_t
 }
 
 
-auto string_normalize(char * normalized, char * raw_seq, unsigned int len) -> void
+auto string_normalize(char * normalized, char const * raw_seq, unsigned int const len) -> void
 {
   /* convert string to upper case and replace U by T */
   for (auto i = 0U; i < len; ++i)
@@ -318,16 +285,7 @@ auto string_normalize(char * normalized, char * raw_seq, unsigned int len) -> vo
 }
 
 
-auto fprint_hex(std::FILE * output_handle, unsigned char * data, int len) -> void
-{
-  for (auto i = 0; i < len; ++i)
-    {
-      std::fprintf(output_handle, "%02x", *std::next(data, i));
-    }
-}
-
-
-auto SHA1(const unsigned char * data, unsigned long len, unsigned char * digest) -> void
+auto SHA1(unsigned char const * data, unsigned long const len, unsigned char * digest) -> void
 {
   if (digest == nullptr)
     {
@@ -340,7 +298,7 @@ auto SHA1(const unsigned char * data, unsigned long len, unsigned char * digest)
 }
 
 
-auto MD5(void * data, unsigned long len, unsigned char * digest) -> void
+auto MD5(void * data, unsigned long const len, unsigned char * digest) -> void
 {
   if (digest == nullptr)
     {
@@ -353,11 +311,11 @@ auto MD5(void * data, unsigned long len, unsigned char * digest) -> void
 }
 
 
-static constexpr auto drop_lower_nibble = 4U;
-static constexpr auto mask_upper_nibble = 15U;
-static const std::vector<char> hexdigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+constexpr auto drop_lower_nibble = 4U;
+constexpr auto mask_upper_nibble = 15U;
+const std::vector<char> hexdigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
-auto get_hex_seq_digest_sha1(char * hex, char * seq, int seqlen) -> void
+auto get_hex_seq_digest_sha1(char * hex, char const * seq, int const seqlen) -> void
 {
   /* Save hexadecimal representation of the SHA1 hash of the sequence.
      The string array digest must be large enough (len_hex_dig_sha1).
@@ -382,7 +340,7 @@ auto get_hex_seq_digest_sha1(char * hex, char * seq, int seqlen) -> void
 }
 
 
-auto get_hex_seq_digest_md5(char * hex, char * seq, int seqlen) -> void
+auto get_hex_seq_digest_md5(char * hex, char const * seq, int const seqlen) -> void
 {
   /* Save hexadecimal representation of the MD5 hash of the sequence.
      The string array digest must be large enough (len_hex_dig_md5).
@@ -405,7 +363,7 @@ auto get_hex_seq_digest_md5(char * hex, char * seq, int seqlen) -> void
 }
 
 
-auto fprint_seq_digest_sha1(std::FILE * output_handle, char * seq, int seqlen) -> void
+auto fprint_seq_digest_sha1(std::FILE * output_handle, char const * seq, int const seqlen) -> void
 {
   std::vector<char> hex_digest(len_hex_dig_sha1);
   get_hex_seq_digest_sha1(hex_digest.data(), seq, seqlen);
@@ -413,7 +371,7 @@ auto fprint_seq_digest_sha1(std::FILE * output_handle, char * seq, int seqlen) -
 }
 
 
-auto fprint_seq_digest_md5(std::FILE * output_handle, char * seq, int seqlen) -> void
+auto fprint_seq_digest_md5(std::FILE * output_handle, char const * seq, int const seqlen) -> void
 {
   std::vector<char> hex_digest(len_hex_dig_md5);
   get_hex_seq_digest_md5(hex_digest.data(), seq, seqlen);
@@ -421,23 +379,7 @@ auto fprint_seq_digest_md5(std::FILE * output_handle, char * seq, int seqlen) ->
 }
 
 
-auto fopen_input(const char * filename) -> std::FILE *
-{
-  /* open the input stream given by filename, but use stdin if name is - */
-  if (std::strcmp(filename, "-") == 0)
-    {
-      auto const file_descriptor = dup(STDIN_FILENO);
-      if (file_descriptor < 0)
-        {
-          return nullptr;
-        }
-      return fdopen(file_descriptor, "rb");
-    }
-  return std::fopen(filename, "rb");
-}
-
-
-auto fopen_output(const char * filename) -> std::FILE *
+auto fopen_output(char const * filename) -> std::FILE *
 {
   /* open the output stream given by filename, but use stdout if name is - */
   if (std::strcmp(filename, "-") == 0)

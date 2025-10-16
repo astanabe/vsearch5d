@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,13 +62,15 @@
 
 #include "vsearch5d.h"
 #include "dynlibs.h"
-#include <cstdio>  // std::FILE
+#include "utils/fatal.hpp"
+#include <algorithm>  // std::max
+#include <cstdio>  // std::FILE, std::size_t
 #include <cstdint>  // uint64_t
 #include <cstdlib>  // std::realloc, std::free
-#include <string.h>  // strcasestr
 
 
-const int memalignment = 16;
+constexpr auto memalignment = 16;
+
 
 auto arch_get_memused() -> uint64_t
 {
@@ -97,6 +98,7 @@ auto arch_get_memused() -> uint64_t
 #endif
 }
 
+
 auto arch_get_memtotal() -> uint64_t
 {
 #ifdef _WIN32
@@ -110,7 +112,7 @@ auto arch_get_memtotal() -> uint64_t
 
   int mib [] = { CTL_HW, HW_MEMSIZE };
   int64_t ram = 0;
-  size_t length = sizeof(ram);
+  std::size_t length = sizeof(ram);
   if(sysctl(mib, 2, &ram, &length, NULL, 0) == -1)
     fatal("Cannot determine amount of RAM");
   return ram;
@@ -119,7 +121,7 @@ auto arch_get_memtotal() -> uint64_t
 
   int64_t const phys_pages = sysconf(_SC_PHYS_PAGES);
   int64_t const pagesize = sysconf(_SC_PAGESIZE);
-  if ((phys_pages == -1) || (pagesize == -1))
+  if ((phys_pages == -1) or (pagesize == -1))
     {
       fatal("Cannot determine amount of RAM");
     }
@@ -135,6 +137,7 @@ auto arch_get_memtotal() -> uint64_t
 #endif
 }
 
+
 auto arch_get_cores() -> long
 {
 #ifdef _WIN32
@@ -145,6 +148,7 @@ auto arch_get_cores() -> long
   return sysconf(_SC_NPROCESSORS_ONLN);
 #endif
 }
+
 
 auto arch_get_user_system_time(double * user_time, double * system_time) -> void
 {
@@ -164,12 +168,13 @@ auto arch_get_user_system_time(double * user_time, double * system_time) -> void
 #else
   struct rusage r_usage;
   getrusage(RUSAGE_SELF, & r_usage);
-  * user_time = r_usage.ru_utime.tv_sec * 1.0
-    + r_usage.ru_utime.tv_usec * 1.0e-6;
-  * system_time = r_usage.ru_stime.tv_sec * 1.0
-    + r_usage.ru_stime.tv_usec * 1.0e-6;
+  * user_time = (r_usage.ru_utime.tv_sec * 1.0)
+    + (r_usage.ru_utime.tv_usec * 1.0e-6);
+  * system_time = (r_usage.ru_stime.tv_sec * 1.0)
+    + (r_usage.ru_stime.tv_usec * 1.0e-6);
 #endif
 }
+
 
 auto arch_srandom() -> void
 {
@@ -180,7 +185,7 @@ auto arch_srandom() -> void
 #ifdef _WIN32
       srand(GetTickCount());
 #else
-      int const fd = open("/dev/urandom", O_RDONLY);
+      auto const fd = open("/dev/urandom", O_RDONLY);
       if (fd < 0)
         {
           fatal("Unable to open /dev/urandom");
@@ -203,6 +208,7 @@ auto arch_srandom() -> void
     }
 }
 
+
 auto arch_random() -> uint64_t
 {
 #ifdef _WIN32
@@ -212,49 +218,48 @@ auto arch_random() -> uint64_t
 #endif
 }
 
-auto xmalloc(size_t size) -> void *
+
+auto xmalloc(std::size_t size) -> void *
 {
-  if (size == 0)
-    {
-      size = 1;
-    }
-  void * t = nullptr;
+  static constexpr auto minimal_allocation = std::size_t{1};
+  size = std::max(size, minimal_allocation);
+  void * ptr = nullptr;
 #ifdef _WIN32
-  t = _aligned_malloc(size, memalignment);
+  ptr = _aligned_malloc(size, memalignment);
 #else
-  if (posix_memalign(& t, memalignment, size))
+  if (posix_memalign(&ptr, memalignment, size) != 0)
     {
-      t = nullptr;
+      ptr = nullptr;
     }
 #endif
-  if (!t)
+  if (ptr == nullptr)
     {
       fatal("Unable to allocate enough memory.");
     }
-  return t;
+  return ptr;
 }
 
-auto xrealloc(void *ptr, size_t size) -> void *
+
+auto xrealloc(void * ptr, std::size_t size) -> void *
 {
-  if (size == 0)
-    {
-      size = 1;
-    }
+  static constexpr auto minimal_allocation = std::size_t{1};
+  size = std::max(size, minimal_allocation);
 #ifdef _WIN32
-  void * t = _aligned_realloc(ptr, size, memalignment);
+  void * new_ptr = _aligned_realloc(ptr, size, memalignment);
 #else
-  void * t = realloc(ptr, size);
+  void * new_ptr = realloc(ptr, size);
 #endif
-  if (not t)
+  if (new_ptr == nullptr)
     {
       fatal("Unable to reallocate enough memory.");
     }
-  return t;
+  return new_ptr;
 }
+
 
 auto xfree(void * ptr) -> void
 {
-  if (ptr)
+  if (ptr != nullptr)
     {
 #ifdef _WIN32
       _aligned_free(ptr);
@@ -268,14 +273,16 @@ auto xfree(void * ptr) -> void
     }
 }
 
+
 auto xfstat(int file_descriptor, xstat_t * buf) -> int
 {
 #ifdef _WIN32
   return _fstat64(file_descriptor, buf);
 #else
-  return fstat(file_descriptor, buf);
+  return fstat(file_descriptor, buf);  // return zero if success
 #endif
 }
+
 
 auto xstat(const char * path, xstat_t * buf) -> int
 {
@@ -286,15 +293,18 @@ auto xstat(const char * path, xstat_t * buf) -> int
 #endif
 }
 
+
 auto xlseek(int file_descriptor, uint64_t offset, int whence) -> uint64_t
 {
 #ifdef _WIN32
   return _lseeki64(file_descriptor, offset, whence);
 #else
-  return lseek(file_descriptor, offset, whence);
+  return lseek(file_descriptor, offset, whence);  // libC or linuxism: replace with std::fseek()?
 #endif
 }
 
+
+// refactoring: only used in fastx.cc
 auto xftello(std::FILE * stream) -> uint64_t
 {
 #ifdef _WIN32
@@ -304,6 +314,8 @@ auto xftello(std::FILE * stream) -> uint64_t
 #endif
 }
 
+
+// refactoring: only used in udb.cc
 auto xopen_read(const char * path) -> int
 {
 #ifdef _WIN32
@@ -313,6 +325,8 @@ auto xopen_read(const char * path) -> int
 #endif
 }
 
+
+// refactoring: only used in udb.cc
 auto xopen_write(const char * path) -> int
 {
 #ifdef _WIN32
@@ -326,24 +340,15 @@ auto xopen_write(const char * path) -> int
 #endif
 }
 
-auto xstrcasestr(const char * haystack, const char * needle) -> const char *
-{
-#ifdef _WIN32
-  return StrStrIA(haystack, needle);
-#else
-  return strcasestr(haystack, needle);
-#endif
-}
 
 #ifdef _WIN32
-auto arch_dlsym(HMODULE handle, const char * symbol) -> FARPROC
-#else
-auto arch_dlsym(void * handle, const char * symbol) -> void *
-#endif
+auto arch_dlsym(HMODULE handle, const char * symbol) -> void_func_ptr
 {
-#ifdef _WIN32
-  return GetProcAddress(handle, symbol);
-#else
-  return dlsym(handle, symbol);
-#endif
+  return reinterpret_cast<void_func_ptr>(GetProcAddress(handle, symbol));
 }
+#else
+auto arch_dlsym(void * handle, const char * symbol) -> void_func_ptr
+{
+  return reinterpret_cast<void_func_ptr>(dlsym(handle, symbol));
+}
+#endif

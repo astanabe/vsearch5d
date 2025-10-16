@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,13 +61,16 @@
 */
 
 #include "vsearch5d.h"
-#include "utils/seqcmp.h"
-#include <algorithm>  // std::max
+#include "utils/fatal.hpp"
+#include "utils/seqcmp.hpp"
+#include "utils/span.hpp"
+#include <algorithm>  // std::max, std::transform
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cstdint> // int64_t, uint64_t
 #include <cstdlib>  // std::qsort
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose
-#include <cstring>  // std::strcmp, std::memset
+#include <cstring>  // std::strcmp
+#include <iterator>  // std::next
 #include <limits>
 #include <vector>
 
@@ -87,56 +89,73 @@ struct bucket
 };
 
 
+// refactoring: FNV-1A is the hashing function used in std::hash
+// (designed for fast hash-table and checksum, not crypto). The
+// function below might be redundant with std?
+
+auto compute_hashes_of_all_prefixes(std::vector<uint64_t> & prefix_hashes,
+                                    Span<char> const sequence) -> void {
+  // Fowler-Noll-Vo (FNV-1A) hash function
+  static constexpr auto FNV_offset_basis = uint64_t{14695981039346656037U};
+  static constexpr auto FNV_prime = uint64_t{1099511628211U};
+  auto FNV1a_hash = FNV_offset_basis;
+  prefix_hashes[0] = FNV_offset_basis;
+  auto incremental_hash = [&FNV1a_hash](char const nucleotide) -> uint64_t {
+    FNV1a_hash ^= static_cast<unsigned char>(nucleotide);
+    FNV1a_hash *= FNV_prime;
+    return FNV1a_hash;
+  };
+  std::transform(sequence.cbegin(),
+                 sequence.cend(),
+                 std::next(prefix_hashes.begin()),
+                 incremental_hash);
+}
+
+
 auto derep_compare_prefix(const void * a, const void * b) -> int
 {
-  auto * x = (struct bucket *) a;
-  auto * y = (struct bucket *) b;
+  auto * lhs = (struct bucket *) a;
+  auto * rhs = (struct bucket *) b;
 
-  /* highest abundance first, then by label, otherwise keep order */
+  /* deleted(?) first, then by highest abundance, then by label, otherwise keep order */
 
-  if (x->deleted > y->deleted)
+  if (static_cast<int>(lhs->deleted) > static_cast<int>(rhs->deleted))
     {
       return +1;
     }
-  else if (x->deleted < y->deleted)
+  if (static_cast<int>(lhs->deleted) < static_cast<int>(rhs->deleted))
     {
       return -1;
     }
-  else
+
+  // both are deleted, compare abundances
+  if (lhs->size < rhs->size)
     {
-      if (x->size < y->size)
-        {
-          return +1;
-        }
-      else if (x->size > y->size)
-        {
-          return -1;
-        }
-      else
-        {
-          int const r = strcmp(db_getheader(x->seqno_first),
-                         db_getheader(y->seqno_first));
-          if (r != 0)
-            {
-              return r;
-            }
-          else
-            {
-              if (x->seqno_first < y->seqno_first)
-                {
-                  return -1;
-                }
-              else if (x->seqno_first > y->seqno_first)
-                {
-                  return +1;
-                }
-              else
-                {
-                  return 0;
-                }
-            }
-        }
+      return +1;
     }
+  if (lhs->size > rhs->size)
+    {
+      return -1;
+    }
+
+  // both are deleted, same abundances, compare sequence headers
+  auto const result = std::strcmp(db_getheader(lhs->seqno_first),
+                                  db_getheader(rhs->seqno_first));
+  if (result != 0)
+    {
+      return result;
+    }
+
+  // both are deleted, same abundances, same sequence headers, compare input order
+  if (lhs->seqno_first < rhs->seqno_first)
+    {
+      return -1;
+    }
+  if (lhs->seqno_first > rhs->seqno_first)
+    {
+      return +1;
+    }
+  return 0;
 }
 
 
@@ -150,19 +169,19 @@ auto derep_prefix(struct Parameters const & parameters) -> void
       fatal("Option '--strand both' not supported with --derep_prefix");
     }
 
-  if (parameters.opt_output)
+  if (parameters.opt_output != nullptr)
     {
       fp_output = fopen_output(parameters.opt_output);
-      if (not fp_output)
+      if (fp_output == nullptr)
         {
           fatal("Unable to open output file for writing");
         }
     }
 
-  if (parameters.opt_uc)
+  if (parameters.opt_uc != nullptr)
     {
       fp_uc = fopen_output(parameters.opt_uc);
-      if (not fp_uc)
+      if (fp_uc == nullptr)
         {
           fatal("Unable to open output (uc) file for writing");
         }
@@ -210,13 +229,13 @@ auto derep_prefix(struct Parameters const & parameters) -> void
   for (int64_t i = 0; i < dbsequencecount; i++)
     {
       unsigned int const seqlen = db_getsequencelen(i);
-      char * seq = db_getsequence(i);
+      auto * seq = db_getsequence(i);
 
       /* normalize sequence: uppercase and replace U by T  */
       string_normalize(seq_up.data(), seq, seqlen);
 
-      uint64_t const ab = parameters.opt_sizein ? db_getabundance(i) : 1;
-      sumsize += ab;
+      auto const abundance = parameters.opt_sizein ? db_getabundance(i) : 1;
+      sumsize += abundance;
 
       /*
         Look for matching identical or prefix sequences.
@@ -238,32 +257,23 @@ auto derep_prefix(struct Parameters const & parameters) -> void
 
       */
 
-      /* compute hashes of all prefixes */
-
-      uint64_t fnv1a_hash = 14695981039346656037ULL;
-      prefix_hashes[0] = fnv1a_hash;
-      for (unsigned int j = 0; j < seqlen; j++)
-        {
-          fnv1a_hash ^= seq_up[j];
-          fnv1a_hash *= 1099511628211ULL;
-          prefix_hashes[j + 1] = fnv1a_hash;
-        }
+      compute_hashes_of_all_prefixes(prefix_hashes, Span<char>{seq_up.data(), seqlen});
 
       /* first, look for an identical match */
 
-      unsigned int prefix_len = seqlen;
+      auto prefix_len = seqlen;
 
       uint64_t hash = prefix_hashes[prefix_len];
-      struct bucket * bp = &hashtable[hash & hash_mask];
+      auto * bp = &hashtable[hash & hash_mask];
 
-      while ((bp->size) and
+      while ((bp->size != 0U) and
              ((bp->deleted) or
               (bp->hash != hash) or
               (prefix_len != db_getsequencelen(bp->seqno_first)) or
-              (seqcmp(seq_up.data(), db_getsequence(bp->seqno_first), prefix_len))))
+              (seqcmp(seq_up.data(), db_getsequence(bp->seqno_first), prefix_len) != 0)))
         {
           ++bp;
-          if (bp >= &hashtable[hashtablesize])
+          if (bp > &hashtable.back())
             {
               bp = hashtable.data();
             }
@@ -273,12 +283,12 @@ auto derep_prefix(struct Parameters const & parameters) -> void
          (2) a bucket with an exact match. */
 
       auto const orig_hash = hash;
-      struct bucket * orig_bp = bp;
+      auto * orig_bp = bp;
 
-      if (bp->size)
+      if (bp->size != 0U)
         {
           /* exact match */
-          bp->size += ab;
+          bp->size += abundance;
           auto const last = bp->seqno_last;
           nextseqtab[last] = i;
           bp->seqno_last = i;
@@ -289,41 +299,41 @@ auto derep_prefix(struct Parameters const & parameters) -> void
         {
           /* look for prefix match */
 
-          while ((not bp->size) and (prefix_len > len_shortest))
+          while ((bp->size == 0U) and (prefix_len > len_shortest))
             {
               --prefix_len;
               hash = prefix_hashes[prefix_len];
               bp = &hashtable[hash & hash_mask];
 
-              while ((bp->size) and
+              while ((bp->size != 0U) and
                      ((bp->deleted) or
                       (bp->hash != hash) or
                       (prefix_len != db_getsequencelen(bp->seqno_first)) or
                       (seqcmp(seq_up.data(),
                               db_getsequence(bp->seqno_first),
-                              prefix_len))))
+                              prefix_len) != 0)))
                 {
                   ++bp;
-                  if (bp >= &hashtable[hashtablesize])
+                  if (bp > &hashtable.back())
                     {
                       bp = hashtable.data();
                     }
                 }
             }
 
-          if (bp->size)
+          if (bp->size != 0U)
             {
               /* prefix match */
 
               /* get necessary info, then delete prefix from hash */
-              unsigned int const first = bp->seqno_first;
-              unsigned int const last = bp->seqno_last;
-              unsigned int const size = bp->size;
+              auto const first = bp->seqno_first;
+              auto const last = bp->seqno_last;
+              auto const size = bp->size;
               bp->deleted = true;
 
               /* create new hash entry */
               bp = orig_bp;
-              bp->size = size + ab;
+              bp->size = size + abundance;
               bp->hash = orig_hash;
               bp->seqno_first = i;
               nextseqtab[i] = first;
@@ -334,12 +344,12 @@ auto derep_prefix(struct Parameters const & parameters) -> void
           else
             {
               /* no match */
-              orig_bp->size = ab;
+              orig_bp->size = abundance;
               orig_bp->hash = orig_hash;
               orig_bp->seqno_first = i;
               orig_bp->seqno_last = i;
 
-              maxsize = std::max(ab, maxsize);
+              maxsize = std::max(abundance, maxsize);
               ++clusters;
             }
         }
@@ -356,7 +366,7 @@ auto derep_prefix(struct Parameters const & parameters) -> void
 
   if (clusters > 0)
     {
-      if (clusters % 2)
+      if ((clusters % 2) != 0)
         {
           median = hashtable[(clusters - 1) / 2].size;
         }
@@ -376,7 +386,7 @@ auto derep_prefix(struct Parameters const & parameters) -> void
           fprintf(stderr,
                   "0 unique sequences\n");
         }
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "0 unique sequences\n\n");
@@ -392,7 +402,7 @@ auto derep_prefix(struct Parameters const & parameters) -> void
                   PRIu64 "\n",
                   clusters, average, median, maxsize);
         }
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "%" PRId64
@@ -409,8 +419,7 @@ auto derep_prefix(struct Parameters const & parameters) -> void
   int64_t selected = 0;
   for (int64_t i = 0; i < clusters; i++)
     {
-      struct bucket * bp = &hashtable[i];
-      int64_t const size = bp->size;
+      int64_t const size = hashtable[i].size;
       if ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize))
         {
           ++selected;
@@ -424,24 +433,24 @@ auto derep_prefix(struct Parameters const & parameters) -> void
 
   /* write output */
 
-  if (parameters.opt_output)
+  if (parameters.opt_output != nullptr)
     {
       progress_init("Writing output file", clusters);
 
       int64_t relabel_count = 0;
       for (int64_t i = 0; i < clusters; i++)
         {
-          struct bucket * bp = &hashtable[i];
-          int64_t const size = bp->size;
+          auto const & bp = hashtable[i];
+          int64_t const size = bp.size;
           if ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize))
             {
               ++relabel_count;
               fasta_print_general(fp_output,
                                   nullptr,
-                                  db_getsequence(bp->seqno_first),
-                                  db_getsequencelen(bp->seqno_first),
-                                  db_getheader(bp->seqno_first),
-                                  db_getheaderlen(bp->seqno_first),
+                                  db_getsequence(bp.seqno_first),
+                                  db_getsequencelen(bp.seqno_first),
+                                  db_getheader(bp.seqno_first),
+                                  db_getheaderlen(bp.seqno_first),
                                   size,
                                   relabel_count,
                                   -1.0,
@@ -460,19 +469,19 @@ auto derep_prefix(struct Parameters const & parameters) -> void
 
   show_rusage();
 
-  if (parameters.opt_uc)
+  if (parameters.opt_uc != nullptr)
     {
       progress_init("Writing uc file, first part", clusters);
       for (int64_t i = 0; i < clusters; i++)
         {
-          struct bucket * bp = &hashtable[i];
-          char * h =  db_getheader(bp->seqno_first);
-          int64_t const len = db_getsequencelen(bp->seqno_first);
+          auto const & bp = hashtable[i];
+          auto * h =  db_getheader(bp.seqno_first);
+          int64_t const len = db_getsequencelen(bp.seqno_first);
 
           fprintf(fp_uc, "S\t%" PRId64 "\t%" PRId64 "\t*\t*\t*\t*\t*\t%s\t*\n",
                   i, len, h);
 
-          for (unsigned int next = nextseqtab[bp->seqno_first];
+          for (auto next = nextseqtab[bp.seqno_first];
                next != terminal;
                next = nextseqtab[next])
             {
@@ -489,9 +498,9 @@ auto derep_prefix(struct Parameters const & parameters) -> void
       progress_init("Writing uc file, second part", clusters);
       for (int64_t i = 0; i < clusters; i++)
         {
-          struct bucket * bp = &hashtable[i];
+          auto const & bp = hashtable[i];
           fprintf(fp_uc, "C\t%" PRId64 "\t%u\t*\t*\t*\t*\t*\t%s\t*\n",
-                  i, bp->size, db_getheader(bp->seqno_first));
+                  i, bp.size, db_getheader(bp.seqno_first));
           progress_update(i);
         }
       fclose(fp_uc);
@@ -510,7 +519,7 @@ auto derep_prefix(struct Parameters const & parameters) -> void
                   100.0 * (clusters - selected) / clusters);
         }
 
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "%" PRId64 " uniques written, %" PRId64

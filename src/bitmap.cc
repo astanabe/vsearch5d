@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -68,10 +67,13 @@
 
 auto bitmap_init(unsigned int const size) -> struct bitmap_s *
 {
-  auto * b = (struct bitmap_s *) xmalloc(sizeof(struct bitmap_s));
-  b->size = size;
-  b->bitmap = (unsigned char *) xmalloc((size + 7) / 8);
-  return b;
+  constexpr auto divider = 8U;
+  constexpr auto padding = divider - 1U;
+  const auto minimal_size = (size + padding) / divider;
+  auto * a_bitmap = static_cast<struct bitmap_s *>(xmalloc(sizeof(struct bitmap_s)));
+  a_bitmap->size = size;
+  a_bitmap->bitmap = static_cast<unsigned char *>(xmalloc(minimal_size));
+  return a_bitmap;
 }
 
 
@@ -101,7 +103,7 @@ auto bitmap_set(struct bitmap_s * a_bitmap, unsigned int const seed_value) -> vo
 
 auto bitmap_free(struct bitmap_s * a_bitmap) -> void
 {
-  if (a_bitmap->bitmap)
+  if (a_bitmap->bitmap != nullptr)
     {
       xfree(a_bitmap->bitmap);
     }

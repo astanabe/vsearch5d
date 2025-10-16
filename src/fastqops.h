@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,6 +60,5 @@
 
 */
 
-auto fastq_convert() -> void;
-auto fastq_stats() -> void;
-auto fastx_revcomp() -> void;
+auto fastq_convert(struct Parameters const & parameters) -> void;
+auto fastx_revcomp(struct Parameters const & parameters) -> void;

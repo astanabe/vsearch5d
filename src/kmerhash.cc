@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,163 +61,140 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
-#include <cstring>  // std::memset
+#include "city.h"
+#include "utils/kmer_hash_struct.hpp"
+#include "utils/maps.hpp"
+#include <algorithm>  // std::max
 #include <vector>
 
 
-#define HASH CityHash64
+using Hash = decltype(&CityHash64);
+static Hash hash_function = CityHash64;
 
-struct kh_bucket_s
-{
-  unsigned int kmer;
-  unsigned int pos; /* 1-based position, 0 = empty */
-};
 
-struct kh_handle_s
-{
-  struct kh_bucket_s * hash;
-  unsigned int hash_mask;
-  int size;
-  int alloc;
-  int maxpos;
-};
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
 
-auto kh_init() -> struct kh_handle_s *
-{
-  auto * kh =
-    (struct kh_handle_s *) xmalloc(sizeof(struct kh_handle_s));
+  auto reset_buckets(std::vector<struct kh_bucket_s> & hash) -> void {
+    auto const current_size = hash.size();
+    hash.clear();
+    hash.resize(current_size);
+  }
 
-  kh->maxpos = 0;
-  kh->alloc = 256;
-  kh->size = 0;
-  kh->hash_mask = kh->alloc - 1;
-  kh->hash =
-    (struct kh_bucket_s *) xmalloc(kh->alloc * sizeof(struct kh_bucket_s));
+}  // end of anonymous namespace
 
-  return kh;
-}
 
-auto kh_exit(struct kh_handle_s * kh) -> void
-{
-  if (kh->hash)
-    {
-      xfree(kh->hash);
-    }
-  xfree(kh);
-}
-
-inline auto kh_insert_kmer(struct kh_handle_s * kh,
-                           int k,
-                           unsigned int kmer,
-                           unsigned int pos) -> void
+inline auto kh_insert_kmer(struct kh_handle_s & kmer_hash,
+                           int const k_offset,
+                           unsigned int const kmer,
+                           unsigned int const pos) -> void
 {
   /* find free bucket in hash */
-  unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
-  while(kh->hash[j].pos)
+  auto bucket = hash_function((char *) &kmer, (k_offset + 3) / 4) & kmer_hash.hash_mask;
+  while (kmer_hash.hash[bucket].pos != 0U)
     {
-      j = (j + 1) & kh->hash_mask;
+      bucket = (bucket + 1) & kmer_hash.hash_mask;
     }
 
-  kh->hash[j].kmer = kmer;
-  kh->hash[j].pos = pos;
+  kmer_hash.hash[bucket].kmer = kmer;
+  kmer_hash.hash[bucket].pos = pos;
 }
 
-auto kh_insert_kmers(struct kh_handle_s * kh, int k, char * seq, int len) -> void
+
+auto kh_insert_kmers(struct kh_handle_s & kmer_hash, int const k_offset, char const * seq, int const len) -> void
 {
-  int const kmers = 1U << (2U * k);
+  int const kmers = 1U << (2U * k_offset);
   unsigned int const kmer_mask = kmers - 1;
+
+  reset_buckets(kmer_hash.hash);
 
   /* reallocate hash table if necessary */
 
-  if (kh->alloc < 2 * len)
+  if (kmer_hash.alloc < 2 * len)
     {
-      while (kh->alloc < 2 * len)
+      while (kmer_hash.alloc < 2 * len)
         {
-          kh->alloc *= 2;
+          kmer_hash.alloc *= 2;
         }
-      kh->hash = (struct kh_bucket_s *)
-        xrealloc(kh->hash, kh->alloc * sizeof(struct kh_bucket_s));
+      kmer_hash.hash.resize(kmer_hash.alloc);
     }
 
-  kh->size = 1;
-  while (kh->size < 2 * len)
+  kmer_hash.size = 1;
+  while (kmer_hash.size < 2 * len)
     {
-      kh->size *= 2;
+      kmer_hash.size *= 2;
     }
-  kh->hash_mask = kh->size - 1;
+  kmer_hash.hash_mask = kmer_hash.size - 1;
 
-  kh->maxpos = len;
+  kmer_hash.maxpos = len;
 
-  memset(kh->hash, 0, kh->size * sizeof(struct kh_bucket_s));
 
   unsigned int bad = kmer_mask;
   unsigned int kmer = 0;
-  char * s = seq;
-
-  unsigned int * maskmap = chrmap_mask_ambig;
+  char const * s = seq;
 
   for (int pos = 0; pos < len; pos++)
     {
-      int const c = *s++;
+      int const c = *s;
+      ++s;
 
       bad <<= 2ULL;
-      bad |= maskmap[c];
+      bad |= map_mask_ambig(c);
       bad &= kmer_mask;
 
       kmer <<= 2ULL;
-      kmer |= chrmap_2bit[c];
+      kmer |= map_2bit(c);
       kmer &= kmer_mask;
 
-      if (! bad)
+      if (bad == 0U)
         {
           /* 1-based pos of start of kmer */
-          kh_insert_kmer(kh, k, kmer, pos - k + 1 + 1);
+          kh_insert_kmer(kmer_hash, k_offset, kmer, pos - k_offset + 1 + 1);
         }
     }
 }
 
-auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) -> int
-{
-  std::vector<int> diag_counts(kh->maxpos, 0);
 
-  int const kmers = 1U << (2U * k);
+auto kh_find_best_diagonal(struct kh_handle_s & kmer_hash, int const k_offset, char const * seq, int const len) -> int
+{
+  std::vector<int> diag_counts(kmer_hash.maxpos, 0);
+
+  int const kmers = 1U << (2U * k_offset);
   unsigned int const kmer_mask = kmers - 1;
 
   unsigned int bad = kmer_mask;
   unsigned int kmer = 0;
-  char * s = seq + len - 1;
-
-  unsigned int * maskmap = chrmap_mask_ambig;
+  char const * seq_cursor = seq + len - 1;
 
   for (int pos = 0; pos < len; pos++)
     {
-      int const c = *s--;
+      int const nucleotide = *seq_cursor;
+      --seq_cursor;
 
       bad <<= 2ULL;
-      bad |= maskmap[c];
+      bad |= map_mask_ambig(nucleotide);
       bad &= kmer_mask;
 
       kmer <<= 2ULL;
-      kmer |= chrmap_2bit[chrmap_complement[c]];
+      kmer |= map_2bit(map_complement(nucleotide));
       kmer &= kmer_mask;
 
-      if (! bad)
+      if (bad == 0U)
         {
           /* find matching buckets in hash */
-          unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
-          while(kh->hash[j].pos)
+          unsigned int j = hash_function((char *) &kmer, (k_offset + 3) / 4) & kmer_hash.hash_mask;
+          while (kmer_hash.hash[j].pos != 0U)
             {
-              if (kh->hash[j].kmer == kmer)
+              if (kmer_hash.hash[j].kmer == kmer)
                 {
-                  int const fpos = kh->hash[j].pos - 1;
-                  int const diag = fpos - (pos - k + 1);
+                  int const fpos = kmer_hash.hash[j].pos - 1;
+                  int const diag = fpos - (pos - k_offset + 1);
                   if (diag >= 0)
                     {
-                      diag_counts[diag]++;
+                      ++diag_counts[diag];
                     }
                 }
-              j = (j + 1) & kh->hash_mask;
+              j = (j + 1) & kmer_hash.hash_mask;
             }
         }
     }
@@ -227,15 +203,15 @@ auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) 
   int best_diag = -1;
   int good_diags = 0;
 
-  for (int d = 0; d < kh->maxpos - k + 1; d++)
+  for (int d = 0; d < kmer_hash.maxpos - k_offset + 1; d++)
     {
-      int const diag_len = kh->maxpos - d;
-      int const minmatch = MAX(1, diag_len - k + 1 - (k * MAX(diag_len / 20, 0)));
+      int const diag_len = kmer_hash.maxpos - d;
+      int const minmatch = std::max(1, diag_len - k_offset + 1 - (k_offset * std::max(diag_len / 20, 0)));
       int const c = diag_counts[d];
 
       if (c >= minmatch)
         {
-          good_diags++;
+          ++good_diags;
         }
 
       if (c > best_diag_count)
@@ -249,56 +225,54 @@ auto kh_find_best_diagonal(struct kh_handle_s * kh, int k, char * seq, int len) 
     {
       return best_diag;
     }
-  else
-    {
-      return -1;
-    }
+  return -1;
 }
 
-auto kh_find_diagonals(struct kh_handle_s * kh,
-                       int k,
-                       char * seq,
-                       int len,
-                       int * diags) -> void
-{
-  memset(diags, 0, (kh->maxpos+len) * sizeof(int));
 
-  int const kmers = 1U << (2U * k);
+auto kh_find_diagonals(struct kh_handle_s & kmer_hash,
+                       int const k_offset,
+                       char const * seq,
+                       int const len,
+                       std::vector<int> & diags) -> void
+{
+
+  int const kmers = 1U << (2U * k_offset);
   unsigned int const kmer_mask = kmers - 1;
 
   unsigned int bad = kmer_mask;
   unsigned int kmer = 0;
-  char * s = seq + len - 1;
+  char const * seq_cursor = seq + len - 1;
 
   for (int pos = 0; pos < len; pos++)
     {
-      int const c = *s--;
+      int const nucleotide = *seq_cursor--;
 
       bad <<= 2ULL;
-      bad |= chrmap_mask_ambig[c];
+      bad |= map_mask_ambig(nucleotide);
       bad &= kmer_mask;
 
       kmer <<= 2ULL;
-      kmer |= chrmap_2bit[chrmap_complement[c]];
+      kmer |= map_2bit(map_complement(nucleotide));
       kmer &= kmer_mask;
 
-      if (! bad)
+      if (bad == 0U)
         {
           /* find matching buckets in hash */
-          unsigned int j = HASH((char *) &kmer, (k + 3) / 4) & kh->hash_mask;
-          while(kh->hash[j].pos)
+          unsigned int j = hash_function((char *) &kmer, (k_offset + 3) / 4) & kmer_hash.hash_mask;
+          while (kmer_hash.hash[j].pos != 0U)
             {
-              if (kh->hash[j].kmer == kmer)
+              if (kmer_hash.hash[j].kmer == kmer)
                 {
-                  int const fpos = kh->hash[j].pos - 1;
-                  int const diag = len + fpos - (pos - k + 1);
+                  int const fpos = kmer_hash.hash[j].pos - 1;
+                  int const diag = len + fpos - (pos - k_offset + 1);
                   if (diag >= 0)
                     {
-                      diags[diag]++;
+                      ++diags[diag];
                     }
                 }
-              j = (j + 1) & kh->hash_mask;
+              j = (j + 1) & kmer_hash.hash_mask;
             }
         }
     }
 }
+

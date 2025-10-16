@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -91,8 +90,9 @@ auto xopen_write(const char * path) -> int;
 
 auto xstrcasestr(const char * haystack, const char * needle) -> const char *;
 
+typedef void (* void_func_ptr)();
 #ifdef _WIN32
-auto arch_dlsym(HMODULE handle, const char * symbol) -> FARPROC;
+auto arch_dlsym(HMODULE handle, const char * symbol) -> void_func_ptr;
 #else
-auto arch_dlsym(void * handle, const char * symbol) -> void *;
+auto arch_dlsym(void * handle, const char * symbol) -> void_func_ptr;
 #endif

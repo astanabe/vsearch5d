@@ -1,6 +1,6 @@
 bin_PROGRAMS = $(top_builddir)/bin/vsearch5d
 
-AM_CFLAGS = -Wall -Wextra -Wpedantic
+AM_CFLAGS = -Wall -Wextra -Wpedantic -Wno-ignored-attributes
 
 # Conditionally set profiling based on ENABLE_PROFILING
 if ENABLE_PROFILING
@@ -21,11 +21,25 @@ endif
 
 # Conditionally set NDEBUG based on ENABLE_DEBUG
 if ENABLE_DEBUG
-AM_CFLAGS += -UNDEBUG -Wcast-align -Wdate-time \
+# next warnings to activate:
+# -fsanitize=undefined,address (run-time warnings; at first, try one at a time)
+# -Wconversion
+# -Wold-style-cast
+# -Wshadow
+# -Wsign-conversion
+# -Wunused-macros
+# -Wuseless-cast
+# GCC 14: -Wnrvo (Named Return Value Optimization)
+AM_CFLAGS += -UNDEBUG -D_GLIBCXX_DEBUG -Wcast-align -Wdate-time \
              -Wdouble-promotion -Wduplicated-branches -Wduplicated-cond -Wfloat-equal \
              -Wformat=1 -Wformat-overflow -Wlogical-op -Wnon-virtual-dtor -Wnull-dereference \
              -Woverloaded-virtual -Wuninitialized \
-             -Wunsafe-loop-optimizations -Wunused -Wvla
+             -Wunsafe-loop-optimizations -Wunused -Wvla \
+             -Wno-ignored-attributes
+             # -Wno-ignored-attributes: ignore warnings due to
+             # std::array<__m128i> (__m128i is declared with
+             # alignment attributes which are ignored by the
+             # std::array template
 else
 AM_CFLAGS += -DNDEBUG
 endif
@@ -42,7 +56,6 @@ attributes.h \
 bitmap.h \
 chimera.h \
 city.h \
-citycrc.h \
 cluster.h \
 cpu.h \
 cut.h \
@@ -59,16 +72,16 @@ fasta.h \
 fastq.h \
 fastq_chars.h \
 fastq_join.h \
+fastq_mergepairs.h \
+fastq_stats.h \
 fastqops.h \
 fastx.h \
 filter.h \
 getseq.h \
 kmerhash.h \
 linmemalign.h \
-maps.h \
 mask.h \
 md5.h \
-mergepairs.h \
 minheap.h \
 msa.h \
 orient.h \
@@ -91,8 +104,20 @@ udb.h \
 unique.h \
 userfields.h \
 util.h \
+utils/check_output_filehandle.hpp \
+utils/cigar.hpp \
+utils/cigar_operations.hpp \
+utils/compare_strings_nocase.hpp \
+utils/fatal.hpp \
+utils/kmer_hash_struct.hpp \
 utils/maps.hpp \
-utils/seqcmp.h \
+utils/open_file.hpp \
+utils/os_byteswap.hpp \
+utils/progress.hpp \
+utils/seqcmp.hpp \
+utils/span.hpp \
+utils/taxonomic_fields.h \
+utils/xpthread.hpp \
 vsearch5d.h \
 xstring.h
 
@@ -149,16 +174,16 @@ fasta.cc \
 fastq.cc \
 fastq_chars.cc \
 fastq_join.cc \
+fastq_mergepairs.cc \
+fastq_stats.cc \
 fastqops.cc \
 fastx.cc \
 filter.cc \
 getseq.cc \
 kmerhash.cc \
 linmemalign.cc \
-maps.cc \
 mask.cc \
 md5.c \
-mergepairs.cc \
 minheap.cc \
 msa.cc \
 orient.cc \
@@ -181,6 +206,13 @@ udb.cc \
 unique.cc \
 userfields.cc \
 util.cc \
+utils/fatal.cpp \
 utils/maps.cpp \
-utils/seqcmp.cc \
+utils/check_output_filehandle.cpp \
+utils/cigar.cpp \
+utils/compare_strings_nocase.cpp \
+utils/open_file.cpp \
+utils/os_byteswap.cpp \
+utils/xpthread.cpp \
+utils/seqcmp.cpp \
 vsearch5d.cc

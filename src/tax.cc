@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,14 +61,16 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/taxonomic_fields.h"
+#include <algorithm>  // std::find
 #include <cctype>  // std::tolower
 #include <cstring>  // std::strlen, std::strstr, std::strchr
+#include <iterator>  // std::distance
 
 
-const char * tax_letters = "dkpcofgst";
-
-auto tax_parse(const char * header,
-               int header_length,
+// very similar to header_find_attribute() in attributes.cc
+auto tax_parse(char const * header,
+               int const header_length,
                int * tax_start,
                int * tax_end) -> bool
 {
@@ -77,54 +78,54 @@ auto tax_parse(const char * header,
     Identify the first occurence of the pattern (^|;)tax=([^;]*)(;|$)
   */
 
-  if (! header)
+  if (header == nullptr)
     {
       return false;
     }
 
-  const char * attribute = "tax=";
+  auto const * attribute = "tax=";
 
-  int const hlen = header_length;
-  int const alen = strlen(attribute);
+  auto const attribute_length = static_cast<int>(std::strlen(attribute));
 
-  int i = 0;
+  auto offset = 0;
 
-  while (i < hlen - alen)
+  while (offset < header_length - attribute_length)
     {
-      char * r = (char *) strstr(header + i, attribute);
+      auto const * first_occurence = std::strstr(header + offset, attribute);
 
       /* no match */
-      if (r == nullptr)
+      if (first_occurence == nullptr)
         {
           break;
         }
 
-      i = r - header;
+      offset = std::distance(header, first_occurence);
 
       /* check for ';' in front */
-      if ((i > 0) && (header[i - 1] != ';'))
+      if ((offset > 0) and (header[offset - 1] != ';'))
         {
-          i += alen + 1;
+          offset += attribute_length + 1;
           continue;
         }
 
-      * tax_start = i;
+      *tax_start = offset;
 
       /* find end (semicolon or end of header) */
-      const char * s = strchr(header + i + alen, ';');
-      if (s == nullptr)
+      auto const * terminus = std::strchr(header + offset + attribute_length, ';');
+      if (terminus == nullptr)
         {
-          * tax_end = hlen;
+          *tax_end = header_length;
         }
       else
         {
-          * tax_end = s - header;
+          *tax_end = std::distance(header, terminus);
         }
 
       return true;
     }
   return false;
 }
+
 
 auto tax_split(int seqno, int * level_start, int * level_len) -> void
 {
@@ -139,56 +140,49 @@ auto tax_split(int seqno, int * level_start, int * level_len) -> void
      s species
      t strain
   */
+  static constexpr auto length_of_attribute_name = 4;  // "tax=" -> 4 letters
+  auto tax_start = 0;
+  auto tax_end = 0;
+  auto const * const header = db_getheader(seqno);
+  auto const header_length = static_cast<int>(db_getheaderlen(seqno));
+  auto const attribute_is_present = tax_parse(header, header_length, & tax_start, & tax_end);
+  if (not attribute_is_present) { return; }
+  auto offset = tax_start + length_of_attribute_name;
 
-  for (int i = 0; i < tax_levels; i++)
+  while (offset < tax_end)
     {
-      level_start[i] = 0;
-      level_len[i] = 0;
-    }
-
-  int tax_start = 0;
-  int tax_end = 0;
-  char * h = db_getheader(seqno);
-  int const hlen = db_getheaderlen(seqno);
-  if (tax_parse(h, hlen, & tax_start, & tax_end))
-    {
-      int t = tax_start + 4;
-
-      while (t < tax_end)
+      /* Is the next char a recognized tax level letter? */
+      auto const * next_level = std::find(taxonomic_fields.begin(), taxonomic_fields.end(), std::tolower(header[offset]));
+      if (next_level != taxonomic_fields.end())
         {
-          /* Is the next char a recogized tax level letter? */
-          const char * r = strchr(tax_letters, tolower(h[t]));
-          if (r)
+          int const level = std::distance(taxonomic_fields.data(), next_level);
+
+          /* Is there a colon after it? */
+          if (header[offset + 1] == ':')
             {
-              int const level = r - tax_letters;
+              level_start[level] = offset + 2;
 
-              /* Is there a colon after it? */
-              if (h[t + 1] == ':')
+              auto const * next_comma = std::strchr(header + offset + 2, ',');
+              if (next_comma != nullptr)
                 {
-                  level_start[level] = t + 2;
-
-                  char * z = strchr(h + t + 2, ',');
-                  if (z)
-                    {
-                      level_len[level] = z - h - t - 2;
-                    }
-                  else
-                    {
-                      level_len[level] = tax_end - t - 2;
-                    }
+                  level_len[level] = std::distance(header, next_comma) - offset - 2;
+                }
+              else
+                {
+                  level_len[level] = tax_end - offset - 2;
                 }
             }
+        }
 
-          /* skip past next comma */
-          char * x = strchr(h + t, ',');
-          if (x)
-            {
-              t = x - h + 1;
-            }
-          else
-            {
-              t = tax_end;
-            }
+      /* skip past next comma */
+      auto const * next_comma_bis = std::strchr(header + offset, ',');
+      if (next_comma_bis != nullptr)
+        {
+          offset = std::distance(header, next_comma_bis) + 1;
+        }
+      else
+        {
+          offset = tax_end;
         }
     }
 }

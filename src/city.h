@@ -31,7 +31,7 @@
 // is Murmur3.  For 64-bit x86 code, CityHash64 is an excellent choice for hash
 // tables and most other hashing (excluding cryptography).
 //
-// For 64-bit x86 code, on long strings, the picture is more complicated.
+// For 64-bit x86 code, on long strings (> 900), the picture is more complicated.
 // On many recent Intel CPUs, such as Nehalem, Westmere, Sandy Bridge, etc.,
 // CityHashCrc128 appears to be faster than all competitors of comparable
 // quality.  CityHash128 is also good but not quite as fast.  We believe our
@@ -67,48 +67,11 @@
 #include <utility>  // std::pair
 
 
-using uint8 = uint8_t;
-using uint32 = uint32_t;
-using uint64 = uint64_t;
-using uint128 = std::pair<uint64, uint64>;
+using uint128 = std::pair<uint64_t, uint64_t>;
 
-inline auto Uint128Low64(const uint128& x) -> uint64 { return x.first; }
-inline auto Uint128High64(const uint128& x) -> uint64 { return x.second; }
+// Hash functions for byte arrays
+auto CityHash64(const char * seq, std::size_t len) -> uint64_t;
 
-// Hash function for a byte array.
-auto CityHash64(const char *s, std::size_t len) -> uint64;
-
-// Hash function for a byte array.  For convenience, a 64-bit seed is also
-// hashed into the result.
-auto CityHash64WithSeed(const char *s, std::size_t len, uint64 seed) -> uint64;
-
-// Hash function for a byte array.  For convenience, two seeds are also
-// hashed into the result.
-auto CityHash64WithSeeds(const char *s, std::size_t len,
-                         uint64 seed0, uint64 seed1) -> uint64;
-
-// Hash function for a byte array.
-auto CityHash128(const char *s, std::size_t len) -> uint128;
-
-// Hash function for a byte array.  For convenience, a 128-bit seed is also
-// hashed into the result.
-auto CityHash128WithSeed(const char *s, std::size_t len, uint128 seed) -> uint128;
-
-// Hash function for a byte array.  Most useful in 32-bit binaries.
-auto CityHash32(const char *s, std::size_t len) -> uint32;
-
-// Hash 128 input bits down to 64 bits of output.
-// This is intended to be a reasonably good hash function.
-inline auto Hash128to64(const uint128& x) -> uint64 {
-  // Murmur-inspired hashing.
-  static constexpr auto divider = 47U;
-  static constexpr uint64 kMul = 0x9ddfea08eb382d69ULL;
-  uint64 a = (Uint128Low64(x) ^ Uint128High64(x)) * kMul;
-  a ^= (a >> divider);
-  uint64 b = (Uint128High64(x) ^ a) * kMul;
-  b ^= (b >> divider);
-  b *= kMul;
-  return b;
-}
+auto CityHash128(const char * seq, std::size_t len) -> uint128;
 
 #endif  // CITY_HASH_H_

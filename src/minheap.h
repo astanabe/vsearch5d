@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -79,12 +78,12 @@ struct minheap_s
 
 using minheap_t = struct minheap_s;
 
-inline auto minheap_isempty(minheap_t * a_minheap) -> bool
+inline auto minheap_isempty(minheap_t const * a_minheap) -> bool
 {
   return (a_minheap->count == 0);
 }
 
-inline auto minheap_empty(minheap_t * a_minheap) -> void
+inline auto minheap_clear(minheap_t * a_minheap) -> void
 {
   a_minheap->count = 0;
 }

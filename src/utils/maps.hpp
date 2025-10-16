@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -69,12 +68,28 @@
 
 extern const std::vector<unsigned char> chrmap_no_change_vector;
 
-extern const std::vector<unsigned char> chrmap_4bit_vector;
-
-extern const std::vector<unsigned char> chrmap_complement_vector;
-
 extern const std::vector<unsigned char> chrmap_normalize_vector;
 
 extern const std::vector<unsigned char> chrmap_upcase_vector;
+
+auto map_uppercase(char nucleotide) -> char;
+
+auto map_2bit(char nucleotide) -> unsigned int;
+
+auto map_4bit(char nucleotide) -> unsigned char;
+
+auto map_complement(char nucleotide) -> char;
+
+auto map_mask_ambig(char nucleotide) -> unsigned int;
+
+auto map_mask_lower(char nucleotide) -> unsigned int;
+
+auto is_equivalent_4bit(char lhs, char rhs) -> bool;
+
+auto is_equivalent_4bit_rhs(char lhs, char rhs) -> bool;
+
+auto is_ambiguous_4bit(unsigned char nucleotide) -> bool;
+
+auto is_same_4bit(char lhs, char rhs) -> bool;
 
 #endif // MAPS_HPP

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,6 +60,7 @@
 
 */
 
+#include <array>
 #include <cstdio>  // std::FILE
 #include <cstdint>  // uint64_t
 
@@ -69,10 +69,10 @@ constexpr auto byte_range = 256U;
 
 struct fastx_buffer_s
 {
-  char * data;
-  uint64_t length;
-  uint64_t alloc;
-  uint64_t position;
+  char * data = nullptr;
+  uint64_t length = 0;
+  uint64_t alloc = 0;
+  uint64_t position = 0;
 };
 
 auto buffer_init(struct fastx_buffer_s * buffer) -> void;
@@ -80,22 +80,24 @@ auto buffer_free(struct fastx_buffer_s * buffer) -> void;
 auto buffer_extend(struct fastx_buffer_s * dest_buffer,
                    char * source_buf,
                    uint64_t len) -> void;
-auto buffer_makespace(struct fastx_buffer_s * buffer, uint64_t x) -> void;
+auto buffer_makespace(struct fastx_buffer_s * buffer, uint64_t size) -> void;
+
+enum struct Format : unsigned char { undefined, plain, bzip, gzip };
 
 struct fastx_s
 {
-  bool is_pipe;
-  bool is_fastq;
-  bool is_empty;
+  bool is_pipe = false;
+  bool is_fastq = false;
+  bool is_empty = false;
 
-  std::FILE * fp;
+  std::FILE * fp = nullptr;
 
 #ifdef HAVE_ZLIB_H
-  gzFile fp_gz;
+  gzFile fp_gz = nullptr;
 #endif
 
 #ifdef HAVE_BZLIB_H
-  BZFILE * fp_bz;
+  BZFILE * fp_bz = nullptr;
 #endif
 
   struct fastx_buffer_s file_buffer;
@@ -105,17 +107,17 @@ struct fastx_s
   struct fastx_buffer_s plusline_buffer;
   struct fastx_buffer_s quality_buffer;
 
-  uint64_t file_size;
-  uint64_t file_position;
+  uint64_t file_size = 0;
+  uint64_t file_position = 0;
 
-  uint64_t lineno;
-  uint64_t lineno_start;
-  int64_t seqno;
+  uint64_t lineno = 0;
+  uint64_t lineno_start = 0;
+  int64_t seqno = 0;
 
-  uint64_t stripped_all;
-  uint64_t stripped[byte_range];
+  uint64_t stripped_all = 0;
+  std::array<uint64_t, byte_range> stripped {{}};
 
-  int format;
+  Format format = Format::undefined;
 };
 
 using fastx_handle = struct fastx_s *;
@@ -123,25 +125,25 @@ using fastx_handle = struct fastx_s *;
 
 /* fastx input */
 
-auto fastx_is_fastq(fastx_handle h) -> bool;
-auto fastx_is_empty(fastx_handle h) -> bool;
-auto fastx_is_pipe(fastx_handle h) -> bool;
-auto fastx_filter_header(fastx_handle h, bool truncateatspace) -> void;
+auto fastx_is_fastq(fastx_handle input_handle) -> bool;
+auto fastx_is_empty(fastx_handle input_handle) -> bool;
+auto fastx_is_pipe(fastx_handle input_handle) -> bool;
+auto fastx_filter_header(fastx_handle input_handle, bool truncateatspace) -> void;
 auto fastx_open(const char * filename) -> fastx_handle;
-auto fastx_close(fastx_handle h) -> void;
-auto fastx_next(fastx_handle h,
+auto fastx_close(fastx_handle input_handle) -> void;
+auto fastx_next(fastx_handle input_handle,
                 bool truncateatspace,
                 const unsigned char * char_mapping) -> bool;
-auto fastx_get_position(fastx_handle h) -> uint64_t;
-auto fastx_get_size(fastx_handle h) -> uint64_t;
-auto fastx_get_lineno(fastx_handle h) -> uint64_t;
-auto fastx_get_seqno(fastx_handle h) -> uint64_t;
-auto fastx_get_header(fastx_handle h) -> char *;
-auto fastx_get_sequence(fastx_handle h) -> char *;
-auto fastx_get_header_length(fastx_handle h) -> uint64_t;
-auto fastx_get_sequence_length(fastx_handle h) -> uint64_t;
+auto fastx_get_position(fastx_handle input_handle) -> uint64_t;
+auto fastx_get_size(fastx_handle input_handle) -> uint64_t;
+auto fastx_get_lineno(fastx_handle input_handle) -> uint64_t;
+auto fastx_get_seqno(fastx_handle input_handle) -> uint64_t;
+auto fastx_get_header(fastx_handle input_handle) -> char const *;
+auto fastx_get_sequence(fastx_handle input_handle) -> char const *;
+auto fastx_get_header_length(fastx_handle input_handle) -> uint64_t;
+auto fastx_get_sequence_length(fastx_handle input_handle) -> uint64_t;
 
-auto fastx_get_quality(fastx_handle h) -> char *;
-auto fastx_get_abundance(fastx_handle h) -> int64_t;
+auto fastx_get_quality(fastx_handle input_handle) -> char const *;
+auto fastx_get_abundance(fastx_handle input_handle) -> int64_t;
 
-auto fastx_file_fill_buffer(fastx_handle h) -> uint64_t;
+auto fastx_file_fill_buffer(fastx_handle input_handle) -> uint64_t;

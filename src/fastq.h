@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -75,23 +74,23 @@ auto fastq_get_position(fastx_handle input_handle) -> uint64_t;
 auto fastq_get_size(fastx_handle input_handle) -> uint64_t;
 auto fastq_get_lineno(fastx_handle input_handle) -> uint64_t;
 auto fastq_get_seqno(fastx_handle input_handle) -> uint64_t;
-auto fastq_get_header(fastx_handle input_handle) -> char *;
-auto fastq_get_sequence(fastx_handle input_handle) -> char *;
-auto fastq_get_quality(fastx_handle input_handle) -> char *;
+auto fastq_get_header(fastx_handle input_handle) -> char const *;
+auto fastq_get_sequence(fastx_handle input_handle) -> char const *;
+auto fastq_get_quality(fastx_handle input_handle) -> char const *;
 auto fastq_get_abundance(fastx_handle input_handle) -> int64_t;
 auto fastq_get_abundance_and_presence(fastx_handle input_handle) -> int64_t;
 auto fastq_get_header_length(fastx_handle input_handle) -> uint64_t;
 auto fastq_get_sequence_length(fastx_handle input_handle) -> uint64_t;
 auto fastq_get_quality_length(fastx_handle input_handle) -> uint64_t;
 
-auto fastq_print(std::FILE * output_handle, char * header, char * sequence, char * quality) -> void;
+auto fastq_print(std::FILE * output_handle, char const * header, char const * sequence, char const * quality) -> void;
 
 auto fastq_print_general(std::FILE * output_handle,
-                         char * seq,
+                         char const * seq,
                          int len,
-                         char * header,
+                         char const * header,
                          int header_len,
-                         char * quality,
+                         char const * quality,
                          int abundance,
                          int ordinal,
-                         double ee) -> void;
+                         double expected_error) -> void;

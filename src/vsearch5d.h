@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -74,32 +73,23 @@
 #include <cctype>
 #include <cfloat>
 #include <cinttypes>
-#include <climits>
 #include <clocale>
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
-#include <cstdio>
+#include <cstdio>  // std::size_t
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
+#include <ctime>  // replace with std::chrono
 #include <map>
 #include <set>
 #include <string>
 #include <cassert>
 #include <limits>
 
-/* include appropriate regex library */
-
-#ifdef HAVE_REGEX_H
-#include <regex.h>
-#else
-#include <regex>
-#endif
-
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>
+#include <sys/time.h>  // refactoring: redundant with <ctime>?
 #include <pthread.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -142,25 +132,17 @@
 #include <windows.h>
 #include <psapi.h>
 #include <shlwapi.h>
-#define bswap_16(x) _byteswap_ushort(x)
-#define bswap_32(x) _byteswap_ulong(x)
-#define bswap_64(x) _byteswap_uint64(x)
 
 #elif __APPLE__
 
 #define PROG_OS "macos"
 #include <sys/sysctl.h>
-#include <libkern/OSByteOrder.h>
 #include <sys/resource.h>
-#define bswap_16(x) OSSwapInt16(x)
-#define bswap_32(x) OSSwapInt32(x)
-#define bswap_64(x) OSSwapInt64(x)
 
 #elif __linux__
 
 #define PROG_OS "linux"
 #include <sys/sysinfo.h>
-#include <byteswap.h>
 #include <sys/resource.h>
 
 #elif __FreeBSD__
@@ -168,20 +150,12 @@
 #define PROG_OS "freebsd"
 #include <sys/sysinfo.h>
 #include <sys/resource.h>
-#include <sys/endian.h>
-#define bswap_16(x) bswap16(x)
-#define bswap_32(x) bswap32(x)
-#define bswap_64(x) bswap64(x)
 
 #elif __NetBSD__
 
 #define PROG_OS "netbsd"
 #include <sys/resource.h>
 #include <sys/types.h>
-#include <sys/bswap.h>
-#define bswap_16(x) bswap16(x)
-#define bswap_32(x) bswap32(x)
-#define bswap_64(x) bswap64(x)
 /* Alters behavior, but NetBSD 7 does not have getopt_long_only() */
 #define getopt_long_only getopt_long
 
@@ -189,7 +163,6 @@
 
 #define PROG_OS "unknown"
 #include <sys/sysinfo.h>
-#include <byteswap.h>
 #include <sys/resource.h>
 
 #endif
@@ -212,11 +185,9 @@
 #include "city.h"
 #include "sha1.h"
 
-#include "arch.h"
+#include "arch.h"  // TODO: rename to operating_systems.h
 #include "util.h"
-#include "xstring.h"
 #include "db.h"
-#include "linmemalign.h"
 #include "searchcore.h"
 #include "results.h"
 #include "cpu.h"
@@ -224,7 +195,6 @@
 #include "fasta.h"
 #include "fastq.h"
 #include "dbhash.h"
-#include "kmerhash.h"
 
 /* options */
 
@@ -247,7 +217,6 @@ extern bool opt_relabel_md5;
 extern bool opt_relabel_self;
 extern bool opt_relabel_sha1;
 extern bool opt_samheader;
-extern bool opt_sff_clip;
 extern bool opt_sintax_random;
 extern bool opt_sizein;
 extern bool opt_sizeorder;
@@ -255,7 +224,6 @@ extern bool opt_sizeout;
 extern bool opt_xee;
 extern bool opt_xlength;
 extern bool opt_xsize;
-extern char * opt_allpairs_global;
 extern char * opt_alnout;
 extern char * opt_biomout;
 extern char * opt_blast6out;
@@ -281,23 +249,12 @@ extern char * opt_fastaout_notmerged_rev;
 extern char * opt_fastaout_rev;
 extern char * opt_fastapairs;
 extern char * opt_fastq_convert;
-extern char * opt_fastq_eestats2;
-extern char * opt_fastq_eestats;
-extern char * opt_fastq_filter;
-extern char * opt_fastq_mergepairs;
-extern char * opt_fastq_stats;
 extern char * opt_fastqout;
 extern char * opt_fastqout_discarded;
 extern char * opt_fastqout_discarded_rev;
 extern char * opt_fastqout_rev;
 extern char * opt_fastqout_notmerged_fwd;
 extern char * opt_fastqout_notmerged_rev;
-extern char * opt_fastx_filter;
-extern char * opt_fastx_getseq;
-extern char * opt_fastx_getseqs;
-extern char * opt_fastx_getsubseq;
-extern char * opt_fastx_mask;
-extern char * opt_fastx_revcomp;
 extern char * opt_label;
 extern char * opt_label_suffix;
 extern char * opt_labels;
@@ -306,15 +263,12 @@ extern char * opt_label_words;
 extern char * opt_label_field;
 extern char * opt_lcaout;
 extern char * opt_log;
-extern char * opt_makeudb_usearch;
-extern char * opt_maskfasta;
 extern char * opt_matched;
 extern char * opt_mothur_shared_out;
 extern char * opt_msaout;
 extern char * opt_nonchimeras;
 extern char * opt_notmatched;
 extern char * opt_notmatchedfq;
-extern char * opt_orient;
 extern char * opt_otutabout;
 extern char * opt_output;
 extern char * opt_pattern;
@@ -324,9 +278,6 @@ extern char * opt_relabel;
 extern char * opt_reverse;
 extern char * opt_samout;
 extern char * opt_sample;
-extern char * opt_search_exact;
-extern char * opt_sff_convert;
-extern char * opt_sintax;
 extern char * opt_tabbedout;
 extern char * opt_tsegout;
 extern char * opt_uc;
@@ -336,10 +287,6 @@ extern char * opt_uchime_denovo;
 extern char * opt_uchime_ref;
 extern char * opt_uchimealns;
 extern char * opt_uchimeout;
-extern char * opt_udb2fasta;
-extern char * opt_udbinfo;
-extern char * opt_udbstats;
-extern char * opt_usearch_global;
 extern char * opt_userout;
 extern double * opt_ee_cutoffs_values;
 extern double opt_abskew;
@@ -352,13 +299,11 @@ extern double opt_fastq_truncee;
 extern double opt_fastq_truncee_rate;
 extern double opt_id;
 extern double opt_lca_cutoff;
-extern double opt_max_unmasked_pct;
 extern double opt_maxid;
 extern double opt_maxqt;
 extern double opt_maxsizeratio;
 extern double opt_maxsl;
 extern double opt_mid;
-extern double opt_min_unmasked_pct;
 extern double opt_mindiv;
 extern double opt_minh;
 extern double opt_minqt;
@@ -451,7 +396,7 @@ extern int64_t opt_rowlen;
 extern int64_t opt_sample_size;
 extern int64_t opt_self;
 extern int64_t opt_selfid;
-extern int64_t opt_strand;
+extern int64_t opt_strand;  // used in pthread functions
 extern int64_t opt_subseq_start;
 extern int64_t opt_subseq_end;
 extern int64_t opt_threads;
@@ -475,10 +420,12 @@ extern int64_t avx2_present;
 
 extern std::FILE * fp_log;
 
-constexpr auto tax_levels = 9;
+constexpr int64_t default_fasta_width = 80;
+constexpr int64_t default_fastq_tail = 4;
 constexpr int64_t default_maxseqlength = 50000;
 constexpr int64_t default_ascii_offset = 33;
 constexpr char alternative_ascii_offset = 64;
+constexpr auto dbl_max = std::numeric_limits<double>::max();
 constexpr int64_t default_max_quality = 41;
 constexpr auto int64_max = std::numeric_limits<int64_t>::max();
 std::string const default_quality_padding = "IIIIIIII";  // Q40 with an offset of 33
@@ -486,8 +433,19 @@ std::string const alternative_quality_padding = "hhhhhhhh";  // Q40 with an offs
 std::string const default_sequence_padding = "NNNNNNNN";
 
 struct Parameters {
+  std::string prog_header;
+  std::string command_line;
+  char * opt_allpairs_global = nullptr;
+  char * opt_chimeras_denovo = nullptr;
+  char * opt_cluster_fast = nullptr;
+  char * opt_cluster_size = nullptr;
+  char * opt_cluster_smallmem = nullptr;
+  char * opt_cluster_unoise = nullptr;
   char * opt_cut = nullptr;
   std::string opt_cut_pattern;
+  char * opt_db = nullptr;
+  char * opt_dbmatched = nullptr;
+  char * opt_dbnotmatched = nullptr;
   char * opt_derep_fulllength = nullptr;
   char * opt_derep_id = nullptr;
   char * opt_derep_prefix = nullptr;
@@ -498,51 +456,113 @@ struct Parameters {
   char * opt_fastaout_discarded = nullptr;
   char * opt_fastaout_discarded_rev = nullptr;
   char * opt_fastq_chars = nullptr;
+  char * opt_fastq_convert = nullptr;
+  char * opt_fastq_eestats2 = nullptr;
+  char * opt_fastq_eestats = nullptr;
+  char * opt_fastq_filter = nullptr;
   char * opt_fastq_join = nullptr;
   char * opt_fastq_join2 = nullptr;
+  char * opt_fastq_mergepairs = nullptr;
+  char * opt_fastq_stats = nullptr;
   char * opt_fastqout = nullptr;
   char * opt_fastqout_rev = nullptr;
   char * opt_fastqout_discarded = nullptr;
   char * opt_fastqout_discarded_rev = nullptr;
+  char * opt_fastx_filter = nullptr;
+  char * opt_fastx_getseq = nullptr;
+  char * opt_fastx_getseqs = nullptr;
+  char * opt_fastx_getsubseq = nullptr;
+  char * opt_fastx_mask = nullptr;
+  char * opt_fastx_revcomp = nullptr;
   char * opt_fastx_subsample = nullptr;
   char * opt_fastx_uniques = nullptr;
   std::string opt_join_padgap = default_sequence_padding;
   std::string opt_join_padgapq = default_quality_padding;
+  char * opt_label_suffix = nullptr;
   char * opt_log = nullptr;
+  char * opt_makeudb_usearch = nullptr;
+  char * opt_maskfasta = nullptr;
+  char * opt_orient = nullptr;
   char * opt_output = nullptr;
   char * opt_relabel = nullptr;
   char * opt_rereplicate = nullptr;
   char * opt_reverse = nullptr;
+  char * opt_sample = nullptr;
+  char * opt_search_exact = nullptr;
+  char * opt_sff_convert = nullptr;
   char * opt_shuffle = nullptr;
+  char * opt_sintax = nullptr;
   char * opt_sortbylength = nullptr;
   char * opt_sortbysize = nullptr;
   char * opt_tabbedout = nullptr;
   char * opt_uc = nullptr;
-  char * progname = nullptr;
+  char * opt_uchime2_denovo = nullptr;
+  char * opt_uchime3_denovo = nullptr;
+  char * opt_uchime_denovo = nullptr;
+  char * opt_uchime_ref = nullptr;
+  char * opt_udb2fasta = nullptr;
+  char * opt_udbinfo = nullptr;
+  char * opt_udbstats = nullptr;
+  char * opt_usearch_global = nullptr;
+  char * progname = nullptr;  // refactoring: unused?
   std::FILE * fp_log = nullptr;
+  double opt_fastq_truncee_rate = dbl_max;
+  double opt_max_unmasked_pct = 100.0;
+  double opt_min_unmasked_pct = 0;
   double opt_sample_pct = 0;
+  int64_t opt_fasta_width = default_fasta_width;
   int64_t opt_fastq_ascii = default_ascii_offset;
   int64_t opt_fastq_asciiout = default_ascii_offset;
+  int64_t opt_fastq_qmax = default_max_quality;
   int64_t opt_fastq_qmaxout = default_max_quality;
+  int64_t opt_fastq_qmin = 0;
   int64_t opt_fastq_qminout = 0;
-  int64_t opt_fastq_tail = 4;
+  int64_t opt_fastq_minqual = 0;
+  int64_t opt_fastq_tail = default_fastq_tail;
   int64_t opt_maxseqlength = default_maxseqlength;
   int64_t opt_maxsize = int64_max;
   int64_t opt_maxuniquesize = int64_max;
   int64_t opt_minseqlength = -1;
   int64_t opt_minsize = 0;
   int64_t opt_minuniquesize = 1;
+  int64_t opt_qmask = 1;  // MASK_DUST
   int64_t opt_randseed = 0;
   int64_t opt_sample_size = 0;
   int64_t opt_threads = 0;
   int64_t opt_topn = int64_max;
+  bool opt_bzip2_decompress = false;
+  bool opt_clusterout_id = false;
+  bool opt_clusterout_sort = false;
+  bool opt_eeout = false;
+  bool opt_fasta_score = false;
+  bool opt_fastq_allowmergestagger = false;
+  bool opt_fastq_eeout = false;
+  bool opt_fastq_nostagger = true;
   bool opt_fastq_qout_max = false;
+  bool opt_gzip_decompress = false;
+  bool opt_hardmask = false;
+  bool opt_label_substr_match = false;
+  bool opt_lengthout = false;
+  bool opt_no_progress = false;
   bool opt_help = false;
   bool opt_join_padgapq_set_by_user = false;
   bool opt_notrunclabels = false;
   bool opt_quiet = false;
+  bool opt_relabel_keep = false;
+  bool opt_relabel_md5 = false;
+  bool opt_relabel_self = false;
+  bool opt_relabel_sha1 = false;
+  bool opt_samheader = false;
+  bool opt_sff_clip = false;
+  bool opt_sintax_random = false;
   bool opt_sizein = false;
+  bool opt_sizeorder = false;
+  bool opt_sizeout = false;
+  bool opt_stderr_is_tty = false;
   bool opt_strand = false;
+  bool opt_uc_allhits = false;
   bool opt_version = false;
+  bool opt_xee = false;
+  bool opt_xlength = false;
   bool opt_xsize = false;
 };

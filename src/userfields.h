@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -64,4 +63,4 @@
 extern int * userfields_requested;
 extern int userfields_requested_count;
 
-auto parse_userfields_arg(char * arg) -> int;
+auto parse_userfields_arg(char const * arg) -> int;

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -83,13 +82,13 @@ auto search16_init(CELL score_match,
                    CELL penalty_gap_extension_target_right) -> struct s16info_s *;
 
 
-auto search16_exit(s16info_s * s) -> void;
+auto search16_exit(s16info_s * searchinfo) -> void;
 
 
-auto search16_qprep(s16info_s * s, char * qseq, int qlen) -> void;
+auto search16_qprep(s16info_s * searchinfo, char * qseq, int qlen) -> void;
 
 
-auto search16(s16info_s * s,
+auto search16(s16info_s * searchinfo,
               unsigned int sequences,
               unsigned int * seqnos,
               CELL * pscores,

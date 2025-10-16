@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -83,13 +82,17 @@
 #include "vsearch5d.h"
 #include "bitmap.h"
 #include "dbindex.h"
-#include "maps.h"
 #include "mask.h"
 #include "minheap.h"
 #include "tax.h"
 #include "udb.h"
 #include "unique.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
+#include "utils/taxonomic_fields.h"
+#include "utils/xpthread.hpp"
 #include <algorithm>  // std::min, std::max
+#include <array>
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose, std::size_t
 #include <cstring>  // std::memset, std::strncmp, std::strcpy
@@ -106,78 +109,73 @@ static int seqcount; /* number of database sequences */
 static pthread_attr_t attr;
 static fastx_handle query_fastx_h;
 
-const int subset_size = 32;
-const int bootstrap_count = 100;
+constexpr auto subset_size = 32;
+constexpr auto bootstrap_count = 100;
 
 /* global data protected by mutex */
 static pthread_mutex_t mutex_input;
 static pthread_mutex_t mutex_output;
-static FILE * fp_tabbedout;
+static std::FILE * fp_tabbedout;
 static int queries = 0;
 static int classified = 0;
 
 
-auto sintax_analyse(char * query_head,
-                    int strand,
-                    int * all_seqno,
-                    int count) -> void
+auto sintax_analyse(char const * query_head,
+                    int const strand,
+                    int const * all_seqno,
+                    int const count) -> void
 {
-  int level_matchcount[tax_levels];
-  int level_best[tax_levels];
-  char * cand_level_name_start[bootstrap_count][tax_levels];
-  int cand_level_name_len[bootstrap_count][tax_levels];
+  std::array<int, tax_levels> level_matchcount {{}};
+  std::array<int, tax_levels> level_best {{}};
+  std::array<std::array<char *, tax_levels>, bootstrap_count> cand_level_name_start {{}};
+  std::array<std::array<int, tax_levels>, bootstrap_count> cand_level_name_len {{}};
 
   /* Check number of successful bootstraps, must be at least half */
 
-  bool const enough = count >= (bootstrap_count + 1) / 2;
+  auto const is_enough = count >= (bootstrap_count + 1) / 2;
 
-  if (enough)
+  if (is_enough)
     {
       /* Find the most common name at each taxonomic rank,
          but with the same names at higher ranks. */
 
-      for (int i = 0; i < count ; i++)
+      for (auto i = 0; i < count ; i++)
         {
           /* Split headers of all candidates by taxonomy ranks */
 
-          int const seqno = all_seqno[i];
-          int new_level_name_start[tax_levels];
-          int new_level_name_len[tax_levels];
-          tax_split(seqno, new_level_name_start, new_level_name_len);
-          for (int k = 0; k < tax_levels; k++)
+          auto const seqno = all_seqno[i];
+          std::array<int, tax_levels> new_level_name_start {{}};
+          std::array<int, tax_levels> new_level_name_len {{}};
+          tax_split(seqno, new_level_name_start.data(), new_level_name_len.data());
+          cand_level_name_len[i] = new_level_name_len;
+          for (auto k = 0; k < tax_levels; k++)
             {
               cand_level_name_start[i][k] = db_getheader(seqno) + new_level_name_start[k];
-              cand_level_name_len[i][k] = new_level_name_len[k];
             }
         }
 
-      bool cand_included[bootstrap_count];
-      for (int i = 0; i < count; i++)
-        cand_included[i] = true;
+      std::array<bool, bootstrap_count> cand_included {{}};
+      cand_included.fill(true);
 
       /* Count matching names among candidates */
 
-      for (int k = 0; k < tax_levels; k++)
+      for (auto k = 0; k < tax_levels; k++)
         {
           level_best[k] = -1;
           level_matchcount[k] = 0;
 
-          int cand_match[bootstrap_count];
-          int cand_matchcount[bootstrap_count];
-          for (int i = 0; i < count ; i++)
-            {
-              cand_match[i] = -1;
-              cand_matchcount[i] = 0;
-            }
+          std::array<int, bootstrap_count> cand_match {{}};
+          cand_match.fill(-1);
+          std::array<int, bootstrap_count> cand_matchcount {{}};
 
-          for (int i = 0; i < count ; i++)
-            if (cand_included[i])
-              for (int j = 0; j <= i ; j++)
+          for (auto i = 0; i < count ; i++) {
+            if (cand_included[i]) {
+              for (auto j = 0; j <= i ; j++) {
                 if (cand_included[j])
                   {
                     /* check match at current level */
                     if ((cand_level_name_len[i][k] == cand_level_name_len[j][k]) &&
-                                  (strncmp(cand_level_name_start[i][k],
+                        (std::strncmp(cand_level_name_start[i][k],
                                            cand_level_name_start[j][k],
                                            cand_level_name_len[i][k]) == 0))
                       {
@@ -186,40 +184,46 @@ auto sintax_analyse(char * query_head,
                         break; /* stop at first match */
                       }
                   }
+              }
+            }
+          }
 
-          for (int i = 0; i < count ; i++)
+          for (auto i = 0; i < count ; i++) {
             if (cand_matchcount[i] > level_matchcount[k])
               {
                 level_best[k] = i;
                 level_matchcount[k] = cand_matchcount[i];
               }
+          }
 
-          for (int i = 0; i < count; i++)
-            if (cand_match[i] != level_best[k])
+          for (auto i = 0; i < count; i++) {
+            if (cand_match[i] != level_best[k]) {
               cand_included[i] = false;
+            }
+          }
         }
     }
 
   /* write to tabbedout file */
   xpthread_mutex_lock(&mutex_output);
-  fprintf(fp_tabbedout, "%s\t", query_head);
+  std::fprintf(fp_tabbedout, "%s\t", query_head);
 
   queries++;
 
-  if (enough)
+  if (is_enough)
     {
       classified++;
 
-      bool comma = false;
-      for (int j = 0; j < tax_levels; j++)
+      auto comma = false;
+      for (auto j = 0; j < tax_levels; j++)
         {
-          int const best = level_best[j];
+          auto const best = level_best[j];
           if (cand_level_name_len[best][j] > 0)
             {
-              fprintf(fp_tabbedout,
+              std::fprintf(fp_tabbedout,
                       "%s%c:%.*s(%.2f)",
                       (comma ? "," : ""),
-                      tax_letters[j],
+                      taxonomic_fields[j],
                       cand_level_name_len[best][j],
                       cand_level_name_start[best][j],
                       1.0 * level_matchcount[j] / count);
@@ -227,22 +231,22 @@ auto sintax_analyse(char * query_head,
             }
         }
 
-      fprintf(fp_tabbedout, "\t%c", strand ? '-' : '+');
+      std::fprintf(fp_tabbedout, "\t%c", (strand != 0) ? '-' : '+');
 
       if (opt_sintax_cutoff > 0.0)
         {
-          fprintf(fp_tabbedout, "\t");
-          bool comma = false;
-          for (int j = 0; j < tax_levels; j++)
+          std::fprintf(fp_tabbedout, "\t");
+          auto comma = false;
+          for (auto j = 0; j < tax_levels; j++)
             {
-              int const best = level_best[j];
+              auto const best = level_best[j];
               if ((cand_level_name_len[best][j] > 0) &&
                   (1.0 * level_matchcount[j] / count >= opt_sintax_cutoff))
                 {
-                  fprintf(fp_tabbedout,
+                  std::fprintf(fp_tabbedout,
                           "%s%c:%.*s",
                           (comma ? "," : ""),
-                          tax_letters[j],
+                          taxonomic_fields[j],
                           cand_level_name_len[best][j],
                           cand_level_name_start[best][j]);
                   comma = true;
@@ -254,19 +258,20 @@ auto sintax_analyse(char * query_head,
     {
       if (opt_sintax_cutoff > 0.0)
         {
-          fprintf(fp_tabbedout, "\t\t");
+          std::fprintf(fp_tabbedout, "\t\t");
         }
       else
         {
-          fprintf(fp_tabbedout, "\t");
+          std::fprintf(fp_tabbedout, "\t");
         }
     }
 
-  fprintf(fp_tabbedout, "\n");
+  std::fprintf(fp_tabbedout, "\n");
   xpthread_mutex_unlock(&mutex_output);
 }
 
-auto sintax_search_topscores(struct searchinfo_s * si) -> void
+
+auto sintax_search_topscores(struct searchinfo_s * searchinfo) -> void
 {
   /*
     Count the number of kmer hits in each database sequence and select
@@ -282,52 +287,52 @@ auto sintax_search_topscores(struct searchinfo_s * si) -> void
   const int indexed_count = dbindex_getcount();
 
   /* zero counts */
-  memset(si->kmers, 0, indexed_count * sizeof(count_t));
+  std::memset(searchinfo->kmers, 0, indexed_count * sizeof(count_t));
 
-  for (unsigned int i = 0; i < si->kmersamplecount; i++)
+  for (auto i = 0U; i < searchinfo->kmersamplecount; i++)
     {
-      unsigned int const kmer = si->kmersample[i];
-      unsigned char * bitmap = dbindex_getbitmap(kmer);
+      unsigned int const kmer = searchinfo->kmersample[i];
+      auto * bitmap = dbindex_getbitmap(kmer);
 
-      if (bitmap)
+      if (bitmap != nullptr)
         {
 #ifdef __x86_64__
-          if (ssse3_present)
+          if (ssse3_present != 0)
             {
-              increment_counters_from_bitmap_ssse3(si->kmers,
+              increment_counters_from_bitmap_ssse3(searchinfo->kmers,
                                                    bitmap, indexed_count);
             }
           else
             {
-              increment_counters_from_bitmap_sse2(si->kmers,
+              increment_counters_from_bitmap_sse2(searchinfo->kmers,
                                                   bitmap, indexed_count);
             }
 #else
-          increment_counters_from_bitmap(si->kmers, bitmap, indexed_count);
+          increment_counters_from_bitmap(searchinfo->kmers, bitmap, indexed_count);
 #endif
         }
       else
         {
-          unsigned int * list = dbindex_getmatchlist(kmer);
-          unsigned int const count = dbindex_getmatchcount(kmer);
-          for (unsigned int j = 0; j < count; j++)
+          auto * list = dbindex_getmatchlist(kmer);
+          auto const count = dbindex_getmatchcount(kmer);
+          for (auto j = 0U; j < count; j++)
             {
-              si->kmers[list[j]]++;
+              searchinfo->kmers[list[j]]++;
             }
         }
     }
 
-  unsigned int tophits = 0;
+  auto tophits = 0U;
 
   elem_t best;
   best.count = 0;
   best.seqno = 0;
   best.length = 0;
 
-  for (int i = 0; i < indexed_count; i++)
+  for (auto i = 0; i < indexed_count; i++)
     {
-      count_t const count = si->kmers[i];
-      unsigned int const seqno = dbindex_getmapping(i);
+      count_t const count = searchinfo->kmers[i];
+      auto const seqno = dbindex_getmapping(i);
       unsigned int const length = db_getsequencelen(best.seqno);
 
       if (count > best.count)
@@ -363,50 +368,51 @@ auto sintax_search_topscores(struct searchinfo_s * si) -> void
         }
     }
 
-  minheap_empty(si->m);
+  minheap_clear(searchinfo->m);
   if (best.count > 1) {
-    minheap_add(si->m, &best);
+    minheap_add(searchinfo->m, &best);
   }
 }
 
-auto sintax_query(int64_t t) -> void
+
+auto sintax_query(int64_t const t) -> void
 {
-  int all_seqno[2][bootstrap_count];
-  int boot_count[2] = {0, 0};
-  unsigned int best_count[2] = {0, 0};
+  std::array<std::array<int, bootstrap_count>, 2> all_seqno {{}};
+  std::array<int, 2> boot_count = {0, 0};
+  std::array<unsigned int, 2> best_count = {0, 0};
   int const qseqlen = si_plus[t].qseqlen;
-  char * query_head = si_plus[t].query_head;
+  char const * query_head = si_plus[t].query_head;
 
   auto * b = bitmap_init(qseqlen);
 
-  for (int s = 0; s < opt_strand; s++)
+  for (auto s = 0; s < opt_strand; s++)
     {
-      struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
+      struct searchinfo_s * si = (s != 0) ? si_minus + t : si_plus + t;
 
       /* perform search */
 
-      unsigned int kmersamplecount = 0;
-      unsigned int * kmersample = nullptr;
+      auto kmersamplecount = 0U;
+      unsigned int const * kmersample = nullptr;
 
       /* find unique kmers */
       unique_count(si->uh, opt_wordlength,
                    si->qseqlen, si->qsequence,
-                   & kmersamplecount, & kmersample, MASK_NONE);
+                   &kmersamplecount, &kmersample, MASK_NONE);
 
       /* perform 100 bootstraps */
 
       if (kmersamplecount >= subset_size)
         {
-          for (int i = 0; i < bootstrap_count ; i++)
+          for (auto i = 0; i < bootstrap_count ; i++)
             {
               /* subsample 32 kmers */
-              unsigned int kmersample_subset[subset_size];
-              int subsamples = 0;
+              std::array<unsigned int, subset_size> kmersample_subset {{}};
+              auto subsamples = 0;
               bitmap_reset_all(b);
-              for (int j = 0; j < subset_size ; j++)
+              for (auto j = 0; j < subset_size ; j++)
                 {
                   int64_t const x = random_int(kmersamplecount);
-                  if (! bitmap_get(b, x))
+                  if (bitmap_get(b, x) == 0U)
                     {
                       kmersample_subset[subsamples++] = kmersample[x];
                       bitmap_set(b, x);
@@ -414,13 +420,13 @@ auto sintax_query(int64_t t) -> void
                 }
 
               si->kmersamplecount = subsamples;
-              si->kmersample = kmersample_subset;
+              si->kmersample = kmersample_subset.data();
 
               sintax_search_topscores(si);
 
               if (! minheap_isempty(si->m))
                 {
-                  elem_t const e = minheap_poplast(si->m);
+                  auto const e = minheap_poplast(si->m);
 
                   all_seqno[s][boot_count[s]++] = e.seqno;
 
@@ -430,7 +436,7 @@ auto sintax_query(int64_t t) -> void
         }
     }
 
-  int best_strand = 0;
+  auto best_strand = 0;
 
   if (opt_strand == 1)
     {
@@ -461,32 +467,33 @@ auto sintax_query(int64_t t) -> void
 
   sintax_analyse(query_head,
                  best_strand,
-                 all_seqno[best_strand],
+                 all_seqno[best_strand].data(),
                  boot_count[best_strand]);
 
   bitmap_free(b);
 }
 
-auto sintax_thread_run(int64_t t) -> void
+
+auto sintax_thread_run(int64_t const t) -> void
 {
   while (true)
     {
       xpthread_mutex_lock(&mutex_input);
 
       if (fastx_next(query_fastx_h,
-                     ! opt_notrunclabels,
-                     chrmap_no_change))
+                     opt_notrunclabels == 0,
+                     chrmap_no_change_vector.data()))
         {
-          char * qhead = fastx_get_header(query_fastx_h);
+          auto const * qhead = fastx_get_header(query_fastx_h);
           int const query_head_len = fastx_get_header_length(query_fastx_h);
-          char * qseq = fastx_get_sequence(query_fastx_h);
+          auto const * qseq = fastx_get_sequence(query_fastx_h);
           int const qseqlen = fastx_get_sequence_length(query_fastx_h);
           int const query_no = fastx_get_seqno(query_fastx_h);
           int const qsize = fastx_get_abundance(query_fastx_h);
 
-          for (int s = 0; s < opt_strand; s++)
+          for (auto s = 0; s < opt_strand; s++)
             {
-              struct searchinfo_s * si = s ? si_minus + t : si_plus + t;
+              struct searchinfo_s * si = (s != 0) ? si_minus + t : si_plus + t;
 
               si->query_head_len = query_head_len;
               si->qseqlen = qseqlen;
@@ -512,11 +519,11 @@ auto sintax_thread_run(int64_t t) -> void
             }
 
           /* plus strand: copy header and sequence */
-          strcpy(si_plus[t].query_head, qhead);
-          strcpy(si_plus[t].qsequence, qseq);
+          std::strcpy(si_plus[t].query_head, qhead);
+          std::strcpy(si_plus[t].qsequence, qseq);
 
           /* get progress as amount of input file read */
-          uint64_t const progress = fastx_get_position(query_fastx_h);
+          auto const progress = fastx_get_position(query_fastx_h);
 
           /* let other threads read input */
           xpthread_mutex_unlock(&mutex_input);
@@ -524,7 +531,7 @@ auto sintax_thread_run(int64_t t) -> void
           /* minus strand: copy header and reverse complementary sequence */
           if (opt_strand > 1)
             {
-              strcpy(si_minus[t].query_head, si_plus[t].query_head);
+              std::strcpy(si_minus[t].query_head, si_plus[t].query_head);
               reverse_complement(si_minus[t].qsequence,
                                  si_plus[t].qsequence,
                                  si_plus[t].qseqlen);
@@ -548,6 +555,7 @@ auto sintax_thread_run(int64_t t) -> void
     }
 }
 
+
 auto sintax_thread_init(struct searchinfo_s * si) -> void
 {
   /* thread specific initialiation */
@@ -564,28 +572,31 @@ auto sintax_thread_init(struct searchinfo_s * si) -> void
   si->s = nullptr;
 }
 
-auto sintax_thread_exit(struct searchinfo_s * si) -> void
+
+auto sintax_thread_exit(struct searchinfo_s * searchinfo) -> void
 {
   /* thread specific clean up */
-  unique_exit(si->uh);
-  minheap_exit(si->m);
-  xfree(si->kmers);
-  if (si->query_head)
+  unique_exit(searchinfo->uh);
+  minheap_exit(searchinfo->m);
+  xfree(searchinfo->kmers);
+  if (searchinfo->query_head != nullptr)
     {
-      xfree(si->query_head);
+      xfree(searchinfo->query_head);
     }
-  if (si->qsequence)
+  if (searchinfo->qsequence != nullptr)
     {
-      xfree(si->qsequence);
+      xfree(searchinfo->qsequence);
     }
 }
 
-auto sintax_thread_worker(void * vp) -> void *
+
+auto sintax_thread_worker(void * void_ptr) -> void *
 {
-  auto t = (int64_t) vp;
+  auto t = (int64_t) void_ptr;
   sintax_thread_run(t);
   return nullptr;
 }
+
 
 auto sintax_thread_worker_run() -> void
 {
@@ -595,10 +606,10 @@ auto sintax_thread_worker_run() -> void
   xpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   /* init and create worker threads, put them into stand-by mode */
-  for (int t = 0; t < opt_threads; t++)
+  for (auto t = 0; t < opt_threads; t++)
     {
       sintax_thread_init(si_plus + t);
-      if (si_minus)
+      if (si_minus != nullptr)
         {
           sintax_thread_init(si_minus + t);
         }
@@ -607,11 +618,11 @@ auto sintax_thread_worker_run() -> void
     }
 
   /* finish and clean up worker threads */
-  for (int t = 0; t < opt_threads; t++)
+  for (auto t = 0; t < opt_threads; t++)
     {
       xpthread_join(pthread[t], nullptr);
       sintax_thread_exit(si_plus + t);
-      if (si_minus)
+      if (si_minus != nullptr)
         {
           sintax_thread_exit(si_minus + t);
         }
@@ -620,7 +631,8 @@ auto sintax_thread_worker_run() -> void
   xpthread_attr_destroy(&attr);
 }
 
-auto sintax() -> void
+
+auto sintax(struct Parameters const & parameters) -> void
 {
   /* tophits = the maximum number of hits we need to store */
 
@@ -628,15 +640,15 @@ auto sintax() -> void
 
   /* open output files */
 
-  if (! opt_db)
+  if (opt_db == nullptr)
     {
       fatal("No database file specified with --db");
     }
 
-  if (opt_tabbedout)
+  if (opt_tabbedout != nullptr)
     {
       fp_tabbedout = fopen_output(opt_tabbedout);
-      if (! fp_tabbedout)
+      if (fp_tabbedout == nullptr)
         {
           fatal("Unable to open tabbedout output file for writing");
         }
@@ -648,7 +660,7 @@ auto sintax() -> void
 
   /* check if db may be an UDB file */
 
-  bool const is_udb = udb_detect_isudb(opt_db);
+  auto const is_udb = udb_detect_isudb(opt_db);
 
   if (is_udb)
     {
@@ -669,7 +681,7 @@ auto sintax() -> void
 
   /* prepare reading of queries */
 
-  query_fastx_h = fastx_open(opt_sintax);
+  query_fastx_h = fastx_open(parameters.opt_sintax);
 
   /* allocate memory for thread info */
 
@@ -699,22 +711,22 @@ auto sintax() -> void
 
   if (! opt_quiet)
     {
-      fprintf(stderr, "Classified %d of %d sequences", classified, queries);
+      std::fprintf(stderr, "Classified %d of %d sequences", classified, queries);
       if (queries > 0)
         {
-          fprintf(stderr, " (%.2f%%)", 100.0 * classified / queries);
+          std::fprintf(stderr, " (%.2f%%)", 100.0 * classified / queries);
         }
-      fprintf(stderr, "\n");
+      std::fprintf(stderr, "\n");
     }
 
-  if (opt_log)
+  if (opt_log != nullptr)
     {
-      fprintf(fp_log, "Classified %d of %d sequences", classified, queries);
+      std::fprintf(fp_log, "Classified %d of %d sequences", classified, queries);
       if (queries > 0)
         {
-          fprintf(fp_log, " (%.2f%%)", 100.0 * classified / queries);
+          std::fprintf(fp_log, " (%.2f%%)", 100.0 * classified / queries);
         }
-      fprintf(fp_log, "\n");
+      std::fprintf(fp_log, "\n");
     }
 
   /* clean up */
@@ -724,13 +736,13 @@ auto sintax() -> void
 
   xfree(pthread);
   xfree(si_plus);
-  if (si_minus)
+  if (si_minus != nullptr)
     {
       xfree(si_minus);
     }
 
   fastx_close(query_fastx_h);
-  fclose(fp_tabbedout);
+  std::fclose(fp_tabbedout);
 
   dbindex_free();
   db_free();

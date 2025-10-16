@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,111 +62,194 @@
 
 #include "vsearch5d.h"
 #include "attributes.h"
-#include "maps.h"
+#include "utils/fatal.hpp"
+#include <algorithm>  // std::min
+#include <array>
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cstdint> // int64_t, uint64_t
-#include <cstdio> // std::FILE, std::fprintf, std::size_t
+#include <cstdio> // std::FILE, std::fprintf, std::size_t, std::snprintf
 #include <cstring>  // std::memchr
+#include <iterator>  // std::next
+#include <vector>
+
+
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+
+
+  enum struct Action : unsigned char {
+    warn,    // (0) symbol is stripped, with a warning
+    accept,  // (1)
+    reject,  // (2) fatal printable symbol ('.', '-')
+    show,    // (3) fatal non-printable symbol (0-32, but not 127?)
+    skip,    // (4) symbol is stripped, silently
+    count    // (5) track the number of lines
+  };
+
+
+  /*
+    How to handle input characters for FASTA
+
+    0=warn, 1=accept, 2=reject, 3=show, 4=skip, 5=count
+
+    3,  3,  3,  3,  3,  3,  3,  3,  3,  4,  5,  4,  4,  4,  3,  3,    // 0-15
+    3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,    // 16-31
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  2,  2,  0,    // 32-47
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,    // 48-63
+    0,  1,  1,  1,  1,  0,  0,  1,  1,  0,  0,  1,  0,  1,  1,  0,    // 64-79
+    0,  0,  1,  1,  1,  1,  1,  1,  0,  1,  0,  0,  0,  0,  0,  0,    // 80-95
+    0,  1,  1,  1,  1,  0,  0,  1,  1,  0,  0,  1,  0,  1,  1,  0,    // 96-111
+    0,  0,  1,  1,  1,  1,  1,  1,  0,  1,  0,  0,  0,  0,  0,  0,    // 112-127
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0
+  */
+  const std::vector<Action> char_actions =
+    {
+      Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::skip,  Action::count,  Action::skip,  Action::skip,  Action::skip,  Action::show,  Action::show,  // 0-15
+      Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  Action::show,  // 16-31
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::reject,  Action::reject,  Action::warn,  // 32-47
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  // 48-63
+      Action::warn,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::warn,  Action::warn,  Action::accept,  Action::accept,  Action::warn,  Action::warn,  Action::accept,  Action::warn,  Action::accept,  Action::accept,  Action::warn,  // 64-79
+      Action::warn,  Action::warn,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::warn,  Action::accept,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  // 80-95
+      Action::warn,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::warn,  Action::warn,  Action::accept,  Action::accept,  Action::warn,  Action::warn,  Action::accept,  Action::warn,  Action::accept,  Action::accept,  Action::warn,  // 96-111
+      Action::warn,  Action::warn,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::accept,  Action::warn,  Action::accept,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  // 112-127
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,
+      Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn,  Action::warn
+    };
+
+
+  auto map_action(char const nucleotide) -> Action {
+    auto const current_char = static_cast<unsigned char>(nucleotide);
+    return char_actions[current_char];
+  }
+
+
+  // __attribute__((noreturn))
+  auto report_illegal_symbol_and_exit(unsigned char symbol, uint64_t line_number) -> void {
+    static constexpr std::size_t max_buffer_size = 200;
+    static std::array<char, max_buffer_size> msg {{}};
+    static_cast<void>(std::snprintf(
+        msg.data(), max_buffer_size,
+        "Illegal character '%c' in sequence on line %" PRIu64 " of FASTA file",
+        symbol,
+        line_number));
+    fatal(msg.data());
+  }
+
+
+  // __attribute__((noreturn))
+  auto report_unprintable_symbol_and_exit(unsigned char symbol, uint64_t line_number) -> void {
+    static constexpr std::size_t max_buffer_size = 200;
+    static std::array<char, max_buffer_size> msg {{}};
+    static_cast<void>(std::snprintf(
+        msg.data(), max_buffer_size,
+        "Illegal unprintable ASCII character no %d in sequence on line %" PRIu64 " of FASTA file",
+        symbol,
+        line_number));
+    fatal(msg.data());
+  }
+
+}  // end of anonymous namespace
 
 
 auto fasta_open(const char * filename) -> fastx_handle
 {
-  fastx_handle h = fastx_open(filename);
+  auto * input_handle = fastx_open(filename);
 
-  if (fastx_is_fastq(h) and not h->is_empty)
+  if (fastx_is_fastq(input_handle) and not input_handle->is_empty)
     {
       fatal("FASTA file expected, FASTQ file found (%s)", filename);
     }
 
-  return h;
+  return input_handle;
 }
 
 
-auto fasta_close(fastx_handle h) -> void
+auto fasta_close(fastx_handle input_handle) -> void
 {
-  fastx_close(h);
+  fastx_close(input_handle);
 }
 
 
-auto fasta_filter_sequence(fastx_handle h,
-                           unsigned int * char_action,
-                           const unsigned char * char_mapping) -> void
+auto fasta_filter_sequence(fastx_handle input_handle,
+                           unsigned char const * char_mapping) -> void
 {
   /* Strip unwanted characters from the sequence and raise warnings or
      errors on certain characters. */
 
-  char * p = h->sequence_buffer.data;
-  char * q = p;
-  char c = '\0';
-  char msg[200];
+  auto * source = input_handle->sequence_buffer.data;
+  auto * dest = source;
 
-  while ((c = *p++))
+  while (*source != '\0')
     {
-      char const m = char_action[(unsigned char) c];
+      auto const current_char = static_cast<unsigned char>(*source);
 
-      switch (m)
+      switch (map_action(*source))
         {
-        case 0:
+        case Action::warn:
           /* stripped */
-          h->stripped_all++;
-          h->stripped[(unsigned char) c]++;
+          ++input_handle->stripped_all;
+          ++input_handle->stripped[current_char];
           break;
 
-        case 1:
+        case Action::accept:
           /* legal character */
-          *q++ = char_mapping[(unsigned char) (c)];
+          *dest = static_cast<char>(char_mapping[current_char]);
+          dest = std::next(dest);
           break;
 
-        case 2:
+        case Action::reject:
           /* fatal character */
-          if ((c >= 32) && (c < 127))
-            {
-              snprintf(msg,
-                       200,
-                       "Illegal character '%c' in sequence on line %" PRIu64 " of FASTA file",
-                       (unsigned char) c,
-                       h->lineno);
-            }
-          else
-            {
-              snprintf(msg,
-                       200,
-                       "Illegal unprintable ASCII character no %d in sequence on line %" PRIu64 " of FASTA file",
-                       (unsigned char) c,
-                       h->lineno);
-            }
-          fatal(msg);
+          report_illegal_symbol_and_exit(current_char, input_handle->lineno);
           break;
 
-        case 3:
+        case Action::show:
+          /* fatal unprintable character */
+          report_unprintable_symbol_and_exit(current_char, input_handle->lineno);
+          break;
+
+        case Action::skip:
           /* silently stripped chars (whitespace) */
           break;
 
-        case 4:
+        case Action::count:
           /* newline (silently stripped) */
-          h->lineno++;
+          ++input_handle->lineno;
           break;
         }
+      source = std::next(source);
     }
 
-  /* add zero after sequence */
-  *q = 0;
-  h->sequence_buffer.length = q - h->sequence_buffer.data;
+  /* add nullchar after sequence */
+  *dest = '\0';
+  input_handle->sequence_buffer.length = dest - input_handle->sequence_buffer.data;
 }
 
 
-auto fasta_next(fastx_handle h,
+auto fasta_next(fastx_handle input_handle,
                 bool truncateatspace,
                 const unsigned char * char_mapping) -> bool
 {
-  h->lineno_start = h->lineno;
+  input_handle->lineno_start = input_handle->lineno;
 
-  h->header_buffer.length = 0;
-  h->header_buffer.data[0] = 0;
-  h->sequence_buffer.length = 0;
-  h->sequence_buffer.data[0] = 0;
+  input_handle->header_buffer.length = 0;
+  input_handle->header_buffer.data[0] = 0;
+  input_handle->sequence_buffer.length = 0;
+  input_handle->sequence_buffer.data[0] = 0;
 
-  uint64_t rest = fastx_file_fill_buffer(h);
+  std::size_t rest = fastx_file_fill_buffer(input_handle);
 
   if (rest == 0)
     {
@@ -178,41 +260,42 @@ auto fasta_next(fastx_handle h,
 
   /* check initial > character */
 
-  if (h->file_buffer.data[h->file_buffer.position] != '>')
+  if (input_handle->file_buffer.data[input_handle->file_buffer.position] != '>')
     {
-      fprintf(stderr, "Found character %02x\n", (unsigned char)(h->file_buffer.data[h->file_buffer.position]));
+      fprintf(stderr, "Found character %02x\n", (unsigned char)(input_handle->file_buffer.data[input_handle->file_buffer.position]));
       fatal("Invalid FASTA - header must start with > character");
     }
-  h->file_buffer.position++;
+  ++input_handle->file_buffer.position;
   --rest;
 
-  char * lf = nullptr;
-  while (lf == nullptr)
+  char const * line_end = nullptr;
+  while (line_end == nullptr)
     {
       /* get more data if buffer empty*/
-      rest = fastx_file_fill_buffer(h);
+      rest = fastx_file_fill_buffer(input_handle);
       if (rest == 0)
         {
           fatal("Invalid FASTA - header must be terminated with newline");
         }
 
-      /* find LF */
-      lf = (char *) memchr(h->file_buffer.data + h->file_buffer.position,
-                           '\n',
-                           rest);
+      /* find new line char ('LF') */
+      auto * const current_position = std::next(input_handle->file_buffer.data, static_cast<long>(input_handle->file_buffer.position));
+      line_end = static_cast<char *>(std::memchr(current_position,
+                                                 '\n',
+                                                 rest));
 
       /* copy to header buffer */
       uint64_t len = rest;
-      if (lf != nullptr)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (h->file_buffer.data + h->file_buffer.position) + 1;
-          h->lineno++;
+          len = line_end - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
+          ++input_handle->lineno;
         }
-      buffer_extend(& h->header_buffer,
-                    h->file_buffer.data + h->file_buffer.position,
+      buffer_extend(& input_handle->header_buffer,
+                    input_handle->file_buffer.data + input_handle->file_buffer.position,
                     len);
-      h->file_buffer.position += len;
+      input_handle->file_buffer.position += len;
       rest -= len;
     }
 
@@ -221,7 +304,7 @@ auto fasta_next(fastx_handle h,
   while (true)
     {
       /* get more data, if necessary */
-      rest = fastx_file_fill_buffer(h);
+      rest = fastx_file_fill_buffer(input_handle);
 
       /* end if no more data */
       if (rest == 0)
@@ -230,111 +313,108 @@ auto fasta_next(fastx_handle h,
         }
 
       /* end if new sequence starts */
-      if ((lf != nullptr) && (h->file_buffer.data[h->file_buffer.position] == '>'))
+      if ((line_end != nullptr) and (input_handle->file_buffer.data[input_handle->file_buffer.position] == '>'))
         {
           break;
         }
 
       /* find LF */
-      lf = (char *) memchr(h->file_buffer.data + h->file_buffer.position,
-                           '\n', rest);
+      auto * const current_position = std::next(input_handle->file_buffer.data, input_handle->file_buffer.position);
+      line_end = static_cast<char *>(std::memchr(current_position, '\n', rest));
 
       uint64_t len = rest;
-      if (lf != nullptr)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (h->file_buffer.data + h->file_buffer.position) + 1;
+          len = line_end - current_position + 1;
         }
-      buffer_extend(& h->sequence_buffer,
-                    h->file_buffer.data + h->file_buffer.position,
+      buffer_extend(& input_handle->sequence_buffer,
+                    current_position,
                     len);
-      h->file_buffer.position += len;
+      input_handle->file_buffer.position += len;
       rest -= len;
     }
 
-  ++h->seqno;
+  ++input_handle->seqno;
 
-  fastx_filter_header(h, truncateatspace);
-  fasta_filter_sequence(h, char_fasta_action, char_mapping);
+  fastx_filter_header(input_handle, truncateatspace);
+  fasta_filter_sequence(input_handle, char_mapping);
 
   return true;
 }
 
 
-auto fasta_get_abundance(fastx_handle h) -> int64_t
+auto fasta_get_abundance(fastx_handle input_handle) -> int64_t
 {
   // return 1 if not present
-  int64_t const size = header_get_size(h->header_buffer.data,
-                                 h->header_buffer.length);
+  auto const size = header_get_size(input_handle->header_buffer.data,
+                                 input_handle->header_buffer.length);
   if (size > 0)
     {
       return size;
     }
-  else
-    {
-      return 1;
-    }
+  return 1;
 }
 
 
-auto fasta_get_abundance_and_presence(fastx_handle h) -> int64_t
+auto fasta_get_abundance_and_presence(fastx_handle input_handle) -> int64_t
 {
   // return 0 if not present
-  return header_get_size(h->header_buffer.data, h->header_buffer.length);
+  return header_get_size(input_handle->header_buffer.data, input_handle->header_buffer.length);
 }
 
 
-auto fasta_get_position(fastx_handle h) -> uint64_t
+auto fasta_get_position(fastx_handle input_handle) -> uint64_t
 {
-  return h->file_position;
+  return input_handle->file_position;
 }
 
 
-auto fasta_get_size(fastx_handle h) -> uint64_t
+auto fasta_get_size(fastx_handle input_handle) -> uint64_t
 {
-  return h->file_size;
+  return input_handle->file_size;
 }
 
 
-auto fasta_get_lineno(fastx_handle h) -> uint64_t
+auto fasta_get_lineno(fastx_handle input_handle) -> uint64_t
 {
-  return h->lineno_start;
+  return input_handle->lineno_start;
 }
 
 
-auto fasta_get_seqno(fastx_handle h) -> uint64_t
+auto fasta_get_seqno(fastx_handle input_handle) -> uint64_t
 {
-  return h->seqno;
+  return input_handle->seqno;
 }
 
 
-auto fasta_get_header_length(fastx_handle h) -> uint64_t
+auto fasta_get_header_length(fastx_handle input_handle) -> uint64_t
 {
-  return h->header_buffer.length;
+  return input_handle->header_buffer.length;
 }
 
 
-auto fasta_get_sequence_length(fastx_handle h) -> uint64_t
+auto fasta_get_sequence_length(fastx_handle input_handle) -> uint64_t
 {
-  return h->sequence_buffer.length;
+  return input_handle->sequence_buffer.length;
 }
 
 
-auto fasta_get_header(fastx_handle h) -> char *
+auto fasta_get_header(fastx_handle input_handle) -> char const *
 {
-  return h->header_buffer.data;
+  return input_handle->header_buffer.data;
 }
 
 
-auto fasta_get_sequence(fastx_handle h) -> char *
+auto fasta_get_sequence(fastx_handle input_handle) -> char const *
 {
-  return h->sequence_buffer.data;
+  return input_handle->sequence_buffer.data;
 }
 
 
 /* fasta output */
 
-auto fasta_print_sequence(std::FILE * fp, char * seq, uint64_t len, int width) -> void
+auto fasta_print_sequence(std::FILE * output_handle, char const * seq, uint64_t const len, int const width) -> void
 {
   /*
     The actual length of the sequence may be longer than "len", but only
@@ -343,56 +423,58 @@ auto fasta_print_sequence(std::FILE * fp, char * seq, uint64_t len, int width) -
     Specify width of lines - zero (or <1) means linearize (all on one line).
   */
 
-  if (width < 1)
+  auto const sequence_length = static_cast<int>(len);
+
+  if (width < 1)  // no sequence folding
     {
-      fprintf(fp, "%.*s\n", (int) (len), seq);
+      std::fprintf(output_handle, "%.*s\n", sequence_length, seq);
     }
-  else
+  else  // sequence folding every 'width'
     {
-      int64_t rest = len;
-      for (uint64_t i = 0; i < len; i += width)
+      auto rest = sequence_length;
+      for (auto i = 0; i < sequence_length; i += width)
         {
-          fprintf(fp, "%.*s\n", (int) (MIN(rest, width)), seq + i);
+          std::fprintf(output_handle, "%.*s\n", std::min(rest, width), seq + i);
           rest -= width;
         }
     }
 }
 
 
-auto fasta_print(std::FILE * fp, const char * hdr,
-                 char * seq, uint64_t len) -> void
+auto fasta_print(std::FILE * output_handle, char const * header,
+                 char const * seq, uint64_t const len) -> void
 {
-  fprintf(fp, ">%s\n", hdr);
-  fasta_print_sequence(fp, seq, len, opt_fasta_width);
+  std::fprintf(output_handle, ">%s\n", header);
+  fasta_print_sequence(output_handle, seq, len, opt_fasta_width);
 }
 
 
-inline auto fprint_seq_label(std::FILE * fp, char * seq, int len) -> void
+inline auto fprint_seq_label(std::FILE * output_handle, char const * seq, int const len) -> void
 {
   /* normalize first? */
-  fprintf(fp, "%.*s", len, seq);
+  std::fprintf(output_handle, "%.*s", len, seq);
 }
 
 
 auto fasta_print_general(std::FILE * output_handle,
-                         const char * prefix,
-                         char * seq,
-                         int len,
-                         char * header,
-                         int header_length,
-                         unsigned int abundance,
-                         int ordinal,
-                         double ee,
-                         int clustersize,
-                         int clusterid,
-                         const char * score_name,
-                         double score) -> void
+                         char const * prefix,
+                         char const * seq,
+                         int const len,
+                         char const * header,
+                         int const header_length,
+                         unsigned int const abundance,
+                         int const ordinal,
+                         double const expected_error,
+                         int const clustersize,
+                         int const clusterid,
+                         char const * score_name,
+                         double const score) -> void
 {
-  fprintf(output_handle, ">");
+  std::fprintf(output_handle, ">");
 
   if (prefix != nullptr)
     {
-      fprintf(output_handle, "%s", prefix);
+      std::fprintf(output_handle, "%s", prefix);
     }
 
   if (opt_relabel_self)
@@ -407,15 +489,15 @@ auto fasta_print_general(std::FILE * output_handle,
     {
       fprint_seq_digest_md5(output_handle, seq, len);
     }
-  else if ((opt_relabel != nullptr) && (ordinal > 0))
+  else if ((opt_relabel != nullptr) and (ordinal > 0))
     {
-      fprintf(output_handle, "%s%d", opt_relabel, ordinal);
+      std::fprintf(output_handle, "%s%d", opt_relabel, ordinal);
     }
   else
     {
-      bool const strip_size = opt_xsize || (opt_sizeout && (abundance > 0));
-      bool const strip_ee = opt_xee || ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0));
-      bool const strip_length = opt_xlength || opt_lengthout;
+      bool const strip_size = opt_xsize or (opt_sizeout and (abundance > 0));
+      bool const strip_ee = opt_xee or ((opt_eeout or opt_fastq_eeout) and (expected_error >= 0.0));
+      bool const strip_length = opt_xlength or opt_lengthout;
       header_fprint_strip(output_handle,
                           header,
                           header_length,
@@ -426,71 +508,71 @@ auto fasta_print_general(std::FILE * output_handle,
 
   if (opt_label_suffix != nullptr)
     {
-      fprintf(output_handle, "%s", opt_label_suffix);
+      std::fprintf(output_handle, "%s", opt_label_suffix);
     }
 
   if (opt_sample != nullptr)
     {
-      fprintf(output_handle, ";sample=%s", opt_sample);
+      std::fprintf(output_handle, ";sample=%s", opt_sample);
     }
 
   if (clustersize > 0)
     {
-      fprintf(output_handle, ";seqs=%d", clustersize);
+      std::fprintf(output_handle, ";seqs=%d", clustersize);
     }
 
   if (clusterid >= 0)
     {
-      fprintf(output_handle, ";clusterid=%d", clusterid);
+      std::fprintf(output_handle, ";clusterid=%d", clusterid);
     }
 
-  if (opt_sizeout && (abundance > 0))
+  if (opt_sizeout and (abundance > 0))
     {
-      fprintf(output_handle, ";size=%u", abundance);
+      std::fprintf(output_handle, ";size=%u", abundance);
     }
 
-  if ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0))
+  if ((opt_eeout or opt_fastq_eeout) and (expected_error >= 0.0))
     {
-      if (ee < 0.000000001) {
-        fprintf(output_handle, ";ee=%.13lf", ee);
-      } else if (ee < 0.00000001) {
-        fprintf(output_handle, ";ee=%.12lf", ee);
-      } else if (ee < 0.0000001) {
-        fprintf(output_handle, ";ee=%.11lf", ee);
-      } else if (ee < 0.000001) {
-        fprintf(output_handle, ";ee=%.10lf", ee);
-      } else if (ee < 0.00001) {
-        fprintf(output_handle, ";ee=%.9lf", ee);
-      } else if (ee < 0.0001) {
-        fprintf(output_handle, ";ee=%.8lf", ee);
-      } else if (ee < 0.001) {
-        fprintf(output_handle, ";ee=%.7lf", ee);
-      } else if (ee < 0.01) {
-        fprintf(output_handle, ";ee=%.6lf", ee);
-      } else if (ee < 0.1) {
-        fprintf(output_handle, ";ee=%.5lf", ee);
+      if (expected_error < 0.000000001) {
+        std::fprintf(output_handle, ";ee=%.13lf", expected_error);
+      } else if (expected_error < 0.00000001) {
+        std::fprintf(output_handle, ";ee=%.12lf", expected_error);
+      } else if (expected_error < 0.0000001) {
+        std::fprintf(output_handle, ";ee=%.11lf", expected_error);
+      } else if (expected_error < 0.000001) {
+        std::fprintf(output_handle, ";ee=%.10lf", expected_error);
+      } else if (expected_error < 0.00001) {
+        std::fprintf(output_handle, ";ee=%.9lf", expected_error);
+      } else if (expected_error < 0.0001) {
+        std::fprintf(output_handle, ";ee=%.8lf", expected_error);
+      } else if (expected_error < 0.001) {
+        std::fprintf(output_handle, ";ee=%.7lf", expected_error);
+      } else if (expected_error < 0.01) {
+        std::fprintf(output_handle, ";ee=%.6lf", expected_error);
+      } else if (expected_error < 0.1) {
+        std::fprintf(output_handle, ";ee=%.5lf", expected_error);
       } else {
-        fprintf(output_handle, ";ee=%.4lf", ee);
+        std::fprintf(output_handle, ";ee=%.4lf", expected_error);
       }
     }
 
   if (opt_lengthout)
     {
-      fprintf(output_handle, ";length=%d", len);
+      std::fprintf(output_handle, ";length=%d", len);
     }
 
   if (score_name != nullptr)
     {
-      fprintf(output_handle, ";%s=%.4lf", score_name, score);
+      std::fprintf(output_handle, ";%s=%.4lf", score_name, score);
     }
 
-  if (opt_relabel_keep &&
-      (((opt_relabel != nullptr) && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5 || opt_relabel_self))
+  if (opt_relabel_keep and
+      (((opt_relabel != nullptr) and (ordinal > 0)) or opt_relabel_sha1 or opt_relabel_md5 or opt_relabel_self))
     {
-      fprintf(output_handle, " %s", header);
+      std::fprintf(output_handle, " %s", header);
     }
 
-  fprintf(output_handle, "\n");
+  std::fprintf(output_handle, "\n");
 
   if (seq != nullptr)
     {
@@ -499,11 +581,11 @@ auto fasta_print_general(std::FILE * output_handle,
 }
 
 
-auto fasta_print_db_relabel(std::FILE * fp,
+auto fasta_print_db_relabel(std::FILE * output_handle,
                             uint64_t seqno,
                             int ordinal) -> void
 {
-  fasta_print_general(fp,
+  fasta_print_general(output_handle,
                       nullptr,
                       db_getsequence(seqno),
                       db_getsequencelen(seqno),
@@ -517,11 +599,11 @@ auto fasta_print_db_relabel(std::FILE * fp,
 }
 
 
-auto fasta_print_db_relabel(std::FILE * fp,
+auto fasta_print_db_relabel(std::FILE * output_handle,
                             uint64_t seqno,
                             std::size_t ordinal) -> void
 {
-  fasta_print_general(fp,
+  fasta_print_general(output_handle,
                       nullptr,
                       db_getsequence(seqno),
                       db_getsequencelen(seqno),
@@ -535,9 +617,9 @@ auto fasta_print_db_relabel(std::FILE * fp,
 }
 
 
-auto fasta_print_db(std::FILE * fp, uint64_t seqno) -> void
+auto fasta_print_db(std::FILE * output_handle, uint64_t seqno) -> void
 {
-  fasta_print_general(fp,
+  fasta_print_general(output_handle,
                       nullptr,
                       db_getsequence(seqno),
                       db_getsequencelen(seqno),

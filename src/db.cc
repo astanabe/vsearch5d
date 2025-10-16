@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,13 +61,15 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
+#include <algorithm>  // std::min, std::max
 #include <cinttypes>  // macros PRIu64 and PRId64
-#include <climits>  // LONG_MAX
 #include <cstdint>  // int64_t, uint64_t
 #include <cstdio>  // std::fprintf, std::size_t
 #include <cstdlib>  // std::qsort
 #include <cstring>  // std::memcpy, std::strcmp
+#include <limits>
 
 
 constexpr uint64_t memchunk = 16777216;  // 2^24
@@ -88,6 +89,7 @@ static size_t seqindex_alloc = 0;
 seqinfo_t * seqindex = nullptr;
 char * datap = nullptr;
 
+
 auto db_setinfo(bool new_is_fastq,
                 uint64_t new_sequences,
                 uint64_t new_nucleotides,
@@ -103,10 +105,12 @@ auto db_setinfo(bool new_is_fastq,
   longestheader = new_longestheader;
 }
 
+
 auto db_is_fastq() -> bool
 {
   return is_fastq;
 }
+
 
 auto db_getquality(uint64_t seqno) -> char *
 {
@@ -114,19 +118,17 @@ auto db_getquality(uint64_t seqno) -> char *
     {
       return datap + seqindex[seqno].qual_p;
     }
-  else
-    {
-      return nullptr;
-    }
+  return nullptr;
 }
 
-auto db_add(bool is_fastq,
-            char * header,
-            char * sequence,
-            char * quality,
-            size_t headerlength,
-            size_t sequencelength,
-            int64_t abundance) -> void
+
+auto db_add(bool const is_fastq,
+            char const * header,
+            char const * sequence,
+            char const * quality,
+            size_t const headerlength,
+            size_t const sequencelength,
+            int64_t const abundance) -> void
 {
   /* Add a sequence to the database. Assumes that the database has been initialized. */
 
@@ -150,25 +152,25 @@ auto db_add(bool is_fastq,
 
   /* store the header */
   size_t const header_p = datalen;
-  memcpy(datap + header_p,
-         header,
-         headerlength + 1);
+  std::memcpy(datap + header_p,
+              header,
+              headerlength + 1);
   datalen += headerlength + 1;
 
   /* store sequence */
   size_t const sequence_p = datalen;
-  memcpy(datap + sequence_p,
-         sequence,
-         sequencelength + 1);
+  std::memcpy(datap + sequence_p,
+              sequence,
+              sequencelength + 1);
   datalen += sequencelength + 1;
 
   size_t const quality_p = datalen;
   if (is_fastq)
     {
       /* store quality */
-      memcpy(datap + quality_p,
-             quality,
-             sequencelength + 1);
+      std::memcpy(datap + quality_p,
+                  quality,
+                  sequencelength + 1);
       datalen += sequencelength + 1;
     }
 
@@ -195,18 +197,9 @@ auto db_add(bool is_fastq,
   /* update statistics */
   ++sequences;
   nucleotides += sequencelength;
-  if (sequencelength > longest)
-    {
-      longest = sequencelength;
-    }
-  if (sequencelength < shortest)
-    {
-      shortest = sequencelength;
-    }
-  if (headerlength > longestheader)
-    {
-      longestheader = headerlength;
-    }
+  longest = std::max((uint64_t)sequencelength, longest);
+  shortest = std::min((uint64_t)sequencelength, shortest);
+  longestheader = std::max((uint64_t)headerlength, longestheader);
 }
 
 
@@ -214,7 +207,7 @@ auto db_read(const char * filename, int upcase) -> void
 {
   h = fastx_open(filename);
 
-  if (not h)
+  if (h == nullptr)
     {
       fatal("Unrecognized file type (not proper FASTA or FASTQ format)");
     }
@@ -224,7 +217,7 @@ auto db_read(const char * filename, int upcase) -> void
   int64_t const filesize = fastx_get_size(h);
 
   char * prompt = nullptr;
-  if (xsprintf(& prompt, "Reading file %s", filename) == -1)
+  if (xsprintf(&prompt, "Reading file %s", filename) == -1)
     {
       fatal("Out of memory");
     }
@@ -232,7 +225,7 @@ auto db_read(const char * filename, int upcase) -> void
   progress_init(prompt, filesize);
 
   longest = 0;
-  shortest = LONG_MAX;
+  shortest = std::numeric_limits<uint64_t>::max();  // refactoring: direct initialization
   longestheader = 0;
   sequences = 0;
   nucleotides = 0;
@@ -250,9 +243,9 @@ auto db_read(const char * filename, int upcase) -> void
   seqindex_alloc = 0;
   seqindex = nullptr;
 
-  while(fastx_next(h,
-                   not opt_notrunclabels,
-                   upcase ? chrmap_upcase : chrmap_no_change))
+  while (fastx_next(h,
+                   opt_notrunclabels == 0,
+                    (upcase != 0) ? chrmap_upcase_vector.data() : chrmap_no_change_vector.data()))
     {
       size_t const sequencelength = fastx_get_sequence_length(h);
       int64_t const abundance = fastx_get_abundance(h);
@@ -265,7 +258,7 @@ auto db_read(const char * filename, int upcase) -> void
         {
           ++discarded_long;
         }
-      else if (opt_cluster_unoise && (abundance < opt_minsize))
+      else if ((opt_cluster_unoise != nullptr) && (abundance < opt_minsize))
         {
           ++discarded_unoise;
         }
@@ -308,7 +301,7 @@ auto db_read(const char * filename, int upcase) -> void
         }
     }
 
-  if (opt_log)
+  if (opt_log != nullptr)
     {
       if (sequences > 0)
         {
@@ -332,7 +325,7 @@ auto db_read(const char * filename, int upcase) -> void
 
   /* Warn about discarded sequences */
 
-  if (discarded_short)
+  if (discarded_short != 0)
     {
       fprintf(stderr,
               "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -340,7 +333,7 @@ auto db_read(const char * filename, int upcase) -> void
               discarded_short,
               (discarded_short == 1 ? "sequence" : "sequences"));
 
-      if (opt_log)
+      if (opt_log != nullptr)
         {
           fprintf(fp_log,
                   "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
@@ -350,7 +343,7 @@ auto db_read(const char * filename, int upcase) -> void
         }
     }
 
-  if (discarded_long)
+  if (discarded_long != 0)
     {
       fprintf(stderr,
               "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -358,7 +351,7 @@ auto db_read(const char * filename, int upcase) -> void
               discarded_long,
               (discarded_long == 1 ? "sequence" : "sequences"));
 
-      if (opt_log)
+      if (opt_log != nullptr)
         {
           fprintf(fp_log,
                   "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
@@ -368,7 +361,7 @@ auto db_read(const char * filename, int upcase) -> void
         }
     }
 
-    if (discarded_unoise)
+    if (discarded_unoise != 0)
     {
       fprintf(stderr,
               "minsize %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -376,7 +369,7 @@ auto db_read(const char * filename, int upcase) -> void
               discarded_unoise,
               (discarded_unoise == 1 ? "sequence" : "sequences"));
 
-      if (opt_log)
+      if (opt_log != nullptr)
         {
           fprintf(fp_log,
                   "minsize %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -389,184 +382,169 @@ auto db_read(const char * filename, int upcase) -> void
   show_rusage();
 }
 
+
 auto db_getsequencecount() -> uint64_t
 {
   return sequences;
 }
+
 
 auto db_getnucleotidecount() -> uint64_t
 {
   return nucleotides;
 }
 
+
 auto db_getlongestheader() -> uint64_t
 {
   return longestheader;
 }
+
 
 auto db_getlongestsequence() -> uint64_t
 {
   return longest;
 }
 
+
 auto db_getshortestsequence() -> uint64_t
 {
   return shortest;
 }
 
+
 auto db_free() -> void
 {
-  if (datap)
+  if (datap != nullptr)
     {
       xfree(datap);
     }
-  if (seqindex)
+  if (seqindex != nullptr)
     {
       xfree(seqindex);
     }
 }
 
+
 auto compare_bylength(const void * a, const void * b) -> int
 {
-  auto * x = (seqinfo_t *) a;
-  auto * y = (seqinfo_t *) b;
+  auto * lhs = (seqinfo_t *) a;
+  auto * rhs = (seqinfo_t *) b;
 
   /* longest first, then by abundance, then by label, otherwise keep order */
 
-  if (x->seqlen < y->seqlen)
+  if (lhs->seqlen < rhs->seqlen)
     {
       return +1;
     }
-  else if (x->seqlen > y->seqlen)
+  if (lhs->seqlen > rhs->seqlen)
     {
       return -1;
     }
-  else
+
+  if (lhs->size < rhs->size)
     {
-      if (x->size < y->size)
-        {
-          return +1;
-        }
-      else if (x->size > y->size)
-        {
-          return -1;
-        }
-      else
-        {
-          int const r = strcmp(datap + x->header_p, datap + y->header_p);
-          if (r != 0)
-            {
-              return r;
-            }
-          else
-            {
-              if (x < y)
-                {
-                  return -1;
-                }
-              else if (x > y)
-                {
-                  return +1;
-                }
-              else
-                {
-                  return 0;
-                }
-            }
-        }
+      return +1;
     }
+  if (lhs->size > rhs->size)
+    {
+      return -1;
+    }
+
+  auto const result = std::strcmp(datap + lhs->header_p, datap + rhs->header_p);
+  if (result != 0)
+    {
+      return result;
+    }
+
+  if (lhs < rhs)
+    {
+      return -1;
+    }
+  if (lhs > rhs)
+    {
+      return +1;
+    }
+  return 0;
 }
+
 
 auto compare_bylength_shortest_first(const void * a, const void * b) -> int
 {
-  auto * x = (seqinfo_t *) a;
-  auto * y = (seqinfo_t *) b;
+  auto * lhs = (seqinfo_t *) a;
+  auto * rhs = (seqinfo_t *) b;
 
   /* shortest first, then by abundance, then by label, otherwise keep order */
 
-  if (x->seqlen < y->seqlen)
+  if (lhs->seqlen < rhs->seqlen)
     {
       return -1;
     }
-  else if (x->seqlen > y->seqlen)
+  if (lhs->seqlen > rhs->seqlen)
     {
       return +1;
     }
-  else
+
+  if (lhs->size < rhs->size)
     {
-      if (x->size < y->size)
-        {
-          return +1;
-        }
-      else if (x->size > y->size)
-        {
-          return -1;
-        }
-      else
-        {
-          int const r = strcmp(datap + x->header_p, datap + y->header_p);
-          if (r != 0)
-            {
-              return r;
-            }
-          else
-            {
-              if (x < y)
-                {
-                  return -1;
-                }
-              else if (x > y)
-                {
-                  return +1;
-                }
-              else
-                {
-                  return 0;
-                }
-            }
-        }
+      return +1;
     }
+  if (lhs->size > rhs->size)
+    {
+      return -1;
+    }
+
+  auto const result = std::strcmp(datap + lhs->header_p, datap + rhs->header_p);
+  if (result != 0)
+    {
+      return result;
+    }
+
+  if (lhs < rhs)
+    {
+      return -1;
+    }
+  if (lhs > rhs)
+    {
+      return +1;
+    }
+  return 0;
 }
+
 
 inline auto compare_byabundance(const void * a, const void * b) -> int
 {
-  auto * x = (seqinfo_t *) a;
-  auto * y = (seqinfo_t *) b;
+  auto * lhs = (seqinfo_t *) a;
+  auto * rhs = (seqinfo_t *) b;
 
   /* most abundant first, then by label, otherwise keep order */
 
-  if (x->size > y->size)
+  if (lhs->size > rhs->size)
     {
       return -1;
     }
-  else if (x->size < y->size)
+  if (lhs->size < rhs->size)
     {
       return +1;
     }
-  else
+
+  auto const result = std::strcmp(datap + lhs->header_p, datap + rhs->header_p);
+  if (result != 0)
     {
-      int const r = strcmp(datap + x->header_p, datap + y->header_p);
-      if (r != 0)
-        {
-          return r;
-        }
-      else
-        {
-          if (x < y)
-            {
-              return -1;
-            }
-          else if (x > y)
-            {
-              return +1;
-            }
-          else
-            {
-              return 0;
-            }
-        }
+      return result;
     }
+
+  if (lhs < rhs)
+    {
+      return -1;
+    }
+  if (lhs > rhs)
+    {
+      return +1;
+    }
+  return 0;
 }
+
 
 auto db_sortbylength() -> void
 {
@@ -578,6 +556,7 @@ auto db_sortbylength() -> void
   progress_done();
 }
 
+
 auto db_sortbylength_shortest_first() -> void
 {
   progress_init("Sorting by length", 100);
@@ -587,6 +566,7 @@ auto db_sortbylength_shortest_first() -> void
         compare_bylength_shortest_first);
   progress_done();
 }
+
 
 auto db_sortbyabundance() -> void
 {

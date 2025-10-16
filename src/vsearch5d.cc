@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -74,11 +73,12 @@
 #include "fasta2fastq.h"
 #include "fastq_chars.h"
 #include "fastq_join.h"
+#include "fastq_mergepairs.h"
+#include "fastq_stats.h"
 #include "fastqops.h"
 #include "filter.h"
 #include "getseq.h"
 #include "mask.h"
-#include "mergepairs.h"
 #include "orient.h"
 #include "rereplicate.h"
 #include "search.h"
@@ -91,6 +91,10 @@
 #include "subsample.h"
 #include "udb.h"
 #include "userfields.h"
+#include "utils/compare_strings_nocase.hpp"
+#include "utils/fatal.hpp"
+#include <algorithm>  // std::count, std::any_of
+#include <array>
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cmath>  // std::floor
 #include <ctime>  // std::strftime, std::localtime, std::time, std::time_t, std::tm, std::difftime
@@ -101,9 +105,12 @@
 #include <getopt.h>  // getopt_long_only, optarg, optind, opterr, struct
                      // option (no_argument, required_argument)
 #include <limits>
-#include <string.h>  // strcasecmp
+#include <string>
 #include <vector>
 
+
+constexpr int64_t n_threads_max = 1024;
+constexpr auto max_line_length = std::size_t{80};
 
 /* options */
 
@@ -126,7 +133,6 @@ bool opt_relabel_md5;
 bool opt_relabel_self;
 bool opt_relabel_sha1;
 bool opt_samheader;
-bool opt_sff_clip;
 bool opt_sintax_random;
 bool opt_sizein;
 bool opt_sizeorder;
@@ -134,7 +140,6 @@ bool opt_sizeout;
 bool opt_xee;
 bool opt_xlength;
 bool opt_xsize;
-char * opt_allpairs_global;
 char * opt_alnout;
 char * opt_biomout;
 char * opt_blast6out;
@@ -161,23 +166,12 @@ char * opt_fastaout_notmerged_rev;
 char * opt_fastaout_rev;
 char * opt_fastapairs;
 char * opt_fastq_convert;
-char * opt_fastq_eestats2;
-char * opt_fastq_eestats;
-char * opt_fastq_filter;
-char * opt_fastq_mergepairs;
-char * opt_fastq_stats;
 char * opt_fastqout;
 char * opt_fastqout_discarded;
 char * opt_fastqout_discarded_rev;
 char * opt_fastqout_notmerged_fwd;
 char * opt_fastqout_notmerged_rev;
 char * opt_fastqout_rev;
-char * opt_fastx_filter;
-char * opt_fastx_getseq;
-char * opt_fastx_getseqs;
-char * opt_fastx_getsubseq;
-char * opt_fastx_mask;
-char * opt_fastx_revcomp;
 char * opt_label;
 char * opt_label_field;
 char * opt_label_suffix;
@@ -186,15 +180,12 @@ char * opt_label_words;
 char * opt_labels;
 char * opt_lcaout;
 char * opt_log;
-char * opt_makeudb_usearch;
-char * opt_maskfasta;
 char * opt_matched;
 char * opt_mothur_shared_out;
 char * opt_msaout;
 char * opt_nonchimeras;
 char * opt_notmatched;
 char * opt_notmatchedfq;
-char * opt_orient;
 char * opt_otutabout;
 char * opt_output;
 char * opt_pattern;
@@ -204,9 +195,6 @@ char * opt_relabel;
 char * opt_reverse;
 char * opt_samout;
 char * opt_sample;
-char * opt_search_exact;
-char * opt_sff_convert;
-char * opt_sintax;
 char * opt_tabbedout;
 char * opt_tsegout;
 char * opt_uc;
@@ -216,10 +204,6 @@ char * opt_uchime_denovo;
 char * opt_uchime_ref;
 char * opt_uchimealns;
 char * opt_uchimeout;
-char * opt_udb2fasta;
-char * opt_udbinfo;
-char * opt_udbstats;
-char * opt_usearch_global;
 char * opt_userout;
 double * opt_ee_cutoffs_values;
 double opt_abskew;
@@ -232,13 +216,11 @@ double opt_fastq_truncee;
 double opt_fastq_truncee_rate;
 double opt_id;
 double opt_lca_cutoff;
-double opt_max_unmasked_pct;
 double opt_maxid;
 double opt_maxqt;
 double opt_maxsizeratio;
 double opt_maxsl;
 double opt_mid;
-double opt_min_unmasked_pct;
 double opt_mindiv;
 double opt_minh;
 double opt_minqt;
@@ -358,15 +340,30 @@ int64_t popcnt_present = 0;
 int64_t avx_present = 0;
 int64_t avx2_present = 0;
 
-static char progheader[80];  //   static constexpr auto max_line_length = std::size_t{80};
+static std::array<char, max_line_length> prog_header {{}};
 static char * cmdline;
 static time_t time_start;
 static time_t time_finish;
 
 std::FILE * fp_log = nullptr;
 
-char * STDIN_NAME = (char *) "/dev/stdin";
-char * STDOUT_NAME = (char *) "/dev/stdout";
+
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+
+  // performance: lambda compiles to a single x86-64 instruction (shr al, 7),
+  // equivalent to (c & ~0x7F) == 0
+  auto is_not_ASCII(std::string const & user_string) -> bool {
+    static constexpr auto ascii_max = static_cast<unsigned char>(std::numeric_limits<signed char>::max());
+    auto is_not_in_range = [](char const user_char) -> bool {
+      auto const unsigned_user_char = static_cast<unsigned char>(user_char);
+      return (unsigned_user_char > ascii_max);
+    };
+    return std::any_of(user_string.begin(), user_string.end(), is_not_in_range);
+  }
+
+}  // end of anonymous namespace
+
 
 #ifdef __x86_64__
 #define cpuid(f1, f2, a, b, c, d)                                       \
@@ -424,51 +421,51 @@ auto cpu_features_detect() -> void
 auto cpu_features_show() -> void
 {
   fprintf(stderr, "CPU features:");
-  if (neon_present)
+  if (neon_present != 0)
     {
       fprintf(stderr, " neon");
     }
-  if (altivec_present)
+  if (altivec_present != 0)
     {
       fprintf(stderr, " altivec");
     }
-  if (mmx_present)
+  if (mmx_present != 0)
     {
       fprintf(stderr, " mmx");
     }
-  if (sse_present)
+  if (sse_present != 0)
     {
       fprintf(stderr, " sse");
     }
-  if (sse2_present)
+  if (sse2_present != 0)
     {
       fprintf(stderr, " sse2");
     }
-  if (sse3_present)
+  if (sse3_present != 0)
     {
       fprintf(stderr, " sse3");
     }
-  if (ssse3_present)
+  if (ssse3_present != 0)
     {
       fprintf(stderr, " ssse3");
     }
-  if (sse41_present)
+  if (sse41_present != 0)
     {
       fprintf(stderr, " sse4.1");
     }
-  if (sse42_present)
+  if (sse42_present != 0)
     {
       fprintf(stderr, " sse4.2");
     }
-  if (popcnt_present)
+  if (popcnt_present != 0)
     {
       fprintf(stderr, " popcnt");
     }
-  if (avx_present)
+  if (avx_present != 0)
     {
       fprintf(stderr, " avx");
     }
-  if (avx2_present)
+  if (avx2_present != 0)
     {
       fprintf(stderr, " avx2");
     }
@@ -481,38 +478,32 @@ auto args_get_ee_cutoffs(char * arg) -> void
   /* get comma-separated list of floating point numbers */
   /* save in ee_cutoffs_count and ee_cutoffs_values */
 
-  int commas = 0;
-  for (size_t i = 0; i < strlen(arg); i++)
-    {
-      if (arg[i] == ',')
-        {
-          commas++;
-        }
-    }
+  auto const commas = std::count(arg, arg + std::strlen(arg), ',');
 
   opt_ee_cutoffs_count = 0;
   opt_ee_cutoffs_values = (double *) xrealloc(opt_ee_cutoffs_values, (commas + 1) * sizeof(double));
 
-  char * s = arg;
+  char const * cursor = arg;
   while (true)
     {
       double val = 0;
       int skip = 0;
 
-      if ((sscanf(s, "%lf%n", &val, &skip) != 1) or (val <= 0.0))
+      if ((std::sscanf(cursor, "%lf%n", &val, &skip) != 1) or (val <= 0.0))
         {
           fatal("Invalid arguments to ee_cutoffs");
         }
 
-      opt_ee_cutoffs_values[opt_ee_cutoffs_count++] = val;
+      opt_ee_cutoffs_values[opt_ee_cutoffs_count] = val;
+      ++opt_ee_cutoffs_count;
 
-      s += skip;
+      cursor += skip;
 
-      if (*s == ',')
+      if (*cursor == ',')
         {
-          s++;
+          ++cursor;
         }
-      else if (*s == 0)
+      else if (*cursor == '\0')
         {
           break;
         }
@@ -531,17 +522,19 @@ auto args_get_length_cutoffs(char * arg) -> void
   /* second value may be * indicating no limit */
   /* save in length_cutoffs_{smallest,largest,increment} */
 
-  int skip = 0;
-  if (sscanf(arg, "%d,%d,%d%n", &opt_length_cutoffs_shortest, &opt_length_cutoffs_longest, &opt_length_cutoffs_increment, & skip) == 3)
+  // refactoring: std::stoi(), faster than sscanf()
+  static constexpr auto n_of_expected_assignments= 3;
+  int skip = 0;  // receives the number of characters read so far ('%n')
+  if (std::sscanf(arg, "%d,%d,%d%n", &opt_length_cutoffs_shortest, &opt_length_cutoffs_longest, &opt_length_cutoffs_increment, & skip) == n_of_expected_assignments)
     {
-      if ((size_t) skip < strlen(arg))
+      if ((size_t) skip < std::strlen(arg))
         {
           fatal("Invalid arguments to length_cutoffs");
         }
     }
-  else if (sscanf(arg, "%d,*,%d%n", &opt_length_cutoffs_shortest, &opt_length_cutoffs_increment, &skip) == 2)
+  else if (std::sscanf(arg, "%d,*,%d%n", &opt_length_cutoffs_shortest, &opt_length_cutoffs_increment, &skip) == 2)
     {
-      if ((size_t) skip < strlen(arg))
+      if ((size_t) skip < std::strlen(arg))
         {
           fatal("Invalid arguments to length_cutoffs");
         }
@@ -561,7 +554,7 @@ auto args_get_length_cutoffs(char * arg) -> void
 }
 
 
-auto args_get_gap_penalty_string(char * arg, int is_open) -> void
+auto args_get_gap_penalty_string(char * arg, bool const is_open) -> void
 {
   /* See http://www.drive5.com/usearch/manual/aln_params.html
 
@@ -585,29 +578,30 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
      all default score and penalties are multiplied by 2.
 
   */
+  static constexpr auto max_penality = std::numeric_limits<int>::max();
 
-  char * p = arg;
+  char * cursor = arg;
 
-  while (*p)
+  while (*cursor != '\0')
     {
       int skip = 0;
       int pen = 0;
 
-      if (sscanf(p, "%d%n", &pen, &skip) == 1)
+      if (std::sscanf(cursor, "%d%n", &pen, &skip) == 1)
         {
-          p += skip;
+          cursor += skip;
         }
-      else if (*p == '*')
+      else if (*cursor == '*')
         {
-          pen = 1000;
-          p++;
+          pen = max_penality;
+          ++cursor;
         }
       else
         {
-          fatal("Invalid gap penalty argument (%s)", p);
+          fatal("Invalid gap penalty argument (%s)", cursor);
         }
 
-      char * q = p;
+      char const * q = cursor;
 
       int set_E = 0;
       int set_I = 0;
@@ -616,9 +610,9 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
       int set_Q = 0;
       int set_T = 0;
 
-      while ((*p) and (*p != '/'))
+      while ((*cursor != '\0') and (*cursor != '/'))
         {
-          switch(*p)
+          switch (*cursor)
             {
             case 'E':
               set_E = 1;
@@ -639,23 +633,23 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
               set_T = 1;
               break;
             default:
-              fatal("Invalid char '%.1s' in gap penalty string", p);
+              fatal("Invalid char '%.1s' in gap penalty string", cursor);
               break;
             }
-          p++;
+          ++cursor;
         }
 
-      if (*p == '/')
+      if (*cursor == '/')
         {
-          p++;
+          ++cursor;
         }
 
-      if (set_E and (set_L or set_R))
+      if ((set_E != 0) and ((set_L != 0) or (set_R != 0)))
         {
           fatal("Invalid gap penalty string (E and L or R) '%s'", q);
         }
 
-      if (set_E)
+      if (set_E != 0)
         {
           set_L = 1;
           set_R = 1;
@@ -663,7 +657,7 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
 
       /* if neither L, I, R nor E is specified, it applies to all */
 
-      if ((not set_L) and (not set_I) and (not set_R))
+      if ((set_L == 0) and (set_I == 0) and (set_R == 0))
         {
           set_L = 1;
           set_I = 1;
@@ -672,7 +666,7 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
 
       /* if neither Q nor T is specified, it applies to both */
 
-      if ((not set_Q) and (not set_T))
+      if ((set_Q == 0) and (set_T == 0))
         {
           set_Q = 1;
           set_T = 1;
@@ -680,32 +674,32 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
 
       if (is_open)
         {
-          if (set_Q)
+          if (set_Q != 0)
             {
-              if (set_L)
+              if (set_L != 0)
                 {
                   opt_gap_open_query_left = pen;
                 }
-              if (set_I)
+              if (set_I != 0)
                 {
                   opt_gap_open_query_interior = pen;
                 }
-              if (set_R)
+              if (set_R != 0)
                 {
                   opt_gap_open_query_right = pen;
                 }
             }
-          if (set_T)
+          if (set_T != 0)
             {
-              if (set_L)
+              if (set_L != 0)
                 {
                   opt_gap_open_target_left = pen;
                 }
-              if (set_I)
+              if (set_I != 0)
                 {
                   opt_gap_open_target_interior = pen;
                 }
-              if (set_R)
+              if (set_R != 0)
                 {
                   opt_gap_open_target_right = pen;
                 }
@@ -713,32 +707,32 @@ auto args_get_gap_penalty_string(char * arg, int is_open) -> void
         }
       else
         {
-          if (set_Q)
+          if (set_Q != 0)
             {
-              if (set_L)
+              if (set_L != 0)
                 {
                   opt_gap_extension_query_left = pen;
                 }
-              if (set_I)
+              if (set_I != 0)
                 {
                   opt_gap_extension_query_interior = pen;
                 }
-              if (set_R)
+              if (set_R != 0)
                 {
                   opt_gap_extension_query_right = pen;
                 }
             }
-          if (set_T)
+          if (set_T != 0)
             {
-              if (set_L)
+              if (set_L != 0)
                 {
                   opt_gap_extension_target_left = pen;
                 }
-              if (set_I)
+              if (set_I != 0)
                 {
                   opt_gap_extension_target_interior = pen;
                 }
-              if (set_R)
+              if (set_R != 0)
                 {
                   opt_gap_extension_target_right = pen;
                 }
@@ -752,8 +746,8 @@ auto args_getlong(char * arg) -> int64_t
 {
   int len = 0;
   int64_t temp = 0;
-  const int ret = sscanf(arg, "%" PRId64 "%n", &temp, &len);
-  if ((ret == 0) or (((unsigned int) (len)) < strlen(arg)))
+  auto const ret = std::sscanf(arg, "%" PRId64 "%n", &temp, &len);
+  if ((ret == 0) or (((unsigned int) (len)) < std::strlen(arg)))
     {
       fatal("Illegal option argument");
     }
@@ -765,8 +759,9 @@ auto args_getdouble(char * arg) -> double
 {
   int len = 0;
   double temp = 0;
-  const int ret = sscanf(arg, "%lf%n", &temp, &len);
-  if ((ret == 0) or (((unsigned int)(len)) < strlen(arg)))
+  auto const ret = std::sscanf(arg, "%lf%n", &temp, &len);
+
+  if ((ret == 0) or (((unsigned int) (len)) < std::strlen(arg)))
     {
       fatal("Illegal option argument");
     }
@@ -777,16 +772,17 @@ auto args_getdouble(char * arg) -> double
 auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 {
   /* Set defaults */
-  static constexpr auto dbl_max = std::numeric_limits<double>::max();
   static constexpr auto int_max = std::numeric_limits<int>::max();
   static constexpr auto long_min = std::numeric_limits<long>::min();
+  static constexpr auto number_of_commands = std::size_t{51};
+  static constexpr auto number_of_options = std::size_t{249};
+  static constexpr auto max_number_of_options_per_command = std::size_t{100};
 
   parameters.progname = argv[0];
 
   opt_abskew = 0.0;
   opt_acceptall = 0;
   opt_alignwidth = 80;
-  opt_allpairs_global = nullptr;
   opt_alnout = nullptr;
   opt_biomout = nullptr;
   opt_blast6out = nullptr;
@@ -831,9 +827,6 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_fastq_asciiout = 33;
   opt_fastq_convert = nullptr;
   opt_fastq_eeout = false;
-  opt_fastq_eestats = nullptr;
-  opt_fastq_eestats2 = nullptr;
-  opt_fastq_filter = nullptr;
   opt_fastq_maxdiffpct = 100.0;
   opt_fastq_maxdiffs = 10;
   opt_fastq_maxee = dbl_max;
@@ -841,7 +834,6 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_fastq_maxlen = int64_max;
   opt_fastq_maxmergelen  = 1000000;
   opt_fastq_maxns = int64_max;
-  opt_fastq_mergepairs = nullptr;
   opt_fastq_minlen = 1;
   opt_fastq_minmergelen = 0;
   opt_fastq_minovlen = 10;
@@ -851,7 +843,6 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_fastq_qmaxout = 41;
   opt_fastq_qmin = 0;
   opt_fastq_qminout = 0;
-  opt_fastq_stats = nullptr;
   opt_fastq_stripleft = 0;
   opt_fastq_stripright = 0;
   opt_fastq_truncee = dbl_max;
@@ -865,25 +856,19 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_fastqout_notmerged_fwd = nullptr;
   opt_fastqout_notmerged_rev = nullptr;
   opt_fastqout_rev = nullptr;
-  opt_fastx_filter = nullptr;
-  opt_fastx_getseq = nullptr;
-  opt_fastx_getseqs = nullptr;
-  opt_fastx_getsubseq = nullptr;
-  opt_fastx_mask = nullptr;
-  opt_fastx_revcomp = nullptr;
   opt_fulldp = 0;
-  opt_gap_extension_query_interior=2;
-  opt_gap_extension_query_left=1;
-  opt_gap_extension_query_right=1;
-  opt_gap_extension_target_interior=2;
-  opt_gap_extension_target_left=1;
-  opt_gap_extension_target_right=1;
-  opt_gap_open_query_interior=20;
-  opt_gap_open_query_left=2;
-  opt_gap_open_query_right=2;
-  opt_gap_open_target_interior=20;
-  opt_gap_open_target_left=2;
-  opt_gap_open_target_right=2;
+  opt_gap_extension_query_interior = 2;
+  opt_gap_extension_query_left = 1;
+  opt_gap_extension_query_right = 1;
+  opt_gap_extension_target_interior = 2;
+  opt_gap_extension_target_left = 1;
+  opt_gap_extension_target_right = 1;
+  opt_gap_open_query_interior = 20;
+  opt_gap_open_query_left = 2;
+  opt_gap_open_query_right = 2;
+  opt_gap_open_target_interior = 20;
+  opt_gap_open_target_left = 2;
+  opt_gap_open_target_right = 2;
   opt_gzip_decompress = false;
   opt_hardmask = 0;
   opt_id = -1.0;
@@ -906,11 +891,8 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_length_cutoffs_shortest = 50;
   opt_lengthout = false;
   opt_log = nullptr;
-  opt_makeudb_usearch = nullptr;
-  opt_maskfasta = nullptr;
   opt_match = 2;
   opt_matched = nullptr;
-  opt_max_unmasked_pct = 100.0;
   opt_maxaccepts = 1;
   opt_maxdiffs = int_max;
   opt_maxgaps = int_max;
@@ -926,7 +908,6 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_maxsubs = int_max;
   opt_maxuniquesize = int64_max;
   opt_mid = 0.0;
-  opt_min_unmasked_pct = 0.0;
   opt_mincols = 0;
   opt_mindiffs = 3;
   opt_mindiv = 0.8;
@@ -948,7 +929,6 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_notmatched = nullptr;
   opt_notmatched = nullptr;
   opt_notrunclabels = 0;
-  opt_orient = nullptr;
   opt_otutabout = nullptr;
   opt_output = nullptr;
   opt_output_no_hits = 0;
@@ -972,12 +952,8 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_sample = nullptr;
   opt_sample_pct = 0;
   opt_sample_size = 0;
-  opt_search_exact = nullptr;
   opt_self = 0;
   opt_selfid = 0;
-  opt_sff_clip = false;
-  opt_sff_convert = nullptr;
-  opt_sintax = nullptr;
   opt_sintax_cutoff = 0.0;
   opt_sintax_random = false;
   opt_sizein = false;
@@ -1002,11 +978,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   opt_uchimealns = nullptr;
   opt_uchimeout = nullptr;
   opt_uchimeout5 = 0;
-  opt_udb2fasta = nullptr;
-  opt_udbinfo = nullptr;
-  opt_udbstats = nullptr;
   opt_unoise_alpha = 2.0;
-  opt_usearch_global = nullptr;
   opt_userout = nullptr;
   opt_usersort = 0;
   opt_weak_id = 10.0;
@@ -1270,8 +1242,8 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       option_idoffset
     };
 
-  static struct option long_options[] =
-    {
+  static constexpr std::array<struct option, number_of_options> long_options =
+    {{
       {"abskew",                required_argument, nullptr, 0 },
       {"acceptall",             no_argument,       nullptr, 0 },
       {"alignwidth",            required_argument, nullptr, 0 },
@@ -1521,16 +1493,16 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       {"xsize",                 no_argument,       nullptr, 0 },
       {"idoffset",              required_argument, nullptr, 0 },
       { nullptr,                0,                 nullptr, 0 }
-    };
+      }};
 
   constexpr int options_count = (sizeof(long_options) / sizeof(struct option)) - 1;
 
   std::vector<bool> options_selected(options_count);
 
   int options_index = 0;
-  int c = 0;
+  int val = 0;  // recognized long option: return 'val' if 'flag' is nullptr
 
-  while ((c = getopt_long_only(argc, argv, "", long_options,
+  while ((val = getopt_long_only(argc, argv, "", long_options.data(),
                                &options_index)) == 0)
     {
       if (options_index < options_count)
@@ -1538,7 +1510,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           options_selected[options_index] = true;
         }
 
-      switch(options_index)
+      switch (options_index)
         {
         case option_help:
           parameters.opt_help = true;
@@ -1553,11 +1525,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_usearch_global:
-          opt_usearch_global = optarg;
+          parameters.opt_usearch_global = optarg;
           break;
 
         case option_db:
           opt_db = optarg;
+          parameters.opt_db = optarg;
           break;
 
         case option_id:
@@ -1590,12 +1563,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_strand:
-          if (strcasecmp(optarg, "plus") == 0)
+          if (are_same_string(optarg, "plus"))
             {
               opt_strand = 1;
               parameters.opt_strand = false;
             }
-          else if (strcasecmp(optarg, "both") == 0)
+          else if (are_same_string(optarg, "both"))
             {
               opt_strand = 2;
               parameters.opt_strand = true;
@@ -1612,11 +1585,11 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_gapopen:
-          args_get_gap_penalty_string(optarg, 1);
+          args_get_gap_penalty_string(optarg, true);
           break;
 
         case option_gapext:
-          args_get_gap_penalty_string(optarg, 0);
+          args_get_gap_penalty_string(optarg, false);
           break;
 
         case option_rowlen:
@@ -1624,7 +1597,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_userfields:
-          if (not parse_userfields_arg(optarg))
+          if (parse_userfields_arg(optarg) == 0)
             {
               fatal("Unrecognized userfield argument");
             }
@@ -1653,6 +1626,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_uc_allhits:
           opt_uc_allhits = 1;
+          parameters.opt_uc_allhits = true;
           break;
 
         case option_notrunclabels:
@@ -1690,6 +1664,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_sizeout:
           opt_sizeout = true;
+          parameters.opt_sizeout = true;
           break;
 
         case option_derep_fulllength:
@@ -1743,10 +1718,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_dbmatched:
           opt_dbmatched = optarg;
+          parameters.opt_dbmatched = optarg;
           break;
 
         case option_dbnotmatched:
           opt_dbnotmatched = optarg;
+          parameters.opt_dbnotmatched = optarg;
           break;
 
         case option_fastapairs:
@@ -1767,6 +1744,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_fasta_width:
           opt_fasta_width = args_getlong(optarg);
+          parameters.opt_fasta_width = args_getlong(optarg);
           break;
 
         case option_query_cov:
@@ -1863,42 +1841,47 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_maskfasta:
-          opt_maskfasta = optarg;
+          parameters.opt_maskfasta = optarg;
           break;
 
         case option_hardmask:
           opt_hardmask = 1;
+          parameters.opt_hardmask = true;
           break;
 
         case option_qmask:
-          if (strcasecmp(optarg, "none") == 0)
+          if (are_same_string(optarg, "none"))
             {
               opt_qmask = MASK_NONE;
+              parameters.opt_qmask = MASK_NONE;
             }
-          else if (strcasecmp(optarg, "dust") == 0)
+          else if (are_same_string(optarg, "dust"))
             {
               opt_qmask = MASK_DUST;
+              parameters.opt_qmask = MASK_DUST;
             }
-          else if (strcasecmp(optarg, "soft") == 0)
+          else if (are_same_string(optarg, "soft"))
             {
               opt_qmask = MASK_SOFT;
+              parameters.opt_qmask = MASK_SOFT;
             }
           else
             {
               opt_qmask = MASK_ERROR;
+              parameters.opt_qmask = MASK_ERROR;
             }
           break;
 
         case option_dbmask:
-          if (strcasecmp(optarg, "none") == 0)
+          if (are_same_string(optarg, "none"))
             {
               opt_dbmask = MASK_NONE;
             }
-          else if (strcasecmp(optarg, "dust") == 0)
+          else if (are_same_string(optarg, "dust"))
             {
               opt_dbmask = MASK_DUST;
             }
-          else if (strcasecmp(optarg, "soft") == 0)
+          else if (are_same_string(optarg, "soft"))
             {
               opt_dbmask = MASK_SOFT;
             }
@@ -1910,10 +1893,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_cluster_smallmem:
           opt_cluster_smallmem = optarg;
+          parameters.opt_cluster_smallmem = optarg;
           break;
 
         case option_cluster_fast:
           opt_cluster_fast = optarg;
+          parameters.opt_cluster_fast = optarg;
           break;
 
         case option_centroids:
@@ -1994,10 +1979,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_uchime_denovo:
           opt_uchime_denovo = optarg;
+          parameters.opt_uchime_denovo = optarg;
           break;
 
         case option_uchime_ref:
           opt_uchime_ref = optarg;
+          parameters.opt_uchime_ref = optarg;
           break;
 
         case option_uchimealns:
@@ -2017,7 +2004,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_allpairs_global:
-          opt_allpairs_global = optarg;
+          parameters.opt_allpairs_global = optarg;
           break;
 
         case option_acceptall:
@@ -2026,6 +2013,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_cluster_size:
           opt_cluster_size = optarg;
+          parameters.opt_cluster_size = optarg;
           break;
 
         case option_samout:
@@ -2076,10 +2064,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_clusterout_id:
           opt_clusterout_id = true;
+          parameters.opt_clusterout_id = true;
           break;
 
         case option_clusterout_sort:
           opt_clusterout_sort = true;
+          parameters.opt_clusterout_sort = true;
           break;
 
         case option_borderline:
@@ -2088,10 +2078,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_relabel_sha1:
           opt_relabel_sha1 = true;
+          parameters.opt_relabel_sha1 = true;
           break;
 
         case option_relabel_md5:
           opt_relabel_md5 = true;
+          parameters.opt_relabel_md5 = true;
           break;
 
         case option_derep_prefix:
@@ -2099,7 +2091,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastq_filter:
-          opt_fastq_filter = optarg;
+          parameters.opt_fastq_filter = optarg;
           break;
 
         case option_fastqout:
@@ -2147,6 +2139,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_eeout:
           opt_eeout = true;
+          parameters.opt_eeout = true;
           break;
 
         case option_fastq_ascii:
@@ -2156,10 +2149,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_fastq_qmin:
           opt_fastq_qmin = args_getlong(optarg);
+          parameters.opt_fastq_qmin = args_getlong(optarg);
           break;
 
         case option_fastq_qmax:
           opt_fastq_qmax = args_getlong(optarg);
+          parameters.opt_fastq_qmax = args_getlong(optarg);
           break;
 
         case option_fastq_qmaxout:
@@ -2168,7 +2163,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastq_stats:
-          opt_fastq_stats = optarg;
+          parameters.opt_fastq_stats = optarg;
           break;
 
         case option_fastq_tail:
@@ -2176,11 +2171,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastx_revcomp:
-          opt_fastx_revcomp = optarg;
+          parameters.opt_fastx_revcomp = optarg;
           break;
 
         case option_label_suffix:
           opt_label_suffix = optarg;
+          parameters.opt_label_suffix = optarg;
           break;
 
         case option_h:
@@ -2189,10 +2185,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_samheader:
           opt_samheader = true;
+          parameters.opt_samheader = true;
           break;
 
         case option_sizeorder:
           opt_sizeorder = true;
+          parameters.opt_sizeorder = true;
           break;
 
         case option_minwordmatches:
@@ -2209,26 +2207,28 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_relabel_keep:
           opt_relabel_keep = true;
+          parameters.opt_relabel_keep = true;
           break;
 
         case option_search_exact:
-          opt_search_exact = optarg;
+          parameters.opt_search_exact = optarg;
           break;
 
         case option_fastx_mask:
-          opt_fastx_mask = optarg;
+          parameters.opt_fastx_mask = optarg;
           break;
 
         case option_min_unmasked_pct:
-          opt_min_unmasked_pct = args_getdouble(optarg);
+          parameters.opt_min_unmasked_pct = args_getdouble(optarg);
           break;
 
         case option_max_unmasked_pct:
-          opt_max_unmasked_pct = args_getdouble(optarg);
+          parameters.opt_max_unmasked_pct = args_getdouble(optarg);
           break;
 
         case option_fastq_convert:
           opt_fastq_convert = optarg;
+          parameters.opt_fastq_convert = optarg;
           break;
 
         case option_fastq_asciiout:
@@ -2242,11 +2242,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastq_mergepairs:
-          opt_fastq_mergepairs = optarg;
+          parameters.opt_fastq_mergepairs = optarg;
           break;
 
         case option_fastq_eeout:
           opt_fastq_eeout = true;
+          parameters.opt_fastq_eeout = true;
           break;
 
         case option_fastqout_notmerged_fwd:
@@ -2270,11 +2271,13 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastq_nostagger:
-          opt_fastq_nostagger = optarg;
+          opt_fastq_nostagger = true;
+          parameters.opt_fastq_nostagger = true;
           break;
 
         case option_fastq_allowmergestagger:
           opt_fastq_allowmergestagger = true;
+          parameters.opt_fastq_allowmergestagger = true;
           break;
 
         case option_fastq_maxdiffs:
@@ -2300,10 +2303,11 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_fasta_score:
           opt_fasta_score = true;
+          parameters.opt_fasta_score = true;
           break;
 
         case option_fastq_eestats:
-          opt_fastq_eestats = optarg;
+          parameters.opt_fastq_eestats = optarg;
           break;
 
         case option_rereplicate:
@@ -2332,10 +2336,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_gzip_decompress:
           opt_gzip_decompress = true;
+          parameters.opt_gzip_decompress = true;
           break;
 
         case option_bzip2_decompress:
           opt_bzip2_decompress = true;
+          parameters.opt_bzip2_decompress = true;
           break;
 
         case option_fastq_maxlen:
@@ -2347,7 +2353,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_fastx_filter:
-          opt_fastx_filter = optarg;
+          parameters.opt_fastx_filter = optarg;
           break;
 
         case option_otutabout:
@@ -2372,10 +2378,11 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_no_progress:
           opt_no_progress = true;
+          parameters.opt_no_progress = true;
           break;
 
         case option_fastq_eestats2:
-          opt_fastq_eestats2 = optarg;
+          parameters.opt_fastq_eestats2 = optarg;
           break;
 
         case option_ee_cutoffs:
@@ -2387,23 +2394,24 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_makeudb_usearch:
-          opt_makeudb_usearch = optarg;
+          parameters.opt_makeudb_usearch = optarg;
           break;
 
         case option_udb2fasta:
-          opt_udb2fasta = optarg;
+          parameters.opt_udb2fasta = optarg;
           break;
 
         case option_udbinfo:
-          opt_udbinfo = optarg;
+          parameters.opt_udbinfo = optarg;
           break;
 
         case option_udbstats:
-          opt_udbstats = optarg;
+          parameters.opt_udbstats = optarg;
           break;
 
         case option_cluster_unoise:
           opt_cluster_unoise = optarg;
+          parameters.opt_cluster_unoise = optarg;
           break;
 
         case option_unoise_alpha:
@@ -2412,14 +2420,16 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_uchime2_denovo:
           opt_uchime2_denovo = optarg;
+          parameters.opt_uchime2_denovo = optarg;
           break;
 
         case option_uchime3_denovo:
           opt_uchime3_denovo = optarg;
+          parameters.opt_uchime3_denovo = optarg;
           break;
 
         case option_sintax:
-          opt_sintax = optarg;
+          parameters.opt_sintax = optarg;
           break;
 
         case option_sintax_cutoff:
@@ -2453,11 +2463,11 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_sff_convert:
-          opt_sff_convert = optarg;
+          parameters.opt_sff_convert = optarg;
           break;
 
         case option_sff_clip:
-          opt_sff_clip = true;
+          parameters.opt_sff_clip = true;
           break;
 
         case option_fastaout_rev:
@@ -2482,22 +2492,24 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_xee:
           opt_xee = true;
+          parameters.opt_xee = true;
           break;
 
         case option_fastx_getseq:
-          opt_fastx_getseq = optarg;
+          parameters.opt_fastx_getseq = optarg;
           break;
 
         case option_fastx_getseqs:
-          opt_fastx_getseqs = optarg;
+          parameters.opt_fastx_getseqs = optarg;
           break;
 
         case option_fastx_getsubseq:
-          opt_fastx_getsubseq = optarg;
+          parameters.opt_fastx_getsubseq = optarg;
           break;
 
         case option_label_substr_match:
           opt_label_substr_match = true;
+          parameters.opt_label_substr_match = true;
           break;
 
         case option_label:
@@ -2542,6 +2554,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_relabel_self:
           opt_relabel_self = true;
+          parameters.opt_relabel_self = true;
           break;
 
         case option_derep_id:
@@ -2549,7 +2562,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           break;
 
         case option_orient:
-          opt_orient = optarg;
+          parameters.opt_orient = optarg;
           break;
 
         case option_fasta2fastq:
@@ -2574,6 +2587,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_sample:
           opt_sample = optarg;
+          parameters.opt_sample = optarg;
           break;
 
         case option_qsegout:
@@ -2590,14 +2604,17 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_lengthout:
           opt_lengthout = true;
+          parameters.opt_lengthout = true;
           break;
 
         case option_xlength:
           opt_xlength = true;
+          parameters.opt_xlength = true;
           break;
 
         case option_chimeras_denovo:
           opt_chimeras_denovo = optarg;
+          parameters.opt_chimeras_denovo = optarg;
           break;
 
         case option_chimeras_length_min:
@@ -2618,6 +2635,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_sintax_random:
           opt_sintax_random = true;
+          parameters.opt_sintax_random = true;
           break;
 
         case option_n_mismatch:
@@ -2626,10 +2644,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
         case option_fastq_minqual:
           opt_fastq_minqual = args_getlong(optarg);
+          parameters.opt_fastq_minqual = args_getlong(optarg);
           break;
 
         case option_fastq_truncee_rate:
           opt_fastq_truncee_rate = args_getdouble(optarg);
+          parameters.opt_fastq_truncee_rate = args_getdouble(optarg);
           break;
 
         case option_idoffset:
@@ -2643,7 +2663,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
     }
 
   /* Terminate if ambiguous or illegal options have been detected */
-  if (c != -1)
+  if (val != -1)
     {
       exit(EXIT_FAILURE);
     }
@@ -2656,7 +2676,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
   /* Below is a list of all command names, in alphabetical order. */
 
-  int const command_options[] =
+  static constexpr std::array<int, number_of_commands> command_options =
     {
       option_allpairs_global,
       option_chimeras_denovo,
@@ -2718,8 +2738,8 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
     The first line is the command and the lines below are the valid options.
   */
 
-  const int valid_options[][100] =
-    {
+  static constexpr std::array<std::array<int, max_number_of_options_per_command>, number_of_commands> valid_options =
+    {{
       {
         option_allpairs_global,
         option_acceptall,
@@ -2822,6 +2842,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
         option_gapopen,
         option_hardmask,
         option_label_suffix,
+	option_lengthout,
         option_log,
         option_match,
         option_maxseqlength,
@@ -2843,6 +2864,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
         option_tabbedout,
         option_threads,
         option_xee,
+	option_xlength,
         option_xn,
         option_xsize,
         -1 },
@@ -4611,7 +4633,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
         option_quiet,
         option_threads,
         -1 }
-    };
+      }};
 
   /* check that only one commmand is specified */
   int commands = 0;
@@ -4620,7 +4642,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
     {
       if (options_selected[command_options[i]])
         {
-          commands++;
+          ++commands;
           k = i;
         }
     }
@@ -4655,19 +4677,19 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           if (options_selected[i])
             {
               int j = 0;
-              bool ok = false;
+              bool option_is_valid = false;
               while (valid_options[k][j] >= 0)
                 {
                   if (valid_options[k][j] == i)
                     {
-                      ok = true;
+                      option_is_valid = true;
                       break;
                     }
-                  j++;
+                  ++j;
                 }
-              if (not ok)
+              if (not option_is_valid)
                 {
-                  invalid_options++;
+                  ++invalid_options;
 
                   if (invalid_options == 1)
                     {
@@ -4688,12 +4710,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
           fprintf(stderr, "\nThe valid options for the %s command are:",
                   long_options[command_options[k]].name);
           int count = 0;
-          for(int j = 1; valid_options[k][j] >= 0; j++)
+          for (int j = 1; valid_options[k][j] >= 0; j++)
             {
               fprintf(stderr, " --%s", long_options[valid_options[k][j]].name);
-              count++;
+              ++count;
             }
-          if (not count)
+          if (count == 0)
             {
               fprintf(stderr, " (none)");
             }
@@ -4704,15 +4726,15 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
   /* multi-threaded commands */
 
-  if ((opt_threads < 0) or (opt_threads > 1024))
+  if ((opt_threads < 0) or (opt_threads > n_threads_max))
     {
       fatal("The argument to --threads must be in the range 0 (default) to 1024");
     }
 
-  if (opt_allpairs_global or opt_cluster_fast or opt_cluster_size or
-      opt_cluster_smallmem or opt_cluster_unoise or opt_fastq_mergepairs or
-      opt_fastx_mask or opt_maskfasta or opt_search_exact or opt_sintax or
-      opt_uchime_ref or opt_usearch_global)
+  if ((parameters.opt_allpairs_global != nullptr) or (parameters.opt_cluster_fast != nullptr) or (parameters.opt_cluster_size != nullptr) or
+      (parameters.opt_cluster_smallmem != nullptr) or (parameters.opt_cluster_unoise != nullptr) or (parameters.opt_fastq_mergepairs != nullptr) or
+      (parameters.opt_fastx_mask != nullptr) or (parameters.opt_maskfasta != nullptr) or (parameters.opt_search_exact != nullptr) or (parameters.opt_sintax != nullptr) or
+      (parameters.opt_uchime_ref != nullptr) or (parameters.opt_usearch_global != nullptr))
     {
       if (parameters.opt_threads == 0)
         {
@@ -4729,12 +4751,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       opt_threads = 1;
       parameters.opt_threads = 1;
     }
-  if (opt_sintax and parameters.opt_randseed and (parameters.opt_threads > 1))
+  if ((parameters.opt_sintax != nullptr) and (parameters.opt_randseed != 0) and (parameters.opt_threads > 1))
     {
       fprintf(stderr, "WARNING: Using the --sintax command with the --randseed option may not work as intended with multiple threads. Use a single thread (--threads 1) to ensure reproducible results.\n");
     }
 
-  if (opt_cluster_unoise)
+  if (parameters.opt_cluster_unoise != nullptr)
     {
       opt_weak_id = 0.90;
     }
@@ -4746,7 +4768,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
   if (opt_maxrejects == -1)
     {
-      if (opt_cluster_fast)
+      if (parameters.opt_cluster_fast != nullptr)
         {
           opt_maxrejects = 8;
         }
@@ -4769,7 +4791,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   if (opt_wordlength == 0)
     {
       /* set default word length */
-      if (opt_orient)
+      if (parameters.opt_orient != nullptr)
         {
           opt_wordlength = 12;
         }
@@ -4790,7 +4812,9 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
     }
 
   if ((opt_idoffset < 0) || (opt_idoffset > 16))
-    fatal("The argument to --idoffset must in the range 0 to 16");
+    {
+      fatal("The argument to --idoffset must in the range 0 to 16");
+    }
 
 #if 0
 
@@ -4813,7 +4837,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       fatal("The argument to --rowlen must not be negative");
     }
 
-  if (opt_qmask == MASK_ERROR)
+  if (parameters.opt_qmask == MASK_ERROR)
     {
       fatal("The argument to --qmask must be none, dust or soft");
     }
@@ -4833,28 +4857,30 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       fatal("The argument to --sample_size must not be negative");
     }
 
-  if (((parameters.opt_relabel ? 1 : 0) +
-       opt_relabel_md5 + opt_relabel_self + opt_relabel_sha1) > 1)
+  if ((((parameters.opt_relabel != nullptr) ? 1 : 0) +
+       static_cast<int>(parameters.opt_relabel_md5) +
+       static_cast<int>(parameters.opt_relabel_self) +
+       static_cast<int>(parameters.opt_relabel_sha1)) > 1)
     {
       fatal("Specify only one of --relabel, --relabel_self, --relabel_sha1, or --relabel_md5");
     }
 
   if (parameters.opt_fastq_tail < 1)
     {
-      fatal("The argument to --fastq_tail must be positive");
+      fatal("The argument to --fastq_tail must be greater than zero");
     }
 
-  if ((opt_min_unmasked_pct < 0.0) and (opt_min_unmasked_pct > 100.0))
+  if ((parameters.opt_min_unmasked_pct < 0.0) and (parameters.opt_min_unmasked_pct > 100.0))
     {
       fatal("The argument to --min_unmasked_pct must be between 0.0 and 100.0");
     }
 
-  if ((opt_max_unmasked_pct < 0.0) and (opt_max_unmasked_pct > 100.0))
+  if ((parameters.opt_max_unmasked_pct < 0.0) and (parameters.opt_max_unmasked_pct > 100.0))
     {
       fatal("The argument to --max_unmasked_pct must be between 0.0 and 100.0");
     }
 
-  if (opt_min_unmasked_pct > opt_max_unmasked_pct)
+  if (parameters.opt_min_unmasked_pct > parameters.opt_max_unmasked_pct)
     {
       fatal("The argument to --min_unmasked_pct cannot be larger than --max_unmasked_pct");
     }
@@ -4899,7 +4925,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       fatal("Sum of arguments to --fastq_asciiout and --fastq_qmaxout must be no more than 126");
     }
 
-  if (opt_gzip_decompress and opt_bzip2_decompress)
+  if (parameters.opt_gzip_decompress and parameters.opt_bzip2_decompress)
     {
       fatal("Specify either --gzip_decompress or --bzip2_decompress, not both");
     }
@@ -4941,9 +4967,9 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
   if ((opt_chimeras_parents_max < 2) or (opt_chimeras_parents_max > maxparents))
     {
-      char maxparents_string[25];
-      snprintf(maxparents_string, 25, "%d", maxparents);
-      fatal("The argument to chimeras_parents_max must be in the range 2 to %s.\n", maxparents_string);
+      std::array<char, 25> maxparents_string {{}};
+      snprintf(maxparents_string.data(), maxparents_string.size(), "%d", maxparents);
+      fatal("The argument to chimeras_parents_max must be in the range 2 to %s.\n", maxparents_string.data());
     }
 
   if ((opt_chimeras_diff_pct < 0.0) or (opt_chimeras_diff_pct > 50.0))
@@ -4957,7 +4983,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
       fatal("The argument to chimeras_parts must be in the range 2 to 100");
     }
 
-  if (opt_chimeras_denovo)
+  if (parameters.opt_chimeras_denovo != nullptr)
     {
       if (not options_selected[option_alignwidth])
         {
@@ -5008,7 +5034,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   /* set default opt_minsize depending on command */
   if (parameters.opt_minsize == 0)
     {
-      if (opt_cluster_unoise)
+      if (parameters.opt_cluster_unoise != nullptr)
         {
           opt_minsize = 8;
           parameters.opt_minsize = 8;
@@ -5023,11 +5049,11 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
   /* set default opt_abskew depending on command */
   if (not options_selected[option_abskew])
     {
-      if (opt_chimeras_denovo)
+      if (parameters.opt_chimeras_denovo != nullptr)
         {
           opt_abskew = 1.0;
         }
-      else if (opt_uchime3_denovo)
+      else if (opt_uchime3_denovo != nullptr)
         {
           opt_abskew = 16.0;
         }
@@ -5041,16 +5067,16 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
 
   if (parameters.opt_minseqlength < 0)
     {
-      if (opt_cluster_fast or
-          opt_cluster_size or
-          opt_cluster_smallmem or
-          opt_cluster_unoise or
-          parameters.opt_derep_fulllength or
-          parameters.opt_derep_id or
-          parameters.opt_derep_prefix or
-          opt_makeudb_usearch or
-          opt_sintax or
-          opt_usearch_global)
+      if ((parameters.opt_cluster_fast != nullptr) or
+          (parameters.opt_cluster_size != nullptr) or
+          (parameters.opt_cluster_smallmem != nullptr) or
+          (parameters.opt_cluster_unoise != nullptr) or
+          (parameters.opt_derep_fulllength != nullptr) or
+          (parameters.opt_derep_id != nullptr) or
+          (parameters.opt_derep_prefix != nullptr) or
+          (parameters.opt_makeudb_usearch != nullptr) or
+          (parameters.opt_sintax != nullptr) or
+          (parameters.opt_usearch_global != nullptr))
         {
           opt_minseqlength = 32;
           parameters.opt_minseqlength = 32;
@@ -5062,7 +5088,7 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
         }
     }
 
-  if (opt_sintax)
+  if (parameters.opt_sintax != nullptr)
     {
     opt_notrunclabels = 1;
     parameters.opt_notrunclabels = true;
@@ -5072,6 +5098,12 @@ auto args_init(int argc, char ** argv, struct Parameters & parameters) -> void
     {
       fatal("The argument to --idoffset must be smaller than to --minseqlength");
     }
+
+  // refactoring: C++17 <filesystem> std::filesystem::is_regular_file
+  // check if stderr is referring to a terminal
+  //  - fileno() returns a file descriptor (fd)
+  //  - isatty() returns 1 if a file descriptor refers to a terminal
+  parameters.opt_stderr_is_tty = (isatty(fileno(stderr)) == 1);
 }
 
 
@@ -5093,22 +5125,21 @@ auto cmd_version(struct Parameters const & parameters) -> void
 
 #ifdef HAVE_ZLIB_H
   printf("Compiled with support for gzip-compressed files,");
-  if (gz_lib)
+  if (gz_lib != nullptr)
     {
       printf(" and the library is loaded.\n");
 
       char * (*zlibVersion_p)();
-      zlibVersion_p = (char * (*)()) arch_dlsym(gz_lib,
-                                                "zlibVersion");
-      char * gz_version = (*zlibVersion_p)();
-      uLong (*zlibCompileFlags_p)();
-      zlibCompileFlags_p = (uLong (*)()) arch_dlsym(gz_lib,
-                                                    "zlibCompileFlags");
-      uLong const flags = (*zlibCompileFlags_p)();
+      zlibVersion_p = (char * (*)()) arch_dlsym(gz_lib, "zlibVersion");
+      char const * gz_version = (*zlibVersion_p)();
+
+      long unsigned int (*zlibCompileFlags_p)();
+      zlibCompileFlags_p = (long unsigned int (*)()) arch_dlsym(gz_lib, "zlibCompileFlags");
+      long unsigned int const flags = (*zlibCompileFlags_p)();
 
       printf("zlib version %s, compile flags %lx", gz_version, flags);
       static constexpr auto check_10th_bit = 1024U; // 0x0400
-      if (flags & check_10th_bit)
+      if ((flags & check_10th_bit) != 0U)
         {
           printf(" (ZLIB_WINAPI)");
         }
@@ -5124,7 +5155,7 @@ auto cmd_version(struct Parameters const & parameters) -> void
 
 #ifdef HAVE_BZLIB_H
   printf("Compiled with support for bzip2-compressed files,");
-  if (bz2_lib)
+  if (bz2_lib != nullptr)
     {
       printf(" and the library is loaded.\n");
     }
@@ -5170,10 +5201,10 @@ auto cmd_help(struct Parameters const & parameters) -> void {
           "  --chimeras_denovo FILENAME  detect chimeras de novo in long exact sequences\n"
           " Parameters\n"
           "  --abskew REAL               minimum abundance ratio (1.0)\n"
-          "  --chimeras_diff_pct         mismatch %% allowed in each chimeric region (0.0)\n"
-          "  --chimeras_length_min       minimum length of each chimeric region (10)\n"
-          "  --chimeras_parents_max      maximum number of parent sequences (3)\n"
-          "  --chimeras_parts            number of parts to divide sequences (length/100)\n"
+          "  --chimeras_diff_pct REAL    mismatch %% allowed in each chimeric region (0.0)\n"
+          "  --chimeras_length_min INT   minimum length of each chimeric region (10)\n"
+          "  --chimeras_parents_max INT  maximum number of parent sequences (3)\n"
+          "  --chimeras_parts INT        number of parts to divide sequences (length/100)\n"
           "  --sizein                    propagate abundance annotation from input\n"
           " Output\n"
           "  --alignwidth INT            width of alignments in alignment output file (60)\n"
@@ -5451,7 +5482,7 @@ auto cmd_help(struct Parameters const & parameters) -> void {
           "  --search_exact FILENAME     filename of queries for exact match search\n"
           "  --usearch_global FILENAME   filename of queries for global alignment search\n"
           " Data\n"
-          "  --db FILENAME               name of UDB or FASTA database for search\n"
+          "  --db FILENAME               FASTA or UDB database (only FASTA for search_exact)\n"
           " Parameters\n"
           "  --dbmask none|dust|soft     mask db with dust, soft or no method (dust)\n"
           "  --fulldp                    full dynamic programming alignment (always on)\n"
@@ -5460,7 +5491,6 @@ auto cmd_help(struct Parameters const & parameters) -> void {
           "  --hardmask                  mask by replacing with N instead of lower case\n"
           "  --id REAL                   reject if identity lower\n"
           "  --iddef INT                 id definition, 0-4=CD-HIT,all,int,MBL,BLAST (2)\n"
-          "  --idoffset INT              id offset (0)\n"
           "  --idprefix INT              reject if first n nucleotides do not match\n"
           "  --idsuffix INT              reject if last n nucleotides do not match\n"
           "  --lca_cutoff REAL           fraction of matching hits required for LCA (1.0)\n"
@@ -5568,6 +5598,7 @@ auto cmd_help(struct Parameters const & parameters) -> void {
           "  --sintax FILENAME           classify sequences in given FASTA/FASTQ file\n"
           " Parameters\n"
           "  --db FILENAME               taxonomic reference db in given FASTA or UDB file\n"
+          "  --randseed INT              seed for PRNG, zero to use random data source (0)\n"
           "  --sintax_cutoff REAL        confidence value cutoff level (0.0)\n"
           "  --sintax_random             use random sequence, not shortest, if equal match\n"
           " Output\n"
@@ -5630,43 +5661,43 @@ auto cmd_help(struct Parameters const & parameters) -> void {
 }
 
 
-auto cmd_allpairs_global() -> void
+auto cmd_allpairs_global(struct Parameters const & parameters) -> void
 {
   /* check options */
 
-  if ((not opt_alnout) and (not opt_userout) and
-      (not opt_uc) and (not opt_blast6out) and
-      (not opt_matched) and (not opt_notmatched) and
-      (not opt_samout) and (not opt_fastapairs))
+  if ((opt_alnout == nullptr) and (opt_userout == nullptr) and
+      (parameters.opt_uc == nullptr) and (opt_blast6out == nullptr) and
+      (opt_matched == nullptr) and (opt_notmatched == nullptr) and
+      (opt_samout == nullptr) and (opt_fastapairs == nullptr))
     {
       fatal("No output files specified");
     }
 
-  if (not (opt_acceptall or ((opt_id >= 0.0) and (opt_id <= 1.0))))
+  if (not ((opt_acceptall != 0) or ((opt_id >= 0.0) and (opt_id <= 1.0))))
     {
       fatal("Specify either --acceptall or --id with an identity from 0.0 to 1.0");
     }
 
-  allpairs_global(cmdline, progheader);
+  allpairs_global(parameters, cmdline, prog_header.data());
 }
 
 
-auto cmd_usearch_global() -> void
+auto cmd_usearch_global(struct Parameters const & parameters) -> void
 {
   /* check options */
 
-  if ((not opt_alnout) and (not opt_userout) and
-      (not opt_uc) and (not opt_blast6out) and
-      (not opt_matched) and (not opt_notmatched) and
-      (not opt_dbmatched) and (not opt_dbnotmatched) and
-      (not opt_samout) and (not opt_otutabout) and
-      (not opt_biomout) and (not opt_mothur_shared_out) and
-      (not opt_fastapairs) and (not opt_lcaout))
+  if ((opt_alnout == nullptr) and (opt_userout == nullptr) and
+      (parameters.opt_uc == nullptr) and (opt_blast6out == nullptr) and
+      (opt_matched == nullptr) and (opt_notmatched == nullptr) and
+      (parameters.opt_dbmatched == nullptr) and (parameters.opt_dbnotmatched == nullptr) and
+      (opt_samout == nullptr) and (opt_otutabout == nullptr) and
+      (opt_biomout == nullptr) and (opt_mothur_shared_out == nullptr) and
+      (opt_fastapairs == nullptr) and (opt_lcaout == nullptr))
     {
       fatal("No output files specified");
     }
 
-  if (not opt_db)
+  if (parameters.opt_db == nullptr)
     {
       fatal("Database filename not specified with --db");
     }
@@ -5676,37 +5707,37 @@ auto cmd_usearch_global() -> void
       fatal("Identity between 0.0 and 1.0 must be specified with --id");
     }
 
-  usearch_global(cmdline, progheader);
+  usearch_global(parameters, cmdline, prog_header.data());
 }
 
 
-auto cmd_search_exact() -> void
+auto cmd_search_exact(struct Parameters const & parameters) -> void
 {
   /* check options */
 
-  if ((not opt_alnout) and (not opt_userout) and
-      (not opt_uc) and (not opt_blast6out) and
-      (not opt_matched) and (not opt_notmatched) and
-      (not opt_dbmatched) and (not opt_dbnotmatched) and
-      (not opt_samout) and (not opt_otutabout) and
-      (not opt_biomout) and (not opt_mothur_shared_out) and
-      (not opt_fastapairs) and (not opt_lcaout))
+  if ((opt_alnout == nullptr) and (opt_userout == nullptr) and
+      (parameters.opt_uc == nullptr) and (opt_blast6out == nullptr) and
+      (opt_matched == nullptr) and (opt_notmatched == nullptr) and
+      (parameters.opt_dbmatched == nullptr) and (parameters.opt_dbnotmatched == nullptr) and
+      (opt_samout == nullptr) and (opt_otutabout == nullptr) and
+      (opt_biomout == nullptr) and (opt_mothur_shared_out == nullptr) and
+      (opt_fastapairs == nullptr) and (opt_lcaout == nullptr))
     {
       fatal("No output files specified");
     }
 
-  if (not opt_db)
+  if (parameters.opt_db == nullptr)
     {
       fatal("Database filename not specified with --db");
     }
 
-  search_exact(cmdline, progheader);
+  search_exact(parameters, cmdline, prog_header.data());
 }
 
 
 auto cmd_subsample(struct Parameters const & parameters) -> void
 {
-  if ((not opt_fastaout) and (not opt_fastqout))
+  if ((opt_fastaout == nullptr) and (opt_fastqout == nullptr))
     {
       fatal("Specify output files for subsampling with --fastaout and/or --fastqout");
     }
@@ -5765,21 +5796,21 @@ auto cmd_none(struct Parameters const & parameters) -> void {
 }
 
 
-auto cmd_cluster() -> void
+auto cmd_cluster(struct Parameters const & parameters) -> void
 {
-  if ((not opt_alnout) and (not opt_userout) and
-      (not opt_uc) and (not opt_blast6out) and
-      (not opt_matched) and (not opt_notmatched) and
-      (not opt_centroids) and (not opt_clusters) and
-      (not opt_consout) and (not opt_msaout) and
-      (not opt_samout) and (not opt_profile) and
-      (not opt_otutabout) and (not opt_biomout) and
-      (not opt_mothur_shared_out))
+  if ((opt_alnout == nullptr) and (opt_userout == nullptr) and
+      (parameters.opt_uc == nullptr) and (opt_blast6out == nullptr) and
+      (opt_matched == nullptr) and (opt_notmatched == nullptr) and
+      (opt_centroids == nullptr) and (opt_clusters == nullptr) and
+      (opt_consout == nullptr) and (opt_msaout == nullptr) and
+      (opt_samout == nullptr) and (opt_profile == nullptr) and
+      (opt_otutabout == nullptr) and (opt_biomout == nullptr) and
+      (opt_mothur_shared_out == nullptr))
     {
       fatal("No output files specified");
     }
 
-  if (not opt_cluster_unoise)
+  if (parameters.opt_cluster_unoise == nullptr)
     {
       if ((opt_id < 0.0) or (opt_id > 1.0))
         {
@@ -5787,34 +5818,35 @@ auto cmd_cluster() -> void
         }
     }
 
-  if (opt_cluster_fast)
+  if (parameters.opt_cluster_fast != nullptr)
     {
-      cluster_fast(cmdline, progheader);
+      cluster_fast(cmdline, prog_header.data());
     }
-  else if (opt_cluster_smallmem)
+  else if (parameters.opt_cluster_smallmem != nullptr)
     {
-      cluster_smallmem(cmdline, progheader);
+      cluster_smallmem(cmdline, prog_header.data());
     }
-  else if (opt_cluster_size)
+  else if (parameters.opt_cluster_size != nullptr)
     {
-      cluster_size(cmdline, progheader);
+      cluster_size(cmdline, prog_header.data());
     }
-  else if (opt_cluster_unoise)
+  else if (parameters.opt_cluster_unoise != nullptr)
     {
-      cluster_unoise(cmdline, progheader);
+      cluster_unoise(cmdline, prog_header.data());
     }
 }
 
 
-auto cmd_chimera() -> void
+auto cmd_chimera(struct Parameters const & parameters) -> void
 {
-  if ((not opt_chimeras)  and (not opt_nonchimeras) and
-      (not opt_uchimeout) and (not opt_uchimealns))
+  if ((opt_chimeras == nullptr)  and (opt_nonchimeras == nullptr) and
+      (opt_uchimeout == nullptr) and (opt_uchimealns == nullptr) and
+      (opt_tabbedout == nullptr) and (opt_alnout == nullptr))
     {
       fatal("No output files specified");
     }
 
-  if (opt_uchime_ref and not opt_db)
+  if ((parameters.opt_uchime_ref != nullptr) and (parameters.opt_db == nullptr))
     {
       fatal("Database filename not specified with --db");
     }
@@ -5834,7 +5866,7 @@ auto cmd_chimera() -> void
       fatal("Argument to --dn must be > 0");
     }
 
-  if ((not opt_uchime2_denovo) and (not opt_uchime3_denovo))
+  if ((parameters.opt_uchime2_denovo == nullptr) and (parameters.opt_uchime3_denovo == nullptr))
     {
       if (opt_mindiffs <= 0)
         {
@@ -5852,42 +5884,73 @@ auto cmd_chimera() -> void
         }
     }
 
-  chimera();
+  chimera(parameters);
 }
 
 
-auto cmd_fastq_mergepairs() -> void
+auto cmd_fastq_join(struct Parameters & parameters) -> void
 {
-  if (not opt_reverse)
+  if (is_not_ASCII(parameters.opt_join_padgap)) {
+    fatal("Option --join_padgap contains non-ASCII characters");
+  }
+  if (is_not_ASCII(parameters.opt_join_padgapq)) {
+    fatal("Option --join_padgapq contains non-ASCII characters");
+  }
+  if ((not parameters.opt_join_padgapq_set_by_user) and
+      (parameters.opt_fastq_ascii != default_ascii_offset)) {
+    parameters.opt_join_padgapq = alternative_quality_padding;
+  }
+  fastq_join(parameters);
+}
+
+
+auto cmd_fastq_join2(struct Parameters & parameters) -> void
+{
+  if (is_not_ASCII(parameters.opt_join_padgap)) {
+    fatal("Option --join_padgap contains non-ASCII characters");
+  }
+  if (is_not_ASCII(parameters.opt_join_padgapq)) {
+    fatal("Option --join_padgapq contains non-ASCII characters");
+  }
+  if ((not parameters.opt_join_padgapq_set_by_user) and
+      (parameters.opt_fastq_ascii != default_ascii_offset)) {
+    parameters.opt_join_padgapq = alternative_quality_padding;
+  }
+  fastq_join2(parameters);
+}
+
+
+auto cmd_fastq_mergepairs(struct Parameters const & parameters) -> void
+{
+  if (parameters.opt_reverse == nullptr)
     {
       fatal("No reverse reads file specified with --reverse");
     }
-  if ((not opt_fastqout) and
-      (not opt_fastaout) and
-      (not opt_fastqout_notmerged_fwd) and
-      (not opt_fastqout_notmerged_rev) and
-      (not opt_fastaout_notmerged_fwd) and
-      (not opt_fastaout_notmerged_rev) and
-      (not opt_eetabbedout))
+  if ((parameters.opt_fastqout == nullptr) and
+      (parameters.opt_fastaout == nullptr) and
+      (opt_fastqout_notmerged_fwd == nullptr) and
+      (opt_fastqout_notmerged_rev == nullptr) and
+      (opt_fastaout_notmerged_fwd == nullptr) and
+      (opt_fastaout_notmerged_rev == nullptr) and
+      (opt_eetabbedout == nullptr))
     {
       fatal("No output files specified");
     }
   if (opt_fastq_maxdiffs < 0) {
     fatal("Argument to --fastq_maxdiffs must be positive");
   }
-  fastq_mergepairs();
+  fastq_mergepairs(parameters);
 }
 
 
-auto fillheader() -> void
+auto fill_prog_header() -> void
 {
-  static constexpr auto max_line_length = std::size_t{80};
-  constexpr static double one_gigabyte {1024 * 1024 * 1024};
-  snprintf(progheader, max_line_length,
-           "%s v%s_%s, %.1fGB RAM, %ld cores",
-           PROG_NAME, PROG_VERSION, PROG_ARCH,
-           arch_get_memtotal() / one_gigabyte,
-           arch_get_cores());
+  static constexpr auto one_gigabyte = double{1024 * 1024 * 1024};
+  auto const * const format = "%s v%s_%s, %.1fGB RAM, %ld cores";
+  static_cast<void>(snprintf(
+      prog_header.data(), max_line_length, format, PROG_NAME, PROG_VERSION,
+      PROG_ARCH, static_cast<double>(arch_get_memtotal()) / one_gigabyte,
+      arch_get_cores()));
 }
 
 
@@ -5896,7 +5959,7 @@ auto getentirecommandline(int argc, char** argv) -> void
   int len = 0;
   for (int i = 0; i < argc; i++)
     {
-      len += strlen(argv[i]);
+      len += std::strlen(argv[i]);
     }
 
   cmdline = (char *) xmalloc(len + argc);
@@ -5906,16 +5969,16 @@ auto getentirecommandline(int argc, char** argv) -> void
     {
       if (i > 0)
         {
-          strcat(cmdline, " ");
+          std::strcat(cmdline, " ");
         }
-      strcat(cmdline, argv[i]);
+      std::strcat(cmdline, argv[i]);
     }
 }
 
 
-auto show_header() -> void {
-  if (opt_quiet) { return ; }
-  fprintf(stderr, "%s\n", progheader);
+auto show_header(struct Parameters const & parameters) -> void {
+  if (parameters.opt_quiet) { return ; }
+  fprintf(stderr, "%s\n", prog_header.data());
   fprintf(stderr, "https://github.com/astanabe/vsearch5d\n");
   fprintf(stderr, "\n");
 }
@@ -5923,11 +5986,12 @@ auto show_header() -> void {
 
 auto main(int argc, char** argv) -> int
 {
-  fillheader();
-
   struct Parameters parameters;
 
+  fill_prog_header();
+
   getentirecommandline(argc, argv);
+  parameters.command_line = std::string{cmdline, std::strlen(cmdline)};
 
   cpu_features_detect();
 
@@ -5937,28 +6001,28 @@ auto main(int argc, char** argv) -> int
     {
       fp_log = fopen_output(opt_log);
       parameters.fp_log = fp_log;
-      if (not fp_log)
+      if (fp_log == nullptr)
         {
           fatal("Unable to open log file for writing");
         }
-      fprintf(fp_log, "%s\n", progheader);
+      fprintf(fp_log, "%s\n", prog_header.data());
       fprintf(fp_log, "%s\n", cmdline);
 
-      char time_string[26];
+      std::array<char, 26> time_string {{}};
       time_start = time(nullptr);
-      struct tm * tm_start = localtime(& time_start);
-      strftime(time_string, 26, "%Y-%m-%dT%H:%M:%S", tm_start);
-      fprintf(fp_log, "Started  %s\n", time_string);
+      struct tm const * tm_start = localtime(& time_start);
+      strftime(time_string.data(), time_string.size(), "%Y-%m-%dT%H:%M:%S", tm_start);
+      fprintf(fp_log, "Started  %s\n", time_string.data());
     }
 
   random_init();
 
-  show_header();
+  show_header(parameters);
 
   dynlibs_open();
 
 #ifdef __x86_64__
-  if (not sse2_present)
+  if (sse2_present == 0)
     {
       fatal("Sorry, this program requires a cpu with SSE2.");
     }
@@ -5968,175 +6032,174 @@ auto main(int argc, char** argv) -> int
     {
       cmd_help(parameters);
     }
-  else if (opt_allpairs_global)
+  else if (parameters.opt_allpairs_global != nullptr)
     {
-      cmd_allpairs_global();
+      opt_strand = 1;
+      parameters.opt_strand = false;
+      opt_uc_allhits = 1;
+      parameters.opt_uc_allhits = true;
+      cmd_allpairs_global(parameters);
     }
-  else if (opt_usearch_global)
+  else if (parameters.opt_usearch_global != nullptr)
     {
-      cmd_usearch_global();
+      cmd_usearch_global(parameters);
     }
-  else if (parameters.opt_sortbysize)
+  else if (parameters.opt_sortbysize != nullptr)
     {
       sortbysize(parameters);
     }
-  else if (parameters.opt_sortbylength)
+  else if (parameters.opt_sortbylength != nullptr)
     {
       sortbylength(parameters);
     }
-  else if (parameters.opt_derep_fulllength)
+  else if (parameters.opt_derep_fulllength != nullptr)
     {
       derep(parameters, parameters.opt_derep_fulllength, false);
     }
-  else if (parameters.opt_derep_prefix)
+  else if (parameters.opt_derep_prefix != nullptr)
     {
       derep_prefix(parameters);
     }
-  else if (parameters.opt_derep_smallmem)
+  else if (parameters.opt_derep_smallmem != nullptr)
     {
       derep_smallmem(parameters);
     }
-  else if (parameters.opt_derep_id)
+  else if (parameters.opt_derep_id != nullptr)
     {
       derep(parameters, parameters.opt_derep_id, true);
     }
-  else if (parameters.opt_shuffle)
+  else if (parameters.opt_shuffle != nullptr)
     {
       shuffle(parameters);
     }
-  else if (parameters.opt_fastx_subsample)
+  else if (parameters.opt_fastx_subsample != nullptr)
     {
       cmd_subsample(parameters);
     }
-  else if (opt_maskfasta)
+  else if (parameters.opt_maskfasta != nullptr)
     {
-      maskfasta();
+      maskfasta(parameters);
     }
-  else if (opt_cluster_smallmem or opt_cluster_fast or opt_cluster_size or opt_cluster_unoise)
+  else if ((parameters.opt_cluster_smallmem != nullptr) or (parameters.opt_cluster_fast != nullptr) or (parameters.opt_cluster_size != nullptr) or (parameters.opt_cluster_unoise != nullptr))
     {
-      cmd_cluster();
+      cmd_cluster(parameters);
     }
-  else if (opt_uchime_denovo or opt_uchime_ref or opt_uchime2_denovo or opt_uchime3_denovo or opt_chimeras_denovo)
+  else if ((parameters.opt_uchime_denovo != nullptr) or (parameters.opt_uchime_ref != nullptr) or (parameters.opt_uchime2_denovo != nullptr) or (parameters.opt_uchime3_denovo != nullptr) or (parameters.opt_chimeras_denovo != nullptr))
     {
-      cmd_chimera();
+      cmd_chimera(parameters);
     }
-  else if (parameters.opt_fastq_chars)
+  else if (parameters.opt_fastq_chars != nullptr)
     {
       fastq_chars(parameters);
     }
-  else if (opt_fastq_stats)
+  else if (parameters.opt_fastq_stats != nullptr)
     {
-      fastq_stats();
+      fastq_stats(parameters);
     }
-  else if (opt_fastq_filter)
+  else if (parameters.opt_fastq_filter != nullptr)
     {
-      fastq_filter();
+      fastq_filter(parameters);
     }
-  else if (opt_fastx_filter)
+  else if (parameters.opt_fastx_filter != nullptr)
     {
-      fastx_filter();
+      fastx_filter(parameters);
     }
-  else if (opt_fastx_revcomp)
+  else if (parameters.opt_fastx_revcomp != nullptr)
     {
-      fastx_revcomp();
+      fastx_revcomp(parameters);
     }
-  else if (opt_search_exact)
+  else if (parameters.opt_search_exact != nullptr)
     {
-      cmd_search_exact();
+      opt_id = 1.0;
+      cmd_search_exact(parameters);
     }
-  else if (opt_fastx_mask)
+  else if (parameters.opt_fastx_mask != nullptr)
     {
-      fastx_mask();
+      fastx_mask(parameters);
     }
-  else if (opt_fastq_convert)
+  else if (parameters.opt_fastq_convert != nullptr)
     {
-      fastq_convert();
+      fastq_convert(parameters);
     }
-  else if (opt_fastq_mergepairs)
+  else if (parameters.opt_fastq_mergepairs != nullptr)
     {
-      cmd_fastq_mergepairs();
+      cmd_fastq_mergepairs(parameters);
     }
-  else if (opt_fastq_eestats)
+  else if (parameters.opt_fastq_eestats != nullptr)
     {
-      fastq_eestats();
+      fastq_eestats(parameters);
     }
-  else if (opt_fastq_eestats2)
+  else if (parameters.opt_fastq_eestats2 != nullptr)
     {
-      fastq_eestats2();
+      fastq_eestats2(parameters);
     }
-  else if (parameters.opt_fastq_join)
+  else if (parameters.opt_fastq_join != nullptr)
     {
-      if ((not parameters.opt_join_padgapq_set_by_user) and
-          (parameters.opt_fastq_ascii != default_ascii_offset)) {
-        parameters.opt_join_padgapq = alternative_quality_padding;
-      }
-      fastq_join(parameters);
+      cmd_fastq_join(parameters);
     }
-  else if (parameters.opt_fastq_join2)
+  else if (parameters.opt_fastq_join2 != nullptr)
     {
-      if ((not parameters.opt_join_padgapq_set_by_user) and
-          (parameters.opt_fastq_ascii != default_ascii_offset)) {
-        parameters.opt_join_padgapq = alternative_quality_padding;
-      }
-      fastq_join2(parameters);
+      cmd_fastq_join2(parameters);
     }
-  else if (parameters.opt_rereplicate)
+  else if (parameters.opt_rereplicate != nullptr)
     {
+      opt_xsize = true;
+      parameters.opt_xsize = true;
       rereplicate(parameters);
     }
   else if (parameters.opt_version)
     {
       cmd_version(parameters);
     }
-  else if (opt_makeudb_usearch)
+  else if (parameters.opt_makeudb_usearch != nullptr)
     {
-      udb_make();
+      udb_make(parameters);
     }
-  else if (opt_udb2fasta)
+  else if (parameters.opt_udb2fasta != nullptr)
     {
-      udb_fasta();
+      udb_fasta(parameters);
     }
-  else if (opt_udbinfo)
+  else if (parameters.opt_udbinfo != nullptr)
     {
-      udb_info();
+      udb_info(parameters);
     }
-  else if (opt_udbstats)
+  else if (parameters.opt_udbstats != nullptr)
     {
-      udb_stats();
+      udb_stats(parameters);
     }
-  else if (opt_sintax)
+  else if (parameters.opt_sintax != nullptr)
     {
-      sintax();
+      sintax(parameters);
     }
-  else if (opt_sff_convert)
+  else if (parameters.opt_sff_convert != nullptr)
     {
-      sff_convert();
+      sff_convert(parameters);
     }
-  else if (opt_fastx_getseq)
+  else if (parameters.opt_fastx_getseq != nullptr)
     {
-      fastx_getseq();
+      fastx_getseq(parameters);
     }
-  else if (opt_fastx_getseqs)
+  else if (parameters.opt_fastx_getseqs != nullptr)
     {
-      fastx_getseqs();
+      fastx_getseqs(parameters);
     }
-  else if (opt_fastx_getsubseq)
+  else if (parameters.opt_fastx_getsubseq != nullptr)
     {
-      fastx_getsubseq();
+      fastx_getsubseq(parameters);
     }
-  else if (parameters.opt_cut)
+  else if (parameters.opt_cut != nullptr)
     {
       cut(parameters);
     }
-  else if (opt_orient)
+  else if (parameters.opt_orient != nullptr)
     {
-      orient();
+      orient(parameters);
     }
-  else if (parameters.opt_fasta2fastq)
+  else if (parameters.opt_fasta2fastq != nullptr)
     {
       fasta2fastq(parameters);
     }
-  else if (parameters.opt_fastx_uniques)
+  else if (parameters.opt_fastx_uniques != nullptr)
     {
       derep(parameters, parameters.opt_fastx_uniques, false);
     }
@@ -6145,14 +6208,14 @@ auto main(int argc, char** argv) -> int
       cmd_none(parameters);
     }
 
-  if (parameters.opt_log)
+  if (parameters.opt_log != nullptr)
     {
       time_finish = time(nullptr);
-      struct tm * tm_finish = localtime(& time_finish);
-      char time_string[26];
-      strftime(time_string, 26, "%Y-%m-%dT%H:%M:%S", tm_finish);
+      struct tm const * tm_finish = localtime(& time_finish);
+      std::array<char, 26> time_string {{}};
+      strftime(time_string.data(), time_string.size(), "%Y-%m-%dT%H:%M:%S", tm_finish);
       fprintf(fp_log, "\n");
-      fprintf(fp_log, "Finished %s", time_string);
+      fprintf(fp_log, "Finished %s", time_string.data());
 
       double const time_diff = difftime(time_finish, time_start);
       fprintf(fp_log, "\n");
@@ -6171,7 +6234,7 @@ auto main(int argc, char** argv) -> int
       fclose(fp_log);
     }
 
-  if (opt_ee_cutoffs_values)
+  if (opt_ee_cutoffs_values != nullptr)
     {
       xfree(opt_ee_cutoffs_values);
     }

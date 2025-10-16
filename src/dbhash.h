@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -66,23 +65,22 @@
 
 struct dbhash_bucket_s
 {
-  uint64_t hash;
-  uint64_t seqno;
+  uint64_t hash = 0;
+  uint64_t seqno = 0;
 };
 
 struct dbhash_search_info_s
 {
-  char * seq;
-  uint64_t seqlen;
-  uint64_t hash;
-  uint64_t index;
+  char * seq = nullptr;
+  uint64_t seqlen = 0;
+  uint64_t hash = 0;
+  uint64_t index = 0;
 };
 
 auto dbhash_open(uint64_t maxelements) -> void;
 auto dbhash_close() -> void;
 
 auto dbhash_add(char * seq, uint64_t seqlen, uint64_t seqno) -> void;
-auto dbhash_add_one(uint64_t seqno) -> void;
 auto dbhash_add_all() -> void;
 
 auto dbhash_search_first(char * seq,

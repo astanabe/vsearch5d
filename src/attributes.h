@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -65,10 +64,10 @@
 #include <cstdio>  // std::FILE
 
 
-auto header_get_size(char * header, int header_length) -> int64_t;
+auto header_get_size(char const * header, int header_length) -> int64_t;
 
 auto header_fprint_strip(std::FILE * output_handle,
-                         char * header,
+                         char const * header,
                          int header_length,
                          bool strip_size,
                          bool strip_ee,

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,97 +60,32 @@
 
 */
 
-#include <array>
-#include <cstdio>  // std::size_t, std::snprintf
-#include <cstring>  // std::strlen, std::strcpy
+#include <string>
 
 
-static std::array<char, 1> empty_string = {""};
-
-class xstring
-{
-  char * string;
-  std::size_t length;
-  std::size_t alloc;
+class xstring {
+private:
+  std::string string_;
 
  public:
+  xstring() = default;
 
-  xstring()
-    {
-      length = 0;
-      alloc = 0;
-      string = nullptr;
-    }
-
-  ~xstring()
-  {
-    if (alloc > 0)
-      {
-        xfree(string);
-      }
-    alloc = 0;
-    string = nullptr;
-    length = 0;
+  auto add_d(int const runlength) -> void {
+    // add digits
+    string_ += std::to_string(runlength);
   }
 
-  auto empty() -> void
-  {
-    length = 0;
+  auto add_c(char const operation) -> void {
+    // add a CIGAR or MD character
+    string_ += operation;
   }
 
-  auto get_string() -> char *
-  {
-    if (length > 0)
-      {
-        return string;
-      }
-    return empty_string.data();
+  auto clear() -> void {
+    string_.clear();
   }
 
-  auto get_length() const -> std::size_t
-  {
-    return length;
-  }
-
-  auto add_c(char a_char) -> void
-  {
-    const std::size_t needed = 1;
-    if (length + needed + 1 > alloc)
-      {
-        alloc = length + needed + 1;
-        string = (char *) xrealloc(string, alloc);
-      }
-    string[length] = a_char;
-    length += 1;
-    string[length] = 0;
-  }
-
-  auto add_d(int a_number) -> void
-  {
-    auto const needed = snprintf(nullptr, 0, "%d", a_number);
-    if (needed < 0)
-      {
-        fatal("snprintf failed");
-      }
-
-    if (length + needed + 1 > alloc)
-      {
-        alloc = length + needed + 1;
-        string = (char *) xrealloc(string, alloc);
-      }
-    std::snprintf(string + length, needed + 1, "%d", a_number);
-    length += needed;
-  }
-
-  auto add_s(char * a_string) -> void
-  {
-    auto const needed = std::strlen(a_string);
-    if (length + needed + 1 > alloc)
-      {
-        alloc = length + needed + 1;
-        string = (char *) xrealloc(string, alloc);
-      }
-    std::strcpy(string + length, a_string);
-    length += needed;
+  auto c_str() -> char const * {
+    // return pointer to a null-terminated character array
+    return string_.c_str();
   }
 };

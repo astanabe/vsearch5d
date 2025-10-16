@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,21 +61,25 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
 #include "msa.h"
+#include "utils/cigar.hpp"
+#include "utils/span.hpp"
 #include <array>
 #include <algorithm>  // std::max()
 #include <cassert>
 #include <cctype>  // std::toupper
 #include <cinttypes>  // macro PRId64
-#include <climits>  // INT_MAX
 #include <cstdint>  // uint64_t
 #include <cstdio>  // std::FILE, std::sscanf, std::fprintf
-#include <cstdlib>  // str::strtoll
-#include <cstring>  // std::memset, std::strlen
+#include <cstdlib>  // std::strtoll
+#include <cstring>  // std::strlen
 #include <iterator> // std::next
 #include <numeric> // std::accumulate
 #include <vector>
+
+#ifndef NDEBUG
+#include <limits>
+#endif
 
 
 /* Compute multiple sequence alignment (msa), profile, and consensus
@@ -99,7 +102,7 @@ auto update_profile(char const nucleotide,
   auto const offset = profsize * position_in_alignment;
 
   // refactoring: eliminate unused cases? No, T and U are merged, same as IUPAC and N
-  switch(std::toupper(nucleotide))
+  switch (std::toupper(nucleotide))
     {
     case 'A':
       profile[offset + A_counter] += abundance;
@@ -143,55 +146,43 @@ auto update_msa(char const nucleotide, int &position_in_alignment,
 }
 
 
-auto find_runlength_of_leftmost_operation(char * first_character, char ** first_non_digit) -> long long {
-  // std::strtoll:
-  // - start from the 'first_character' pointed to,
-  // - consume as many characters as possible to form a valid integer,
-  // - advance pointer to the first non-digit character,
-  // - return the valid integer
-  // - if there is no valid integer: pointer is not advanced and function returns zero,
-  static constexpr auto decimal_base = 10;
-  auto runlength = std::strtoll(first_character, first_non_digit, decimal_base);
-  assert(runlength <= INT_MAX);
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
 
-  // in the context of cigar strings, runlength is at least 1
-  if (runlength == 0) {
-    runlength = 1;
-  }
-  return runlength;  // is in [1, LLONG_MAX]
-}
+}  // end of anonymous namespace
 
 
 auto find_max_insertions_per_position(int const target_count,
                                       std::vector<struct msa_target_s> const & target_list_v,
                                       int const centroid_len) -> std::vector<int> {
   std::vector<int> max_insertions(centroid_len + 1);
-  for (auto i = 1; i < target_count; ++i)
-    {
-      char * cigar_start = target_list_v[i].cigar;
-      auto const cigar_length = static_cast<long>(std::strlen(cigar_start));
-      char * cigar_end = std::next(cigar_start, cigar_length);
-      auto * position_in_cigar = cigar_start;
-      auto position_in_centroid = 0LL;
-      while (position_in_cigar < cigar_end)
-        {
-          auto** next_operation = &position_in_cigar;  // operations: match (M), insertion (I), or deletion (D)
-          auto const runlength = find_runlength_of_leftmost_operation(position_in_cigar, next_operation);
-          auto const operation = **next_operation;
-          position_in_cigar = std::next(position_in_cigar);
-          switch (operation)
-            {
-            case 'M':
-            case 'I':
-              position_in_centroid += runlength;
-              break;
-            case 'D':
-              max_insertions[position_in_centroid] = std::max(static_cast<int>(runlength), max_insertions[position_in_centroid]);
-              break;
-            default:
-              break;
-            }
-        }
+
+  // refactoring: with template Span<T>
+  // auto target_list_view = Span<struct msa_target_s const>{target_list_v.data(), target_list_v.size()};
+  // for (auto const & a_msa_target : target_list_view.subspan(1, target_count) { }
+  // assert(static_cast<size_t>(target_count), target_list_v.size());
+
+  for (auto i = 1; i < target_count; ++i) {
+    auto position = 0LL;
+    auto * cigar_start = target_list_v[i].cigar;
+    auto const cigar_length = std::strlen(cigar_start);
+    auto const cigar_pairs = parse_cigar_string(Span<char>{cigar_start, cigar_length});
+
+    for (auto const & a_pair: cigar_pairs) {
+      auto const operation = a_pair.first;
+      auto const runlength = a_pair.second;
+      switch (operation) {
+      case Operation::match:
+      case Operation::insertion:
+        position += runlength;
+        break;
+
+      case Operation::deletion:
+        assert(runlength <= std::numeric_limits<int>::max());
+        max_insertions[position] = std::max(static_cast<int>(runlength), max_insertions[position]);
+        break;
+      }
+    }
   }
   return max_insertions;
 }
@@ -348,9 +339,9 @@ auto compute_and_print_msa(int const target_count,
       auto qpos = 0;
       auto tpos = 0;
 
-      char * cigar_start = target.cigar;
+      auto * cigar_start = target.cigar;
       auto const cigar_length = static_cast<long>(std::strlen(cigar_start));
-      char * cigar_end = std::next(cigar_start, cigar_length);
+      auto const * cigar_end = std::next(cigar_start, cigar_length);
       auto * position_in_cigar = cigar_start;
       while (position_in_cigar < cigar_end)
         {
@@ -425,6 +416,7 @@ auto compute_and_print_consensus(std::vector<int> const &max_insertions,
                                  std::vector<char> &cons_v,
                                  std::vector<prof_type> &profile,
                                  std::FILE * fp_msaout) -> void {
+  static constexpr std::array<char, 16> sym_nt_4bit = {{'-', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'}};
   static constexpr char index_of_N = 15;  // 15th char in sym_nt_4bit[] (=> 'N')
 
   auto const alignment_length = static_cast<int>(aln_v.size() - 1);

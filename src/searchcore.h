@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,8 +60,10 @@
 
 */
 
+#include "linmemalign.h"
 #include <array>
 #include <vector>
+
 
 struct uhandle_s;
 
@@ -136,9 +137,11 @@ struct searchinfo_s
   char * query_head = nullptr;            /* query header */
   int qseqlen = 0;                  /* query length */
   int seq_alloc = 0;                /* bytes allocated for the query sequence */
+  std::vector<char> qsequence_v;  /* vector of query sequence chars */
   char * qsequence = nullptr;             /* query sequence */
   unsigned int kmersamplecount = 0; /* number of kmer samples from query */
-  unsigned int * kmersample = nullptr;    /* list of kmers sampled from query */
+  unsigned int const * kmersample = nullptr;    /* list of kmers sampled from query */
+  std::vector<count_t> kmers_v; /* vector of kmer counts */
   count_t * kmers = nullptr;              /* list of kmer counts for each db seq */
   std::vector<struct hit> hits_v; /* vector of hits */
   struct hit * hits = nullptr;            /* list of hits */
@@ -153,9 +156,9 @@ struct searchinfo_s
   int finalized = 0;
 };
 
-auto search_topscores(struct searchinfo_s * si) -> void;
+auto search_topscores(struct searchinfo_s * searchinfo) -> void;
 
-auto search_onequery(struct searchinfo_s * si, int seqmask) -> void;
+auto search_onequery(struct searchinfo_s * searchinfo, int seqmask) -> void;
 
 auto search_findbest2_byid(struct searchinfo_s * si_p,
                            struct searchinfo_s * si_m) -> struct hit *;
@@ -163,18 +166,17 @@ auto search_findbest2_byid(struct searchinfo_s * si_p,
 auto search_findbest2_bysize(struct searchinfo_s * si_p,
                              struct searchinfo_s * si_m) -> struct hit *;
 
-auto search_acceptable_unaligned(struct searchinfo_s * si,
+auto search_acceptable_unaligned(struct searchinfo_s const & searchinfo,
                                  int target) -> bool;
 
-auto search_acceptable_aligned(struct searchinfo_s * si,
+auto search_acceptable_aligned(struct searchinfo_s const & searchinfo,
                                struct hit * hit) -> bool;
 
 auto align_trim(struct hit * hit) -> void;
 
 auto search_joinhits(struct searchinfo_s * si_p,
                      struct searchinfo_s * si_m,
-                     struct hit * * hits,
-                     int * hit_count) -> void;
+                     std::vector<struct hit> & hits) -> void;
 
-auto search_enough_kmers(struct searchinfo_s * si,
+auto search_enough_kmers(struct searchinfo_s const & searchinfo,
                          unsigned int count) -> bool;

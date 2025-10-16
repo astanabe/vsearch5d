@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,24 +60,27 @@
 
 */
 
+#include "utils/span.hpp"
 #include <cstdint>  // int64_t
-#include <cstdio>  // FILE
+#include <cstdio>  // std::FILE
+#include <vector>
 
 
-auto align_getrow(char * seq, char * cigar, int alignlen, int origin) -> char *;
-
-auto align_fprint_uncompressed_alignment(std::FILE * output_handle, char * cigar) -> void;
+auto align_getrow(Span<char> seq_view,
+                  Span<char> cigar_view,
+                  int alignlen,
+                  bool is_target) -> std::vector<char>;
 
 auto align_show(std::FILE * output_handle,
-                char * seq1,
+                char const * seq1,
                 int64_t seq1len,
                 int64_t seq1off,
-                const char * seq1name,
-                char * seq2,
+                char const * seq1name,
+                char const * seq2,
                 int64_t seq2len,
                 int64_t seq2off,
-                const char * seq2name,
-                char * cigar,
+                char const * seq2name,
+                char const * cigar,
                 int64_t cigarlen,
                 int numwidth,
                 int namewidth,

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,35 +61,132 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
-#include "utils/seqcmp.h"
-#include <algorithm>  // std::min
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
+#include "utils/seqcmp.hpp"
+#include <algorithm>  // std::count_if, std::min
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cmath>  // std::log10, std::pow
 #include <cstdint> // int64_t, uint64_t
 #include <cstdlib>  // std::qsort
 #include <cstdio>  // std::FILE, std::fprintf, std::fclose
-#include <cstring>  // std::strlen, std::strcmp, std::memset
-#include <iterator>  // std::next
+#include <cstring>  // std::strlen, std::strcmp
 #include <limits>
 #include <string>
 #include <vector>
 
 
-#define HASH hash_cityhash64
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
 
-struct bucket
-{
-  uint64_t hash;
-  unsigned int seqno_first;
-  unsigned int seqno_last;
-  unsigned int size;
-  unsigned int count;
-  bool deleted;
-  char * header;
-  char * seq;
-  char * qual;
-};
+  // refactoring:
+  // replace with std::unordered_map (default hashing)
+  // if performance are bad, see Victor_Ciura's Cpp Talk "So You Think You Can Hash"
+  // then make a CityHash hasher object and use it with std::unordered_map
+  using Hash = decltype(&hash_cityhash64);
+  Hash hash_function = hash_cityhash64;
+
+
+  struct bucket
+  {
+    uint64_t hash = 0;
+    unsigned int seqno_first = 0;
+    unsigned int seqno_last = 0;
+    unsigned int size = 0;
+    unsigned int count = 0;
+    bool deleted = false;
+    char * header = nullptr;
+    char * seq = nullptr;
+    char * qual = nullptr;
+  };
+
+
+  auto count_selected(std::vector<struct bucket> const & hashtable,
+                      struct Parameters const & parameters) -> uint64_t {
+    auto size_in_range = [&](struct bucket const & bucket) -> bool {
+      auto const size = bucket.size;
+      return ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize));
+    };
+    auto const selected = std::count_if(hashtable.begin(), hashtable.end(),
+                                        size_in_range);
+    return std::min(static_cast<uint64_t>(selected),
+                    static_cast<uint64_t>(parameters.opt_topn));
+  }
+
+
+  // refactoring: same as find_median_abundance()
+  auto find_median_size(std::vector<struct bucket> const & hashtable) -> double {
+    static constexpr auto half = 0.5;
+    if (hashtable.empty()) {
+      return 0.0;
+    }
+    auto const table_size = hashtable.size();
+    auto const midpoint = std::ldiv(static_cast<long>(table_size), 2L);
+    auto const is_odd = ((table_size % 2) != 0U);
+    if (is_odd) {
+      // index is zero-based, so if size == 3, midpoint == 1
+      auto const index = midpoint.quot;
+      return hashtable[index].size;
+    }
+    // pair number of elements:
+    // index is zero-based, so if size == 4, midpoint == 2, lhs index == 1
+    auto const lhs_index = midpoint.quot - 1;
+    auto const rhs_index = midpoint.quot;
+    auto const lhs_size = hashtable[lhs_index].size;
+    auto const rhs_size = hashtable[rhs_index].size;
+    // sorted by decreasing abundance: lhs size > rhs size
+    // limit risk of integer additon overflow:
+    // a >= b ; (a + b) / 2 == b + (a - b) / 2
+    return rhs_size + ((lhs_size - rhs_size) * half);
+  }
+
+
+  auto rehash(std::vector<struct bucket> & hashtable) -> void
+  {
+    // new double-size hash table
+    uint64_t const new_hashtable_size = 2 * hashtable.size();
+    uint64_t const new_hash_mask = new_hashtable_size - 1;
+    std::vector<struct bucket> new_hashtable(new_hashtable_size);
+
+    // rehash all entries from the old to the new table
+    for (auto const & old_bucket : hashtable) {
+      if (old_bucket.size != 0U) {
+        auto new_index = old_bucket.hash & new_hash_mask;
+        while (new_hashtable[new_index].size != 0U) {
+          new_index = (new_index + 1) & new_hash_mask;
+        }
+        new_hashtable[new_index] = old_bucket;
+      }
+    }
+    hashtable.swap(new_hashtable);
+  }
+
+
+  // refactorig: duplicate of q2p()?
+  inline auto convert_quality_symbol_to_probability(int const quality_symbol, struct Parameters const & parameters) -> double
+  {
+    static constexpr auto minimal_quality_value = 2;
+    static constexpr auto maximal_probability = 0.75;
+    auto const quality_value = quality_symbol - static_cast<int>(parameters.opt_fastq_ascii);
+    if (quality_value < minimal_quality_value)
+      {
+        return maximal_probability;
+      }
+    static constexpr auto base = 10.0;
+    return std::pow(base, -quality_value / base);
+  }
+
+
+  inline auto convert_probability_to_quality_symbol(double const probability, struct Parameters const & parameters) -> int
+  {
+    static constexpr auto base = 10.0;
+    auto quality_value = static_cast<int64_t>(std::trunc(-base * std::log10(probability)));
+    quality_value = std::min(quality_value, parameters.opt_fastq_qmaxout);
+    quality_value = std::max(quality_value, parameters.opt_fastq_qminout);
+    return static_cast<int>(quality_value + parameters.opt_fastq_asciiout);
+  }
+
+}  // end of anonymous namespace
 
 
 auto derep_compare_full(void const * void_lhs, void const * void_rhs) -> int
@@ -141,73 +237,8 @@ auto derep_compare_full(void const * void_lhs, void const * void_rhs) -> int
 }
 
 
-auto rehash(struct bucket ** hashtableref, int64_t alloc_clusters) -> void
-{
-  /*
-    double the size of the hash table:
-
-    - allocate the new hash table
-    - rehash all entries from the old to the new table
-    - free the old table
-    - update variables
-  */
-
-  auto * old_hashtable = *hashtableref;
-  uint64_t const old_hashtablesize = 2 * alloc_clusters;
-  uint64_t const new_hashtablesize = 2 * old_hashtablesize;
-  uint64_t const new_hash_mask = new_hashtablesize - 1;
-
-  auto * new_hashtable =
-    (struct bucket *) xmalloc(sizeof(struct bucket) * new_hashtablesize);
-  memset(new_hashtable, 0, sizeof(struct bucket) * new_hashtablesize);
-
-  /* rehash all */
-  for (auto i = 0UL; i < old_hashtablesize; ++i)
-    {
-      auto const & old_bucket = *std::next(old_hashtable, static_cast<long>(i));
-      if (old_bucket.size != 0U)
-        {
-          auto new_index = old_bucket.hash & new_hash_mask;
-          while (std::next(new_hashtable, static_cast<long>(new_index))->size != 0U)
-            {
-              new_index = (new_index + 1) & new_hash_mask;
-            }
-          auto & new_bp = *std::next(new_hashtable, new_index);
-
-          new_bp = old_bucket;
-        }
-    }
-
-  xfree(old_hashtable);
-  *hashtableref = new_hashtable;
-}
-
-
-inline auto convert_quality_symbol_to_probability(int const quality_symbol, struct Parameters const & parameters) -> double
-{
-  static constexpr auto minimal_quality_value = 2;
-  static constexpr auto maximal_probability = 0.75;
-  auto const quality_value = quality_symbol - static_cast<int>(parameters.opt_fastq_ascii);
-  if (quality_value < minimal_quality_value)
-    {
-      return maximal_probability;
-    }
-  static constexpr auto base = 10.0;
-  return std::pow(base, -quality_value / base);
-}
-
-
-inline auto convert_probability_to_quality_symbol(double const probability, struct Parameters const & parameters) -> int
-{
-  static constexpr auto base = 10.0;
-  auto quality_value = static_cast<int64_t>(std::trunc(-base * std::log10(probability)));
-  quality_value = std::min(quality_value, parameters.opt_fastq_qmaxout);
-  quality_value = std::max(quality_value, parameters.opt_fastq_qminout);
-  return static_cast<int>(quality_value + parameters.opt_fastq_asciiout);
-}
-
-
-auto derep(struct Parameters const & parameters, char * input_filename, bool use_header) -> void
+// used by --derep_fulllength, --derep_id, and --fastx_uniques
+auto derep(struct Parameters const & parameters, char * input_filename, bool const use_header) -> void
 {
   /* dereplicate full length sequences, optionally require identical headers */
 
@@ -218,9 +249,9 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   show_rusage();
 
-  fastx_handle input_handle = fastx_open(input_filename);
+  auto * input_handle = fastx_open(input_filename);
 
-  if (not input_handle)
+  if (input_handle == nullptr)
     {
       fatal("Unrecognized input file type (not proper FASTA or FASTQ format)");  // unreachable? case already handled in fastx_open(), assert(h != nullptr) should always be true
     }
@@ -253,12 +284,12 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   if (parameters.opt_fastx_uniques != nullptr)
     {
-      if ((not parameters.opt_uc) and (not parameters.opt_fastaout) and (not parameters.opt_fastqout) and (not parameters.opt_tabbedout)) {
+      if ((parameters.opt_uc == nullptr) and (parameters.opt_fastaout == nullptr) and (parameters.opt_fastqout == nullptr) and (parameters.opt_tabbedout == nullptr)) {
         fatal("Output file for dereplication with fastx_uniques must be "
               "specified with --fastaout, --fastqout, --tabbedout, or --uc");
       }
     } else {
-    if ((not parameters.opt_output) and (not parameters.opt_uc)) {
+    if ((parameters.opt_output == nullptr) and (parameters.opt_uc == nullptr)) {
       fatal("Output file for dereplication must be specified with --output "
             "or --uc");
     }
@@ -266,28 +297,28 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   if (parameters.opt_fastx_uniques != nullptr)
     {
-      if (parameters.opt_fastaout)
+      if (parameters.opt_fastaout != nullptr)
         {
           fp_fastaout = fopen_output(parameters.opt_fastaout);
-          if (not fp_fastaout)
+          if (fp_fastaout == nullptr)
             {
               fatal("Unable to open FASTA output file for writing");
             }
         }
 
-      if (parameters.opt_fastqout)
+      if (parameters.opt_fastqout != nullptr)
         {
           fp_fastqout = fopen_output(parameters.opt_fastqout);
-          if (not fp_fastqout)
+          if (fp_fastqout == nullptr)
             {
               fatal("Unable to open FASTQ output file for writing");
             }
         }
 
-      if (parameters.opt_tabbedout)
+      if (parameters.opt_tabbedout != nullptr)
         {
           fp_tabbedout = fopen_output(parameters.opt_tabbedout);
-          if (not fp_tabbedout)
+          if (fp_tabbedout == nullptr)
             {
               fatal("Unable to open tab delimited output file for writing");
             }
@@ -295,26 +326,26 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
     }
   else
     {
-      if (parameters.opt_output)
+      if (parameters.opt_output != nullptr)
         {
           fp_fastaout = fopen_output(parameters.opt_output);
-          if (not fp_fastaout)
+          if (fp_fastaout == nullptr)
             {
               fatal("Unable to open FASTA output file for writing");
             }
         }
     }
 
-  if (parameters.opt_uc)
+  if (parameters.opt_uc != nullptr)
     {
       fp_uc = fopen_output(parameters.opt_uc);
-      if (not fp_uc)
+      if (fp_uc == nullptr)
         {
           fatal("Unable to open output (uc) file for writing");
         }
     }
 
-  uint64_t const filesize = fastx_get_size(input_handle);
+  auto const filesize = fastx_get_size(input_handle);
 
 
   /* allocate initial memory for 1024 clusters
@@ -326,9 +357,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   uint64_t hashtablesize = 2 * alloc_clusters;
   uint64_t hash_mask = hashtablesize - 1;
-  auto * hashtable =
-    (struct bucket *) xmalloc(sizeof(struct bucket) * hashtablesize);
-  memset(hashtable, 0, sizeof(struct bucket) * hashtablesize);
+  std::vector<struct bucket> hashtable(hashtablesize);
 
   show_rusage();
 
@@ -337,7 +366,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
   std::vector<std::string> headertab;
   std::vector<char> match_strand;
 
-  auto const extra_info = parameters.opt_uc or parameters.opt_tabbedout;
+  auto const extra_info = (parameters.opt_uc != nullptr) or (parameters.opt_tabbedout != nullptr);
 
   if (extra_info)
     {
@@ -359,23 +388,22 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   std::vector<char> seq_up(alloc_seqlen + 1);
   std::vector<char> rc_seq_up(alloc_seqlen + 1);
-  std::string prompt = std::string("Dereplicating file ") + input_filename;
+  std::string const prompt = std::string("Dereplicating file ") + input_filename;
 
   progress_init(prompt.c_str(), filesize);
 
   uint64_t sequencecount = 0;
   uint64_t nucleotidecount = 0;
-  int64_t shortest = INT64_MAX;
+  auto shortest = std::numeric_limits<int64_t>::max();
   int64_t longest = 0;
   uint64_t discarded_short = 0;
   uint64_t discarded_long = 0;
   uint64_t clusters = 0;
   int64_t sumsize = 0;
   uint64_t maxsize = 0;
-  double median = 0.0;
-  double average = 0.0;
+  auto average = 0.0;
 
-  while (fastx_next(input_handle, not parameters.opt_notrunclabels, chrmap_no_change))
+  while (fastx_next(input_handle, not parameters.opt_notrunclabels, chrmap_no_change_vector.data()))
     {
       int64_t const seqlen = fastx_get_sequence_length(input_handle);
 
@@ -425,7 +453,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
         {
           uint64_t const new_alloc_clusters = 2 * alloc_clusters;
 
-          rehash(& hashtable, alloc_clusters);
+          rehash(hashtable);
 
           alloc_clusters = new_alloc_clusters;
           hashtablesize = 2 * alloc_clusters;
@@ -434,10 +462,10 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
           show_rusage();
         }
 
-      char * seq = fastx_get_sequence(input_handle);
-      char * header = fastx_get_header(input_handle);
-      int64_t const headerlen = fastx_get_header_length(input_handle);
-      char * qual = fastx_get_quality(input_handle); // nullptr if FASTA
+      auto const * seq = fastx_get_sequence(input_handle);
+      auto const * header = fastx_get_header(input_handle);
+      auto const headerlen = fastx_get_header_length(input_handle);
+      auto const * qual = fastx_get_quality(input_handle); // nullptr if FASTA
 
       /* normalize sequence: uppercase and replace U by T  */
       string_normalize(seq_up.data(), seq, seqlen);
@@ -456,49 +484,41 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
         collision when the number of sequences is about 5e9.
       */
 
-      uint64_t hash_header = 0;
-      if (use_header)
-        {
-          hash_header = HASH(header, headerlen);
-        }
-      else
-        {
-          hash_header = 0;
-        }
+      auto const hash_header = use_header ? hash_function(header, headerlen) : uint64_t{0};
 
-      uint64_t const hash = HASH(seq_up.data(), seqlen) ^ hash_header;
-      uint64_t j = hash & hash_mask;
-      struct bucket * bp = hashtable + j;
+      auto const hash = hash_function(seq_up.data(), seqlen) ^ hash_header;
+      auto j = hash & hash_mask;
+      auto * bp = &hashtable[j];  // refactoring: rename to "cluster"
 
-      while ((bp->size) and
+      while ((bp->size != 0U) and
              ((hash != bp->hash) or
-              (seqcmp(seq_up.data(), bp->seq, seqlen)) or
-              (use_header and strcmp(header, bp->header))))
+              (seqcmp(seq_up.data(), bp->seq, seqlen) != 0) or
+              (use_header and (std::strcmp(header, bp->header) != 0))))
         {
           j = (j + 1) & hash_mask;
-          bp = hashtable + j;
+          bp = &hashtable[j];
         }
 
-      if (parameters.opt_strand and not bp->size)
+      if (parameters.opt_strand and (bp->size == 0U))
         {
           /* no match on plus strand */
           /* check minus strand as well */
 
-          uint64_t const rc_hash = HASH(rc_seq_up.data(), seqlen) ^ hash_header;
-          uint64_t k = rc_hash & hash_mask;
-          struct bucket * rc_bp = hashtable + k;
+          auto const rc_hash = hash_function(rc_seq_up.data(), seqlen) ^ hash_header;
+          auto k = rc_hash & hash_mask;
+          auto * rc_bp = &hashtable[k];
 
-          while ((rc_bp->size)
+          while ((rc_bp->size != 0U)
                  and
                  ((rc_hash != rc_bp->hash) or
-                  (seqcmp(rc_seq_up.data(), rc_bp->seq, seqlen)) or
-                  (use_header and strcmp(header, rc_bp->header))))
+                  (seqcmp(rc_seq_up.data(), rc_bp->seq, seqlen) != 0U) or
+                  (use_header and (std::strcmp(header, rc_bp->header) != 0))))
             {
               k = (k + 1) & hash_mask;
-              rc_bp = hashtable + k;
+              rc_bp = &hashtable[k];
             }
 
-          if (rc_bp->size)
+          if (rc_bp->size != 0U)
             {
               bp = rc_bp;
               j = k;
@@ -509,11 +529,10 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
             }
         }
 
-      int const abundance = fastx_get_abundance(input_handle);
-      int64_t const ab = parameters.opt_sizein ? abundance : 1;
-      sumsize += ab;
+      auto const abundance = parameters.opt_sizein ? fastx_get_abundance(input_handle) : int64_t{1};
+      sumsize += abundance;
 
-      if (bp->size)
+      if (bp->size != 0U)
         {
           /* at least one identical sequence already */
           if (extra_info)
@@ -525,19 +544,19 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
             }
 
           int64_t const s1 = bp->size;
-          int64_t const s2 = ab;
+          int64_t const s2 = abundance;
           int64_t const s3 = s1 + s2;
 
-          if (parameters.opt_fastqout)
+          if (parameters.opt_fastqout != nullptr)
             {
               /* update quality scores */
               for (int i = 0; i < seqlen; i++)
                 {
                   int const q1 = bp->qual[i];
                   int const q2 = qual[i];
-                  double const p1 = convert_quality_symbol_to_probability(q1, parameters);
-                  double const p2 = convert_quality_symbol_to_probability(q2, parameters);
-                  double p3 = 0.0;
+                  auto const p1 = convert_quality_symbol_to_probability(q1, parameters);
+                  auto const p2 = convert_quality_symbol_to_probability(q2, parameters);
+                  auto p3 = 0.0;
 
                   /* how to compute the new quality score? */
 
@@ -556,7 +575,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
                   // fastq_qout_min
                   /* max error prob, lowest quality */
-                  // p3 = MAX(p1, p2);
+                  // p3 = std::max(p1, p2);
 
                   // fastq_qout_first
                   /* keep first */
@@ -589,14 +608,14 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
       else
         {
           /* no identical sequences yet */
-          bp->size = ab;
+          bp->size = abundance;
           bp->hash = hash;
           bp->seqno_first = sequencecount;
           bp->seqno_last = sequencecount;
           bp->seq = xstrdup(seq);
           bp->header = xstrdup(header);
           bp->count = 1;
-          if (qual) {
+          if (qual != nullptr) {
             bp->qual = xstrdup(qual);
           } else {
             bp->qual = nullptr;
@@ -637,7 +656,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
         }
     }
 
-  if (parameters.opt_log)
+  if (parameters.opt_log != nullptr)
     {
       if (sequencecount > 0)
         {
@@ -659,7 +678,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
         }
     }
 
-  if (discarded_short)
+  if (discarded_short != 0U)
     {
       fprintf(stderr,
               "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -667,7 +686,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
               discarded_short,
               (discarded_short == 1 ? "sequence" : "sequences"));
 
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "minseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
@@ -677,7 +696,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
         }
     }
 
-  if (discarded_long)
+  if (discarded_long != 0U)
     {
       fprintf(stderr,
               "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n",
@@ -685,7 +704,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
               discarded_long,
               (discarded_long == 1 ? "sequence" : "sequences"));
 
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "maxseqlength %" PRId64 ": %" PRId64 " %s discarded.\n\n",
@@ -698,23 +717,12 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
   show_rusage();
 
   progress_init("Sorting", 1);
-  qsort(hashtable, hashtablesize, sizeof(struct bucket), derep_compare_full);
+  qsort(hashtable.data(), hashtablesize, sizeof(struct bucket), derep_compare_full);
   progress_done();
 
   show_rusage();
 
-  if (clusters > 0)
-    {
-      if (clusters % 2)
-        {
-          median = hashtable[(clusters - 1) / 2].size;
-        }
-      else
-        {
-          median = (hashtable[(clusters / 2) - 1].size +
-                    hashtable[clusters / 2].size) / 2.0;
-        }
-    }
+  auto const median = find_median_size(hashtable);
 
   average = 1.0 * sumsize / clusters;
 
@@ -725,7 +733,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
           fprintf(stderr,
                   "0 unique sequences\n");
         }
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "0 unique sequences\n\n");
@@ -741,7 +749,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
                   PRIu64 "\n",
                   clusters, average, median, maxsize);
         }
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "%" PRId64
@@ -753,43 +761,30 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   /* count selected */
 
-  uint64_t selected = 0;
-  for (uint64_t i = 0; i < clusters; ++i)
-    {
-      struct bucket * bp = hashtable + i;
-      int64_t const size = bp->size;
-      if ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize))
-        {
-          ++selected;
-          if (selected == (uint64_t) parameters.opt_topn)
-            {
-              break;
-            }
-        }
-    }
+  auto const selected = count_selected(hashtable, parameters);
 
   show_rusage();
 
   /* write output */
 
-  if (parameters.opt_output or parameters.opt_fastaout)
+  if ((parameters.opt_output != nullptr) or (parameters.opt_fastaout != nullptr))
     {
       progress_init("Writing FASTA output file", clusters);
 
       int64_t relabel_count = 0;
       for (uint64_t i = 0; i < clusters; ++i)
         {
-          struct bucket * bp = hashtable + i;
-          int64_t const size = bp->size;
+          auto const & cluster = hashtable[i];
+          int64_t const size = cluster.size;
           if ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize))
             {
               ++relabel_count;
               fasta_print_general(fp_fastaout,
                                   nullptr,
-                                  bp->seq,
-                                  strlen(bp->seq),
-                                  bp->header,
-                                  strlen(bp->header),
+                                  cluster.seq,
+                                  std::strlen(cluster.seq),
+                                  cluster.header,
+                                  std::strlen(cluster.header),
                                   size,
                                   relabel_count,
                                   -1.0,
@@ -806,24 +801,24 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
       fclose(fp_fastaout);
     }
 
-  if (parameters.opt_fastqout)
+  if (parameters.opt_fastqout != nullptr)
     {
       progress_init("Writing FASTQ output file", clusters);
 
       int64_t relabel_count = 0;
       for (uint64_t i = 0; i < clusters; ++i)
         {
-          struct bucket * bp = hashtable + i;
-          int64_t const size = bp->size;
+          auto const & cluster = hashtable[i];
+          int64_t const size = cluster.size;
           if ((size >= parameters.opt_minuniquesize) and (size <= parameters.opt_maxuniquesize))
             {
               ++relabel_count;
               fastq_print_general(fp_fastqout,
-                                  bp->seq,
-                                  strlen(bp->seq),
-                                  bp->header,
-                                  strlen(bp->header),
-                                  bp->qual,
+                                  cluster.seq,
+                                  std::strlen(cluster.seq),
+                                  cluster.header,
+                                  std::strlen(cluster.header),
+                                  cluster.qual,
                                   size,
                                   relabel_count,
                                   -1.0);
@@ -841,27 +836,26 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   show_rusage();
 
-  if (parameters.opt_uc)
+  if (parameters.opt_uc != nullptr)
     {
       progress_init("Writing uc file, first part", clusters);
       for (uint64_t i = 0; i < clusters; ++i)
         {
-          struct bucket * bp = hashtable + i;
-          char * hh =  bp->header;
-          int64_t const len = strlen(bp->seq);
+          auto const & cluster = hashtable[i];
+          int64_t const len = std::strlen(cluster.seq);
 
           fprintf(fp_uc, "S\t%" PRId64 "\t%" PRId64 "\t*\t*\t*\t*\t*\t%s\t*\n",
-                  i, len, hh);
+                  i, len, cluster.header);
 
-          for (unsigned int next = nextseqtab[bp->seqno_first];
+          for (auto next = nextseqtab[cluster.seqno_first];
                next != terminal;
                next = nextseqtab[next])
             {
               fprintf(fp_uc,
                       "H\t%" PRId64 "\t%" PRId64 "\t%.1f\t%s\t0\t0\t*\t%s\t%s\n",
                       i, len, 100.0,
-                      (match_strand[next] ? "-" : "+"),
-                      headertab[next].c_str(), hh);
+                      ((match_strand[next] != 0) ? "-" : "+"),
+                      headertab[next].c_str(), cluster.header);
             }
 
           progress_update(i);
@@ -871,45 +865,44 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
       progress_init("Writing uc file, second part", clusters);
       for (uint64_t i = 0; i < clusters; ++i)
         {
-          struct bucket * bp = hashtable + i;
+          auto const & cluster = hashtable[i];
           fprintf(fp_uc, "C\t%" PRId64 "\t%u\t*\t*\t*\t*\t*\t%s\t*\n",
-                  i, bp->size, bp->header);
+                  i, cluster.size, cluster.header);
           progress_update(i);
         }
       fclose(fp_uc);
       progress_done();
     }
 
-  if (parameters.opt_tabbedout)
+  if (parameters.opt_tabbedout != nullptr)
     {
       progress_init("Writing tab separated file", clusters);
       for (uint64_t i = 0; i < clusters; ++i)
         {
-          struct bucket * bp = hashtable + i;
-          char * hh =  bp->header;
+          auto const & cluster = hashtable[i];
 
-          if (parameters.opt_relabel) {
+          if (parameters.opt_relabel != nullptr) {
             fprintf(fp_tabbedout,
                     "%s\t%s%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%u\t%s\n",
-                    hh, parameters.opt_relabel, i + 1, i, (uint64_t) 0, bp->count, hh);
+                    cluster.header, parameters.opt_relabel, i + 1, i, (uint64_t) 0, cluster.count, cluster.header);
           } else {
             fprintf(fp_tabbedout, "%s\t%s\t%" PRIu64 "\t%" PRIu64 "\t%u\t%s\n",
-                    hh, hh, i, (uint64_t) 0, bp->count, hh);
+                    cluster.header, cluster.header, i, (uint64_t) 0, cluster.count, cluster.header);
           }
 
           uint64_t j = 1;
-          for (unsigned int next = nextseqtab[bp->seqno_first];
+          for (auto next = nextseqtab[cluster.seqno_first];
                next != terminal;
                next = nextseqtab[next])
             {
-              if (parameters.opt_relabel) {
+              if (parameters.opt_relabel != nullptr) {
                 fprintf(fp_tabbedout,
                         "%s\t%s%" PRIu64 "\t%" PRIu64 "\t%" PRIu64 "\t%u\t%s\n",
-                        headertab[next].c_str(), parameters.opt_relabel, i + 1, i, j, bp->count, hh);
+                        headertab[next].c_str(), parameters.opt_relabel, i + 1, i, j, cluster.count, cluster.header);
               } else {
                 fprintf(fp_tabbedout,
                         "%s\t%s\t%" PRIu64 "\t%" PRIu64 "\t%u\t%s\n",
-                        headertab[next].c_str(), hh, i, j, bp->count, hh);
+                        headertab[next].c_str(), cluster.header, i, j, cluster.count, cluster.header);
               }
               ++j;
             }
@@ -934,7 +927,7 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
                   100.0 * (clusters - selected) / clusters);
         }
 
-      if (parameters.opt_log)
+      if (parameters.opt_log != nullptr)
         {
           fprintf(fp_log,
                   "%" PRId64 " uniques written, %"
@@ -948,22 +941,16 @@ auto derep(struct Parameters const & parameters, char * input_filename, bool use
 
   /* Free all seqs and headers */
 
-  for (uint64_t i = 0; i < clusters; ++i)
-    {
-      struct bucket * bp = hashtable + i;
-      if (bp->size)
-        {
-          xfree(bp->seq);
-          xfree(bp->header);
-          if (bp->qual) {
-            xfree(bp->qual);
-          }
-        }
+  for (auto & bucket : hashtable) {
+    if (bucket.size == 0U) { continue; }
+    xfree(bucket.seq);
+    xfree(bucket.header);
+    if (bucket.qual != nullptr) {
+      xfree(bucket.qual);
     }
+  }
 
   show_rusage();
-
-  xfree(hashtable);
 
   show_rusage();
 }

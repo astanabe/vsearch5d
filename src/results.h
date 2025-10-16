@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -66,58 +65,60 @@
 
 
 auto results_show_alnout(std::FILE * output_handle,
-                         struct hit * hits,
+                         struct hit const * hits,
                          int hitcount,
-                         char * query_head,
-                         char * qsequence,
+                         char const * query_head,
+                         char const * qsequence,
                          int64_t qseqlen) -> void;
 
 auto results_show_lcaout(std::FILE * output_handle,
-                         struct hit * hits,
+                         struct hit const * hits,
                          int hitcount,
-                         char * query_head) -> void;
+                         char const * query_head) -> void;
 
 auto results_show_blast6out_one(std::FILE * output_handle,
-                                struct hit * hits,
-                                char * query_head,
+                                struct hit const * hits,
+                                char const * query_head,
                                 int64_t qseqlen) -> void;
 
 auto results_show_uc_one(std::FILE * output_handle,
-                         struct hit * hits,
-                         char * query_head,
+                         struct hit const * hits,
+                         char const * query_head,
                          int64_t qseqlen,
                          int clusterno) -> void;
 
 auto results_show_userout_one(std::FILE * output_handle,
-                              struct hit * hits,
-                              char * query_head,
-                              char * qsequence,
+                              struct hit const * hits,
+                              char const * query_head,
+                              char const * qsequence,
                               int64_t qseqlen,
-                              char * qsequence_rc) -> void;
+                              char const * qsequence_rc) -> void;
 
 auto results_show_fastapairs_one(std::FILE * output_handle,
-                                 struct hit * hits,
-                                 char * query_head,
-                                 char * qsequence,
-                                 char * qsequence_rc) -> void;
+                                 struct hit const * hits,
+                                 char const * query_head,
+                                 char const * qsequence,
+                                 char const * qsequence_rc) -> void;
 
 auto results_show_qsegout_one(std::FILE * output_handle,
-                              struct hit * hits,
-                              char * query_head,
-                              char * qsequence,
+                              struct hit const * hits,
+                              char const * query_head,
+                              char const * qsequence,
                               int64_t qseqlen,
-                              char * qsequence_rc) -> void;
+                              char const * qsequence_rc) -> void;
 
 auto results_show_tsegout_one(std::FILE * output_handle,
-                              struct hit * hits) -> void;
+                              struct hit const * hits) -> void;
 
 auto results_show_samheader(std::FILE * output_handle,
-                            char * cmdline,
-                            char * dbname) -> void;
+                            char const * cmdline,
+                            char const * dbname) -> void;
 
 auto results_show_samout(std::FILE * output_handle,
-                         struct hit * hits,
+                         struct hit const * hits,
                          int hitcount,
-                         char * query_head,
-                         char * qsequence,
-                         char * qsequence_rc) -> void;
+                         char const * query_head,
+                         char const * qsequence,
+                         char const * qsequence_rc) -> void;
+
+auto clean_up() -> void;

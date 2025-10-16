@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,10 +61,12 @@
 */
 
 #include "vsearch5d.h"
+#include <algorithm>  // std::count
 #include <cstdint>  // uint64_t
 #include <cstring>  // std::strcmp, std::strchr, std::strlen
 
 
+// refactoring: C++11 std::array does not allow conversion from litteral string to char *
 static const char * userfields_names[] =
   {
     "query",  // 0
@@ -101,85 +102,78 @@ static const char * userfields_names[] =
     "mism",
     "ids",
     "qcov",
-    "tcov",  // 33
+    "tcov",   // 33
     "id0",
     "id1",
     "id2",
     "id3",
-    "id4", // 38
-    "qilo", // 39
+    "id4",    // 38
+    "qilo",   // 39
     "qihi",
     "tilo",
-    "tihi", // 42
+    "tihi",   // 42
     nullptr
   };
 
 int * userfields_requested = nullptr;
 int userfields_requested_count = 0;
 
-auto parse_userfields_arg(char * arg) -> int
+
+auto parse_userfields_arg(char const * arg) -> int
 {
   // Parses the userfields option argument, e.g. query+target+id+alnlen+mism
   // and returns 1 if it is ok or 0 if not.
+  static constexpr auto separator = '+';
+  char const * ptr = arg;
+  char const * end_of_string = ptr + std::strlen(ptr); // pointer to end of string
 
-  char * p = arg;
-  char * e = p + strlen(p); // pointer to end of string
+  userfields_requested_count = std::count(ptr, end_of_string, separator) + 1;
 
-  // refactoring:
-  // auto const userfields_requested_count = std::count(v.cbegin(), v.cend(), '+');
-  userfields_requested_count = 1;
-  while (p < e)
-    {
-      if (*p++ == '+')
-        {
-          ++userfields_requested_count;
-        }
-    }
+  userfields_requested = static_cast<int *>(xmalloc(sizeof(int) * (uint64_t) userfields_requested_count));
 
-  userfields_requested = (int *) xmalloc(sizeof(int) * (uint64_t) userfields_requested_count);
+  ptr = arg;  // reset to the start of the string
 
-  p = arg;
+  char const * next_separator = nullptr;
 
-  char * q = nullptr;
-
-  int fields = 0;
+  auto nth_field = 0;
 
   while (true)
     {
-      q = strchr(p, '+');
-      if (not q)
+      next_separator = std::strchr(ptr, separator);
+      if (next_separator == nullptr)
         {
-          q = e;
+          next_separator = end_of_string;
         }
 
-      auto n = (uint64_t) (q - p);
+      auto const field_length = static_cast<uint64_t>(next_separator - ptr);
 
-      char ** u = (char **) userfields_names;
+      char ** valid_userfield = (char **) userfields_names;
 
-      while (*u)
+      while (*valid_userfield != nullptr)
         {
-          if ((strncmp(p, *u, n) == 0) and (strlen(*u) == n))
+          if ((std::strncmp(ptr, *valid_userfield, field_length) == 0) and (std::strlen(*valid_userfield) == field_length))
             {
               break;
             }
-          ++u;
+          ++valid_userfield;
         }
 
-      if (not *u)
+      if (*valid_userfield == nullptr)
         {    // reached end of list -> unrecognized field
           return 0; // bad argument
         }
 
-      int const i = (int) (((const char **) u) - userfields_names);
-      userfields_requested[fields++] = i;
+      auto const nth_valid_userfield = static_cast<int>((((const char **) valid_userfield) - userfields_names));
+      userfields_requested[nth_field] = nth_valid_userfield;
+      ++nth_field;
 
-      p = q;
+      ptr = next_separator;
 
-      if (p == e)
+      if (ptr == end_of_string)
         {  // reached end of argument
           return 1;
         }
 
-      ++p;
+      ++ptr;
     }
 }

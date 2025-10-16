@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([vsearch5d], [2.30.0], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
+AC_INIT([vsearch5d], [2.30.1], [akifumi.tanabe@gmail.com], [vsearch5d], [https://github.com/astanabe/vsearch5d])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([subdir-objects])
 AC_LANG([C++])
@@ -23,7 +23,7 @@ AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([psapi], [GetProcessMemoryInfo])
 
 # Checks for header files.
-AC_CHECK_HEADERS([getopt.h fcntl.h float.h regex.h ctype.h locale.h limits.h string.h sys/time.h dlfcn.h pthread.h])
+AC_CHECK_HEADERS([getopt.h fcntl.h regex.h string.h sys/time.h dlfcn.h pthread.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -34,7 +34,7 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 # Checks for library functions.
-AC_CHECK_FUNCS([memmove memcpy posix_memalign gettimeofday localtime memchr memset pow regcomp strcasecmp strchr strcspn sysinfo])
+AC_CHECK_FUNCS([memmove memcpy posix_memalign gettimeofday localtime memchr memset pow regcomp strchr strcspn sysinfo])
 
 have_bzip2=no
 AC_ARG_ENABLE(bzip2, AS_HELP_STRING([--disable-bzip2], [Disable bzip2 support]))

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -65,31 +64,18 @@
 #include <cstdio>  // std::FILE, std::size_t
 
 
-#ifndef MIN
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef MAX
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#endif
-
-
 constexpr auto md5_digest_length = 16;
 constexpr auto sha1_digest_length = 20;
-
 constexpr auto len_hex_dig_md5 = (2 * md5_digest_length) + 1;
-constexpr int len_hex_dig_sha1 = (2 * sha1_digest_length) + 1;
+constexpr auto len_hex_dig_sha1 = (2 * sha1_digest_length) + 1;
 
-auto fatal(const char * msg) -> void;
-auto fatal(const char * format, const char * message) -> void;
-auto xstrdup(const char * src) -> char *;
-auto xstrchrnul(char * str, int target) -> char *;
-auto xsprintf(char * * ret, const char * format, ...) -> int;
-auto hash_cityhash64(char * sequence, uint64_t length) -> uint64_t;
-auto hash_cityhash128(char * sequence, uint64_t length) -> uint128;
+auto xstrdup(char const * src) -> char *;
+auto xsprintf(char * * ret, char const * format, ...) -> int;
+auto hash_cityhash64(char const * sequence, uint64_t length) -> uint64_t;
+auto hash_cityhash128(char const * sequence, uint64_t length) -> uint128;
 auto show_rusage() -> void;
 
-auto progress_init(const char * prompt, uint64_t size) -> void;
+auto progress_init(char const * prompt, uint64_t size) -> void;
 auto progress_update(uint64_t progress) -> void;
 auto progress_done() -> void;
 
@@ -97,132 +83,14 @@ auto random_init() -> void;
 auto random_int(int64_t upper_limit) -> int64_t;
 auto random_ulong(uint64_t upper_limit) -> uint64_t;
 
-auto string_normalize(char * normalized, char * raw_seq, unsigned int len) -> void;
+auto string_normalize(char * normalized, char const * raw_seq, unsigned int len) -> void;
 
-auto reverse_complement(char * rc_seq, char * seq, int64_t len) -> void;
+auto reverse_complement(char * rc_seq, char const * seq, int64_t len) -> void;
 
-auto fprint_hex(std::FILE * output_handle, unsigned char * data, int len) -> void;
+auto get_hex_seq_digest_sha1(char * hex, char const * seq, int seqlen) -> void;
+auto get_hex_seq_digest_md5(char * hex, char const * seq, int seqlen) -> void;
 
-auto get_hex_seq_digest_sha1(char * hex, char * seq, int seqlen) -> void;
-auto get_hex_seq_digest_md5(char * hex, char * seq, int seqlen) -> void;
+auto fprint_seq_digest_sha1(std::FILE * output_handle, char const * seq, int seqlen) -> void;
+auto fprint_seq_digest_md5(std::FILE * output_handle, char const * seq, int seqlen) -> void;
 
-auto fprint_seq_digest_sha1(std::FILE * output_handle, char * seq, int seqlen) -> void;
-auto fprint_seq_digest_md5(std::FILE * output_handle, char * seq, int seqlen) -> void;
-
-auto fopen_input(const char * filename) -> std::FILE *;
-auto fopen_output(const char * filename) -> std::FILE *;
-
-inline auto xpthread_attr_init(pthread_attr_t * attr) -> void
-{
-  if (pthread_attr_init(attr) != 0)
-    {
-      fatal("Unable to init thread attributes");
-    }
-}
-
-inline auto xpthread_attr_destroy(pthread_attr_t * attr) -> void
-{
-  if (pthread_attr_destroy(attr) != 0)
-    {
-      fatal("Unable to destroy thread attributes");
-    }
-}
-
-inline auto xpthread_attr_setdetachstate(pthread_attr_t * attr, int detachstate) -> void
-{
-  if (pthread_attr_setdetachstate(attr, detachstate) != 0)
-    {
-      fatal("Unable to set thread attributes detach state");
-    }
-}
-
-inline auto xpthread_create(pthread_t * thread, const pthread_attr_t * attr,
-                            void *(*start_routine)(void *), void * arg) -> void
-{
-  if (pthread_create(thread, attr, start_routine, arg) != 0)
-    {
-      fatal("Unable to create thread");
-    }
-}
-
-inline auto xpthread_join(pthread_t thread, void ** value_ptr) -> void
-{
-  if (pthread_join(thread, value_ptr) != 0)
-    {
-      fatal("Unable to join thread");
-    }
-}
-
-inline auto xpthread_mutex_init(pthread_mutex_t * mutex,
-                                const pthread_mutexattr_t * attr) -> void
-{
-  if (pthread_mutex_init(mutex, attr) != 0)
-    {
-      fatal("Unable to init mutex");
-    }
-}
-
-inline auto xpthread_mutex_destroy(pthread_mutex_t * mutex) -> void
-{
-  if (pthread_mutex_destroy(mutex) != 0)
-    {
-      fatal("Unable to destroy mutex");
-    }
-}
-
-inline auto xpthread_mutex_lock(pthread_mutex_t * mutex) -> void
-{
-  if (pthread_mutex_lock(mutex) != 0)
-    {
-      fatal("Unable to lock mutex");
-    }
-}
-
-inline auto xpthread_mutex_unlock(pthread_mutex_t * mutex) -> void
-{
-  if (pthread_mutex_unlock(mutex) != 0)
-    {
-      fatal("Unable to unlock mutex");
-    }
-}
-
-inline auto xpthread_cond_init(pthread_cond_t * cond,
-                               const pthread_condattr_t * attr) -> void
-{
-  if (pthread_cond_init(cond, attr) != 0)
-    {
-      fatal("Unable to init condition variable");
-    }
-}
-
-inline auto xpthread_cond_destroy(pthread_cond_t * cond) -> void
-{
-  if (pthread_cond_destroy(cond) != 0)
-    {
-      fatal("Unable to destroy condition variable");
-    }
-}
-
-inline auto xpthread_cond_wait(pthread_cond_t * cond, pthread_mutex_t * mutex) -> void
-{
-  if (pthread_cond_wait(cond, mutex) != 0)
-    {
-      fatal("Unable to wait on condition variable");
-    }
-}
-
-inline auto xpthread_cond_signal(pthread_cond_t * cond) -> void
-{
-  if (pthread_cond_signal(cond) != 0)
-    {
-      fatal("Unable to signal condition variable");
-    }
-}
-
-inline auto xpthread_cond_broadcast(pthread_cond_t * cond) -> void
-{
-  if (pthread_cond_broadcast(cond) != 0)
-    {
-      fatal("Unable to broadcast condition variable");
-    }
-}
+auto fopen_output(char const * filename) -> std::FILE *;

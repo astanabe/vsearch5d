@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,6 +61,7 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/fatal.hpp"
 #include "utils/maps.hpp"
 #include <algorithm>  // std::transform
 #include <cinttypes>  // macros PRIu64 and PRId64
@@ -70,141 +70,146 @@
 #include <string>
 
 
-struct input_file {
-  char * name = nullptr;
-  fastx_handle handle = nullptr;
-};
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
 
-struct input_files {
-  input_file forward;
-  input_file reverse;
-};
+  struct input_file {
+    char * name = nullptr;
+    fastx_handle handle = nullptr;
+  };
 
-struct output_file {
-  char * name = nullptr;
-  std::FILE * handle = nullptr;
-};
+  struct input_files {
+    input_file forward;
+    input_file reverse;
+  };
 
-struct output_files {
-  output_file fasta;
-  output_file fastq;
-};
+  struct output_file {
+    char * name = nullptr;
+    std::FILE * handle = nullptr;
+  };
 
-
-auto check_parameters(struct Parameters const & parameters) -> void {
-  if (parameters.opt_reverse == nullptr) {
-    fatal("No reverse reads file specified with --reverse");
-  }
-
-  if ((parameters.opt_fastqout == nullptr) and (parameters.opt_fastaout == nullptr)) {
-    fatal("No output files specified");
-  }
-
-  if (parameters.opt_join_padgap.length() != parameters.opt_join_padgapq.length()) {
-    fatal("Strings given by --join_padgap and --join_padgapq differ in length");
-  }
-}
+  struct output_files {
+    output_file fasta;
+    output_file fastq;
+  };
 
 
-auto open_input_files(struct Parameters const & parameters) -> struct input_files {
-  struct input_files infiles;
-  infiles.forward.name = parameters.opt_fastq_join;
-  infiles.reverse.name = parameters.opt_reverse;
-  if (infiles.forward.name != nullptr) {
-    infiles.forward.handle = fastq_open(infiles.forward.name);
-  }
-  if (infiles.reverse.name != nullptr) {
-    infiles.reverse.handle = fastq_open(infiles.reverse.name);
-  }
-  return infiles;
-}
+  auto check_parameters(struct Parameters const & parameters) -> void {
+    if (parameters.opt_reverse == nullptr) {
+      fatal("No reverse reads file specified with --reverse");
+    }
 
+    if ((parameters.opt_fastqout == nullptr) and (parameters.opt_fastaout == nullptr)) {
+      fatal("No output files specified");
+    }
 
-auto open_input_files2(struct Parameters const & parameters) -> struct input_files {
-  struct input_files infiles;
-  infiles.forward.name = parameters.opt_fastq_join2;
-  infiles.reverse.name = parameters.opt_reverse;
-  if (infiles.forward.name != nullptr) {
-    infiles.forward.handle = fastq_open(infiles.forward.name);
-  }
-  if (infiles.reverse.name != nullptr) {
-    infiles.reverse.handle = fastq_open(infiles.reverse.name);
-  }
-  return infiles;
-}
-
-
-auto open_output_files(struct Parameters const & parameters) -> struct output_files {
-  struct output_files outfiles;
-  outfiles.fasta.name = parameters.opt_fastaout;
-  outfiles.fastq.name = parameters.opt_fastqout;
-  if (outfiles.fasta.name != nullptr) {
-    outfiles.fasta.handle = fopen_output(outfiles.fasta.name);
-  }
-  if (outfiles.fastq.name != nullptr) {
-    outfiles.fastq.handle = fopen_output(outfiles.fastq.name);
-  }
-  return outfiles;
-}
-
-
-auto check_output_files(struct output_files const & outfiles) -> void {
-  if (outfiles.fasta.name != nullptr) {
-    if (outfiles.fasta.handle == nullptr) {
-      fatal("Unable to open file for writing (%s)", outfiles.fasta.name);
+    if (parameters.opt_join_padgap.length() != parameters.opt_join_padgapq.length()) {
+      fatal("Strings given by --join_padgap and --join_padgapq differ in length");
     }
   }
-  if (outfiles.fastq.name != nullptr) {
-    if (outfiles.fastq.handle == nullptr) {
-      fatal("Unable to open file for writing (%s)", outfiles.fastq.name);
+
+
+  auto open_input_files(struct Parameters const & parameters) -> struct input_files {
+    struct input_files infiles;
+    infiles.forward.name = parameters.opt_fastq_join;
+    infiles.reverse.name = parameters.opt_reverse;
+    if (infiles.forward.name != nullptr) {
+      infiles.forward.handle = fastq_open(infiles.forward.name);
+    }
+    if (infiles.reverse.name != nullptr) {
+      infiles.reverse.handle = fastq_open(infiles.reverse.name);
+    }
+    return infiles;
+  }
+
+
+  auto open_input_files2(struct Parameters const & parameters) -> struct input_files {
+    struct input_files infiles;
+    infiles.forward.name = parameters.opt_fastq_join2;
+    infiles.reverse.name = parameters.opt_reverse;
+    if (infiles.forward.name != nullptr) {
+      infiles.forward.handle = fastq_open(infiles.forward.name);
+    }
+    if (infiles.reverse.name != nullptr) {
+      infiles.reverse.handle = fastq_open(infiles.reverse.name);
+    }
+    return infiles;
+  }
+
+
+  auto open_output_files(struct Parameters const & parameters) -> struct output_files {
+    struct output_files outfiles;
+    outfiles.fasta.name = parameters.opt_fastaout;
+    outfiles.fastq.name = parameters.opt_fastqout;
+    if (outfiles.fasta.name != nullptr) {
+      outfiles.fasta.handle = fopen_output(outfiles.fasta.name);
+    }
+    if (outfiles.fastq.name != nullptr) {
+      outfiles.fastq.handle = fopen_output(outfiles.fastq.name);
+    }
+    return outfiles;
+  }
+
+
+  auto check_output_files(struct output_files const & outfiles) -> void {
+    if (outfiles.fasta.name != nullptr) {
+      if (outfiles.fasta.handle == nullptr) {
+        fatal("Unable to open file for writing (%s)", outfiles.fasta.name);
+      }
+    }
+    if (outfiles.fastq.name != nullptr) {
+      if (outfiles.fastq.handle == nullptr) {
+        fatal("Unable to open file for writing (%s)", outfiles.fastq.name);
+      }
     }
   }
-}
 
 
-auto close_output_files(struct output_files const & outfiles) -> void {
-  for (auto * fp_outputfile : {outfiles.fasta.handle, outfiles.fastq.handle}) {
-    if (fp_outputfile != nullptr) {
-      static_cast<void>(std::fclose(fp_outputfile));
+  auto close_output_files(struct output_files const & outfiles) -> void {
+    for (auto * fp_outputfile : {outfiles.fasta.handle, outfiles.fastq.handle}) {
+      if (fp_outputfile != nullptr) {
+        static_cast<void>(std::fclose(fp_outputfile));
+      }
     }
   }
-}
 
 
-auto close_input_files(struct input_files const & infiles) -> void {
-  for (auto * fp_inputfile : {infiles.forward.handle, infiles.reverse.handle}) {
-    if (fp_inputfile != nullptr) {
+  auto close_input_files(struct input_files const & infiles) -> void {
+    for (auto * fp_inputfile : {infiles.forward.handle, infiles.reverse.handle}) {
+      if (fp_inputfile != nullptr) {
         fastq_close(fp_inputfile);
+      }
     }
   }
-}
 
 
-auto stats_message(std::FILE * output_stream,
-                   uint64_t const total) -> void {
-  static_cast<void>(std::fprintf(output_stream,
-                                 "%" PRIu64 " pairs joined\n",
-                                 total));
-}
-
-
-auto output_stats_message(struct Parameters const & parameters,
-                          uint64_t const total,
-                          char const * log_filename) -> void {
-  if (log_filename == nullptr) {
-    return;
+  auto stats_message(std::FILE * output_stream,
+                     uint64_t const total) -> void {
+    static_cast<void>(std::fprintf(output_stream,
+                                   "%" PRIu64 " pairs joined\n",
+                                   total));
   }
-  stats_message(parameters.fp_log, total);
-}
 
 
-auto output_stats_message(struct Parameters const & parameters,
-                          uint64_t const total) -> void {
-  if (parameters.opt_quiet) {
-    return;
+  auto output_stats_message(struct Parameters const & parameters,
+                            uint64_t const total,
+                            char const * log_filename) -> void {
+    if (log_filename == nullptr) {
+      return;
+    }
+    stats_message(parameters.fp_log, total);
   }
-  stats_message(stderr, total);
-}
+
+
+  auto output_stats_message(struct Parameters const & parameters,
+                            uint64_t const total) -> void {
+    if (parameters.opt_quiet) {
+      return;
+    }
+    stats_message(stderr, total);
+  }
+
+}  // end of anonymous namespace
 
 
 auto fastq_join(struct Parameters const & parameters) -> void
@@ -274,10 +279,8 @@ auto fastq_join(struct Parameters const & parameters) -> void
       std::transform(reverse_sequence.begin(),
                      reverse_sequence.end(),
                      reverse_sequence.begin(),
-                     [](char const & lhs) -> char {
-                       auto const unsigned_lhs = static_cast<unsigned char>(lhs);
-                       auto const complement_lhs = chrmap_complement_vector[unsigned_lhs];
-                       return static_cast<char>(complement_lhs);
+                     [](char const nucleotide) -> char {
+                       return map_complement(nucleotide);
                      });
 
       /* reverse read: reverse quality */
@@ -295,11 +298,11 @@ auto fastq_join(struct Parameters const & parameters) -> void
       if (parameters.opt_fastqout != nullptr)
         {
           fastq_print_general(outfiles.fastq.handle,
-                              const_cast<char *>(final_sequence.c_str()),
+                              final_sequence.c_str(),
                               static_cast<int>(needed),
                               fastq_get_header(infiles.forward.handle),
                               static_cast<int>(fastq_get_header_length(infiles.forward.handle)),
-                              const_cast<char *>(final_quality.c_str()),
+                              final_quality.c_str(),
                               static_cast<int>(fastq_get_abundance(infiles.forward.handle)),
                               static_cast<int>(total + 1),
                               -1.0);
@@ -309,7 +312,7 @@ auto fastq_join(struct Parameters const & parameters) -> void
         {
           fasta_print_general(outfiles.fasta.handle,
                               nullptr,
-                              const_cast<char *>(final_sequence.c_str()),
+                              final_sequence.c_str(),
                               static_cast<int>(needed),
                               fastq_get_header(infiles.forward.handle),
                               static_cast<int>(fastq_get_header_length(infiles.forward.handle)),
@@ -410,10 +413,8 @@ auto fastq_join2(struct Parameters const & parameters) -> void
       std::transform(reverse_sequence.begin(),
                      reverse_sequence.end(),
                      reverse_sequence.begin(),
-                     [](char const & lhs) -> char {
-                       auto const unsigned_lhs = static_cast<unsigned char>(lhs);
-                       auto const complement_lhs = chrmap_complement_vector[unsigned_lhs];
-                       return static_cast<char>(complement_lhs);
+                     [](char const nucleotide) -> char {
+                       return map_complement(nucleotide);
                      });
 
       /* reverse read: reverse quality */
@@ -431,11 +432,11 @@ auto fastq_join2(struct Parameters const & parameters) -> void
       if (parameters.opt_fastqout != nullptr)
         {
           fastq_print_general(outfiles.fastq.handle,
-                              const_cast<char *>(final_sequence.c_str()),
+                              final_sequence.c_str(),
                               static_cast<int>(needed),
                               fastq_get_header(infiles.forward.handle),
                               static_cast<int>(fastq_get_header_length(infiles.forward.handle)),
-                              const_cast<char *>(final_quality.c_str()),
+                              final_quality.c_str(),
                               static_cast<int>(fastq_get_abundance(infiles.forward.handle)),
                               static_cast<int>(total + 1),
                               -1.0);
@@ -445,7 +446,7 @@ auto fastq_join2(struct Parameters const & parameters) -> void
         {
           fasta_print_general(outfiles.fasta.handle,
                               nullptr,
-                              const_cast<char *>(final_sequence.c_str()),
+                              final_sequence.c_str(),
                               static_cast<int>(needed),
                               fastq_get_header(infiles.forward.handle),
                               static_cast<int>(fastq_get_header_length(infiles.forward.handle)),

@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,19 +61,23 @@
 */
 
 #include "vsearch5d.h"
+#include "utils/fatal.hpp"
 #include <algorithm>  // std::swap
+#include <array>
+#include <cerrno>  // errno
 #include <cstdint>  // int64_t
 #include <cstdio>  // std::FILE, std::fprintf
-#include <cstdlib>  // std::atol
+#include <cstdlib>  // std::strtoll
 #include <cstring>  // std::strlen, std::strstr, std::strspn
 
+constexpr auto n_expected_attributes = std::size_t{3};  // 3 attributes: size, ee, length
 
-auto header_find_attribute(const char * header,
-                           int header_length,
-                           const char * attribute,
+auto header_find_attribute(char const * header,
+                           int const header_length,
+                           char const * attribute,
                            int * start,
                            int * end,
-                           bool allow_decimal) -> bool
+                           bool const allow_decimal) -> bool
 {
   /*
     Identify the first occurence of the pattern (^|;)size=([0-9]+)(;|$)
@@ -85,169 +88,151 @@ auto header_find_attribute(const char * header,
   const char * digit_chars = "0123456789";
   const char * digit_chars_decimal = "0123456789.";
 
-  if ((not header) or (not attribute))
+  if ((header == nullptr) or (attribute == nullptr))
     {
       return false;
     }
 
-  int const hlen = header_length;
-  int const alen = strlen(attribute);
+  auto const attribute_length = static_cast<int>(std::strlen(attribute));
 
-  int i = 0;
+  auto offset = 0;
 
-  while (i < hlen - alen)
+  while (offset < header_length - attribute_length)
     {
-      char * r = (char *) strstr(header + i, attribute);
+      auto const * first_occurence = std::strstr(header + offset, attribute);
 
       /* no match */
-      if (r == nullptr)
+      if (first_occurence == nullptr)
         {
           break;
         }
 
-      i = r - header;
+      offset = first_occurence - header;
 
       /* check for ';' in front */
-      if ((i > 0) and (header[i - 1] != ';'))
+      if ((offset > 0) and (header[offset - 1] != ';'))
         {
-          i += alen + 1;
+          offset += attribute_length + 1;
           continue;
         }
 
-      int const digits
-        = (int) strspn(header + i + alen,
-                       (allow_decimal ? digit_chars_decimal : digit_chars));
+      auto const digits
+        = static_cast<int>(std::strspn(header + offset + attribute_length,
+                                       (allow_decimal ? digit_chars_decimal : digit_chars)));
 
       /* check for at least one digit */
       if (digits == 0)
         {
-          i += alen + 1;
+          offset += attribute_length + 1;
           continue;
         }
 
       /* check for ';' after */
-      if ((i + alen + digits < hlen) and (header[i + alen + digits] != ';'))
+      if ((offset + attribute_length + digits < header_length) and (header[offset + attribute_length + digits] != ';'))
         {
-          i += alen + digits + 2;
+          offset += attribute_length + digits + 2;
           continue;
         }
 
       /* ok */
-      * start = i;
-      * end = i + alen + digits;
+      *start = offset;
+      *end = offset + attribute_length + digits;
       return true;
     }
   return false;
 }
 
-auto header_get_size(char * header, int header_length) -> int64_t
-{
+
+auto header_get_size(char const * header, int const header_length) -> int64_t {
   /* read size/abundance annotation */
-  int64_t abundance = 0;
-  int start = 0;
-  int end = 0;
-  if (header_find_attribute(header,
-                            header_length,
-                            "size=",
-                            &start,
-                            &end,
-                            false))
-    {
-      int64_t const number = atol(header + start + 5);
-      if (number > 0)
-        {
-          abundance = number;
-        }
-      else
-        {
-          fatal("Invalid (zero) abundance annotation in FASTA file header");
-        }
-    }
+  static constexpr auto length_of_attribute_name = 5;  // "size=" -> 5 letters
+  static constexpr auto decimal_base = 10;
+  auto start = 0;
+  auto end = 0;
+  auto const attribute_is_present = header_find_attribute(header,
+                                                          header_length,
+                                                          "size=",
+                                                          &start,
+                                                          &end,
+                                                          false);
+  if (not attribute_is_present) {
+    return 0;  // refactoring: return 1 by default?
+  }
+
+  char * next_character = nullptr;
+  auto const abundance = std::strtoll(header + start + length_of_attribute_name, &next_character, decimal_base);
+  auto const range_error = (errno == ERANGE);
+
+  if (range_error) {
+    fatal("Invalid (range error) abundance annotation in FASTA file header");
+  }
+
+  if (abundance == 0) {
+    fatal("Invalid (zero) abundance annotation in FASTA file header");
+  }
+
   return abundance;
 }
 
 
+auto look_for_attribute(char const * header, int const header_length,
+                        int & nth_attribute, std::array<int, n_expected_attributes> &attribute_start,
+                        std::array<int, n_expected_attributes> &attribute_end,
+                        char const * attribute_text,
+                        bool const strip_attribute) -> void {
+  auto start = 0;
+  auto end = 0;
+  if (not strip_attribute) { return; }
+
+  auto const attribute_is_present = header_find_attribute(header,
+                                                          header_length,
+                                                          attribute_text,
+                                                          & start,
+                                                          & end,
+                                                          false);
+  if (not attribute_is_present) { return; }
+  attribute_start[nth_attribute] = start;
+  attribute_end[nth_attribute] = end;
+  ++nth_attribute;
+}
+
+
 auto header_fprint_strip(FILE * output_handle,
-                         char * header,
-                         int header_length,
-                         bool strip_size,
-                         bool strip_ee,
-                         bool strip_length) -> void
+                         char const * header,
+                         int const header_length,
+                         bool const strip_size,
+                         bool const strip_ee,
+                         bool const strip_length) -> void
 {
-  int attributes = 0;
-  int attribute_start[3];
-  int attribute_end[3];
+  auto nth_attribute = 0;
+  std::array<int, n_expected_attributes> attribute_start {{}};
+  std::array<int, n_expected_attributes> attribute_end {{}};
 
   /* look for size attribute */
-
-  int size_start = 0;
-  int size_end = 0;
-  bool size_found = false;
-  if (strip_size)
-    {
-      size_found = header_find_attribute(header,
-                                         header_length,
-                                         "size=",
-                                         & size_start,
-                                         & size_end,
-                                         false);
-    }
-  if (size_found)
-    {
-      attribute_start[attributes] = size_start;
-      attribute_end[attributes] = size_end;
-      ++attributes;
-    }
+  look_for_attribute(header, header_length,
+                     nth_attribute, attribute_start,
+                     attribute_end,
+                     "size=", strip_size);
 
   /* look for ee attribute */
-
-  int ee_start = 0;
-  int ee_end = 0;
-  bool ee_found = false;
-  if (strip_ee)
-    {
-      ee_found = header_find_attribute(header,
-                                       header_length,
-                                       "ee=",
-                                       & ee_start,
-                                       & ee_end,
-                                       true);
-    }
-  if (ee_found)
-    {
-      attribute_start[attributes] = ee_start;
-      attribute_end[attributes] = ee_end;
-      ++attributes;
-    }
+  look_for_attribute(header, header_length,
+                     nth_attribute, attribute_start,
+                     attribute_end,
+                     "ee=", strip_ee);
 
   /* look for length attribute */
-
-  int length_start = 0;
-  int length_end = 0;
-  bool length_found = false;
-  if (strip_length)
-    {
-      length_found = header_find_attribute(header,
-                                           header_length,
-                                           "length=",
-                                           &length_start,
-                                           &length_end,
-                                           true);
-    }
-  if (length_found)
-    {
-      attribute_start[attributes] = length_start;
-      attribute_end[attributes] = length_end;
-      ++attributes;
-    }
+  look_for_attribute(header, header_length,
+                     nth_attribute, attribute_start,
+                     attribute_end,
+                     "length=", strip_length);
 
   /* sort */
 
-  int last_swap = 0;
-  int limit = attributes - 1;
+  auto last_swap = 0;
+  auto limit = nth_attribute - 1;
   while (limit > 0)
     {
-      for(int i = 0; i < limit; i++)
+      for (auto i = 0; i < limit; ++i)
         {
           if (attribute_start[i] > attribute_start[i + 1])
             {
@@ -261,19 +246,19 @@ auto header_fprint_strip(FILE * output_handle,
 
   /* print */
 
-  if (attributes == 0)
+  if (nth_attribute == 0)
     {
-      fprintf(output_handle, "%.*s", header_length, header);
+      std::fprintf(output_handle, "%.*s", header_length, header);
     }
   else
     {
-      int prev_end = 0;
-      for (int i = 0; i < attributes; i++)
+      auto prev_end = 0;
+      for (auto i = 0; i < nth_attribute; ++i)
         {
           /* print part of header in front of this attribute */
           if (attribute_start[i] > prev_end + 1)
             {
-              fprintf(output_handle, "%.*s",
+              std::fprintf(output_handle, "%.*s",
                       attribute_start[i] - prev_end - 1,
                       header + prev_end);
             }
@@ -283,7 +268,7 @@ auto header_fprint_strip(FILE * output_handle,
       /* print the rest, if any */
       if (header_length > prev_end + 1)
         {
-          fprintf(output_handle, "%.*s",
+          std::fprintf(output_handle, "%.*s",
                   header_length - prev_end,
                   header + prev_end);
         }

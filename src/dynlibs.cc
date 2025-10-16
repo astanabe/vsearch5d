@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,18 +62,20 @@
 
 #include "vsearch5d.h"
 #include "dynlibs.h"
+#include "utils/fatal.hpp"
 #include <cstdio>  // std::FILE
+#include <string>
 
 
 #ifdef HAVE_ZLIB_H
 # ifdef _WIN32
-const char gz_libname[] = "zlib1.dll";
+const std::string gz_libname = "zlib1.dll";
 HMODULE gz_lib;
 # else
 #  ifdef __APPLE__
-const char gz_libname[] = "libz.dylib";
+const std::string gz_libname = "libz.dylib";
 #  else
-const char gz_libname[] = "libz.so.1";
+const std::string gz_libname = "libz.so.1";
 #  endif
 void * gz_lib;
 # endif
@@ -87,13 +88,13 @@ int ZEXPORT (*gzread_p) OF((gzFile, void *, unsigned));
 
 #ifdef HAVE_BZLIB_H
 # ifdef _WIN32
-const char bz2_libname[] = "libbz2.dll";
+const std::string bz2_libname = "libbz2.dll";
 HMODULE bz2_lib;
 # else
 #  ifdef __APPLE__
-const char bz2_libname[] = "libbz2.dylib";
+const std::string bz2_libname = "libbz2.dylib";
 #  else
-const char bz2_libname[] = "libbz2.so.1";
+const std::string bz2_libname = "libbz2.so.1";
 #  endif
 void * bz2_lib;
 # endif
@@ -104,15 +105,16 @@ int (*BZ2_bzRead_p)(int*, BZFILE*, void*, int);
 
 #endif
 
-void dynlibs_open()
+
+auto dynlibs_open() -> void
 {
 #ifdef HAVE_ZLIB_H
 #ifdef _WIN32
-  gz_lib = LoadLibraryA(gz_libname);
+  gz_lib = LoadLibraryA(gz_libname.data());
 #else
-  gz_lib = dlopen(gz_libname, RTLD_LAZY);
+  gz_lib = dlopen(gz_libname.data(), RTLD_LAZY);
 #endif
-  if (gz_lib)
+  if (gz_lib != nullptr)
     {
       gzdopen_p = (gzFile (*)(int, const char*))
         arch_dlsym(gz_lib, "gzdopen");
@@ -120,7 +122,7 @@ void dynlibs_open()
         arch_dlsym(gz_lib, "gzclose");
       gzread_p = (int (*)(gzFile, void*, unsigned))
         arch_dlsym(gz_lib, "gzread");
-      if (not (gzdopen_p && gzclose_p && gzread_p))
+      if (not ((gzdopen_p != nullptr) && (gzclose_p != nullptr) && (gzread_p != nullptr)))
         {
           fatal("Invalid compression library (zlib)");
         }
@@ -129,11 +131,11 @@ void dynlibs_open()
 
 #ifdef HAVE_BZLIB_H
 #ifdef _WIN32
-  bz2_lib = LoadLibraryA(bz2_libname);
+  bz2_lib = LoadLibraryA(bz2_libname.data());
 #else
-  bz2_lib = dlopen(bz2_libname, RTLD_LAZY);
+  bz2_lib = dlopen(bz2_libname.data(), RTLD_LAZY);
 #endif
-  if (bz2_lib)
+  if (bz2_lib != nullptr)
     {
       BZ2_bzReadOpen_p = (BZFILE* (*)(int*, FILE*, int, int, void*, int))
         arch_dlsym(bz2_lib, "BZ2_bzReadOpen");
@@ -141,7 +143,7 @@ void dynlibs_open()
         arch_dlsym(bz2_lib, "BZ2_bzReadClose");
       BZ2_bzRead_p = (int (*)(int*, BZFILE*, void*, int))
         arch_dlsym(bz2_lib, "BZ2_bzRead");
-      if (not (BZ2_bzReadOpen_p && BZ2_bzReadClose_p && BZ2_bzRead_p))
+      if (not ((BZ2_bzReadOpen_p != nullptr) && (BZ2_bzReadClose_p != nullptr) && (BZ2_bzRead_p != nullptr)))
         {
           fatal("Invalid compression library (bz2)");
         }
@@ -149,10 +151,11 @@ void dynlibs_open()
 #endif
 }
 
-void dynlibs_close()
+
+auto dynlibs_close() -> void
 {
 #ifdef HAVE_ZLIB_H
-  if (gz_lib)
+  if (gz_lib != nullptr)
     {
 #ifdef _WIN32
       FreeLibrary(gz_lib);
@@ -164,7 +167,7 @@ void dynlibs_close()
 #endif
 
 #ifdef HAVE_BZLIB_H
-  if (bz2_lib)
+  if (bz2_lib != nullptr)
     {
 #ifdef _WIN32
       FreeLibrary(bz2_lib);

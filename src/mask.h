@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -68,8 +67,8 @@ constexpr auto MASK_DUST = 1;
 constexpr auto MASK_SOFT = 2;
 
 
-auto maskfasta() -> void;
-auto fastx_mask() -> void;
+auto maskfasta(struct Parameters const & parameters) -> void;
+auto fastx_mask(struct Parameters const & parameters) -> void;
 
 auto dust(char * seq, int len) -> void;
 auto hardmask(char * seq, int len) -> void;

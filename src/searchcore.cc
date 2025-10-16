@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -64,22 +63,74 @@
 #include "vsearch5d.h"
 #include "align_simd.h"
 #include "dbindex.h"
-#include "maps.h"
+#include "linmemalign.h"
 #include "minheap.h"
 #include "otutable.h"
 #include "unique.h"
+#include "utils/seqcmp.hpp"
+#include "utils/span.hpp"
+#include <algorithm>  // std::count_if, std::min, std::max
+#include <array>
+#include <cassert>
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cmath>  // std::pow
 #include <cstdint> // int64_t, uint64_t
-#include <cstdio>  // std::sscanf
+#include <cstdio>  // std::sscanf, std::size_t
 #include <cstdlib>  // std::qsort
 #include <cstring>  // std::strlen, std::memset, std::strcmp
 #include <limits>
+#include <vector>
+
+
+
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+
+  auto make_hits_span(struct searchinfo_s const * search_info) -> Span<struct hit> {
+    assert(search_info != nullptr);
+    assert(search_info->hit_count >= 0);
+    auto const length = static_cast<std::size_t>(search_info->hit_count);
+    return Span<struct hit>{search_info->hits, length};
+  }
+
+
+  auto count_number_of_hits_to_keep(struct searchinfo_s const * search_info) -> std::size_t {
+    if (search_info == nullptr) { return std::size_t{0}; }
+    auto const hits = make_hits_span(search_info);
+    return static_cast<std::size_t>(std::count_if(hits.cbegin(), hits.cend(),
+                                                  [](struct hit const & hit) -> bool {
+                                                    return hit.accepted or hit.weak;
+                                                  }));
+  }
+
+
+  auto copy_over_hits_to_be_kept(std::vector<struct hit> & hits,
+                                 struct searchinfo_s const * search_info) -> void {
+    if (search_info == nullptr) { return; }
+    for (auto const & hit : make_hits_span(search_info)) {
+      if (hit.accepted or hit.weak) {
+        hits.emplace_back(hit);
+      }
+    }
+  }
+
+
+  auto free_rejected_alignments(struct searchinfo_s const * search_info) -> void {
+    if (search_info == nullptr) { return; }
+    for (auto const & hit : make_hits_span(search_info)) {
+      if (not (hit.accepted or hit.weak) and hit.aligned) {
+        xfree(hit.nwalignment);
+      }
+    }
+  }
+
+}  // end of anonymous namespace
+
 
 
 /* per thread data */
 
-inline auto hit_compare_byid_typed(struct hit * x, struct hit * y) -> int
+inline auto hit_compare_byid_typed(struct hit const * lhs, struct hit const * rhs) -> int
 {
   /*
     Order:
@@ -88,136 +139,130 @@ inline auto hit_compare_byid_typed(struct hit * x, struct hit * y) -> int
     early target, then late target
   */
 
-  if (x->rejected < y->rejected)
+  if (lhs->rejected < rhs->rejected)
     {
       return -1;
     }
-  else if (x->rejected > y->rejected)
+  if (lhs->rejected > rhs->rejected)
     {
       return +1;
     }
-  else if (x->aligned > y->aligned)
+  if (lhs->aligned > rhs->aligned)
     {
       return -1;
     }
-  else if (x->aligned < y->aligned)
+  if (lhs->aligned < rhs->aligned)
     {
       return +1;
     }
-  else if (x->aligned == 0)
+  if (lhs->aligned == 0)
     {
       return 0;
     }
-  else if (x->id > y->id)
+  if (lhs->id > rhs->id)
     {
       return -1;
     }
-  else if (x->id < y->id)
+  if (lhs->id < rhs->id)
     {
       return +1;
     }
-  else if (x->target < y->target)
+  if (lhs->target < rhs->target)
     {
       return -1;
     }
-  else if (x->target > y->target)
+  if (lhs->target > rhs->target)
     {
       return +1;
     }
-  else
-    {
-      return 0;
-    }
+  return 0;
 }
 
-inline auto hit_compare_bysize_typed(struct hit * x, struct hit * y) -> int
+
+inline auto hit_compare_bysize_typed(struct hit const * lhs, struct hit const * rhs) -> int
 {
   // high abundance, then low abundance
   // high id, then low id
   // early target, then late target
 
-  if (x->rejected < y->rejected)
+  if (lhs->rejected < rhs->rejected)
     {
       return -1;
     }
-  else
-    if (x->rejected > y->rejected)
-      {
-        return +1;
-      }
-    else
-      if (x->rejected == 1)
-        {
-          return 0;
-        }
-      else
-        if (x->aligned > y->aligned)
-          {
-            return -1;
-          }
-        else
-          if (x->aligned < y->aligned)
-            {
-              return +1;
-            }
-          else
-            if (x->aligned == 0)
-              {
-                return 0;
-              }
-            else
-              if (db_getabundance(x->target) > db_getabundance(y->target))
-                {
-                  return -1;
-                }
-              else
-                if (db_getabundance(x->target) < db_getabundance(y->target))
-                  {
-                    return +1;
-                  }
-                else
-                  if (x->id > y->id)
-                    {
-                      return -1;
-                    }
-                  else
-                    if (x->id < y->id)
-                      {
-                        return +1;
-                      }
-                    else
-                      if (x->target < y->target)
-                        {
-                          return -1;
-                        }
-                      else
-                        if (x->target > y->target)
-                          {
-                            return +1;
-                          }
-                        else
-                          {
-                            return 0;
-                          }
+  if (lhs->rejected > rhs->rejected)
+    {
+      return +1;
+    }
+  if (lhs->rejected == 1)
+    {
+      return 0;
+    }
+
+  if (lhs->aligned > rhs->aligned)
+    {
+      return -1;
+    }
+  if (lhs->aligned < rhs->aligned)
+    {
+      return +1;
+    }
+  if (lhs->aligned == 0)
+    {
+      return 0;
+    }
+
+  auto const lhs_abundance = db_getabundance(lhs->target);
+  auto const rhs_abundance = db_getabundance(rhs->target);
+  if (lhs_abundance > rhs_abundance)
+    {
+      return -1;
+    }
+  if (lhs_abundance < rhs_abundance)
+    {
+      return +1;
+    }
+
+  if (lhs->id > rhs->id)
+    {
+      return -1;
+    }
+  if (lhs->id < rhs->id)
+    {
+      return +1;
+    }
+
+  if (lhs->target < rhs->target)
+    {
+      return -1;
+    }
+  if (lhs->target > rhs->target)
+    {
+      return +1;
+    }
+  return 0;
 }
 
-auto hit_compare_byid(const void * a, const void * b) -> int
+
+auto hit_compare_byid(const void * lhs, const void * rhs) -> int
 {
-  return hit_compare_byid_typed((struct hit *) a, (struct hit *) b);
+  return hit_compare_byid_typed((struct hit *) lhs, (struct hit *) rhs);
 }
 
-auto hit_compare_bysize(const void * a, const void * b) -> int
+
+auto hit_compare_bysize(const void * lhs, const void * rhs) -> int
 {
-  return hit_compare_bysize_typed((struct hit *) a, (struct hit *) b);
+  return hit_compare_bysize_typed((struct hit *) lhs, (struct hit *) rhs);
 }
 
-auto search_enough_kmers(struct searchinfo_s * si,
-                         unsigned int count) -> bool
+
+auto search_enough_kmers(struct searchinfo_s const & searchinfo,
+                         unsigned int const count) -> bool
 {
-  return (count >= opt_minwordmatches) or (count >= si->kmersamplecount);
+  return (count >= opt_minwordmatches) or (count >= searchinfo.kmersamplecount);
 }
 
-auto search_topscores(struct searchinfo_s * si) -> void
+
+auto search_topscores(struct searchinfo_s * searchinfo) -> void
 {
   /*
     Count the kmer hits in each database sequence and
@@ -230,51 +275,51 @@ auto search_topscores(struct searchinfo_s * si) -> void
   const int indexed_count = dbindex_getcount();
 
   /* zero counts */
-  memset(si->kmers, 0, indexed_count * sizeof(count_t));
+  std::memset(searchinfo->kmers, 0, indexed_count * sizeof(count_t));
 
-  minheap_empty(si->m);
+  minheap_clear(searchinfo->m);
 
-  for(unsigned int i = 0; i < si->kmersamplecount; i++)
+  for (auto i = 0U; i < searchinfo->kmersamplecount; i++)
     {
-      unsigned int const kmer = si->kmersample[i];
-      unsigned char * bitmap = dbindex_getbitmap(kmer);
+      auto const kmer = searchinfo->kmersample[i];
+      auto * bitmap = dbindex_getbitmap(kmer);
 
-      if (bitmap)
+      if (bitmap != nullptr)
         {
 #ifdef __x86_64__
-          if (ssse3_present)
+          if (ssse3_present != 0)
             {
-              increment_counters_from_bitmap_ssse3(si->kmers,
+              increment_counters_from_bitmap_ssse3(searchinfo->kmers,
                                                    bitmap, indexed_count);
             }
           else
             {
-              increment_counters_from_bitmap_sse2(si->kmers,
+              increment_counters_from_bitmap_sse2(searchinfo->kmers,
                                                   bitmap, indexed_count);
             }
 #else
-          increment_counters_from_bitmap(si->kmers, bitmap, indexed_count);
+          increment_counters_from_bitmap(searchinfo->kmers, bitmap, indexed_count);
 #endif
         }
       else
         {
-          unsigned int * list = dbindex_getmatchlist(kmer);
-          unsigned int const count = dbindex_getmatchcount(kmer);
-          for(unsigned int j = 0; j < count; j++)
+          auto * list = dbindex_getmatchlist(kmer);
+          auto const count = dbindex_getmatchcount(kmer);
+          for (auto j = 0U; j < count; j++)
             {
-              si->kmers[list[j]]++;
+              searchinfo->kmers[list[j]]++;
             }
         }
     }
 
-  const int minmatches = MIN(opt_minwordmatches, si->kmersamplecount);
+  auto const minmatches = std::min(static_cast<unsigned int>(opt_minwordmatches), searchinfo->kmersamplecount);
 
-  for(int i = 0; i < indexed_count; i++)
+  for (auto i = 0; i < indexed_count; i++)
     {
-      count_t const count = si->kmers[i];
+      auto const count = searchinfo->kmers[i];
       if (count >= minmatches)
         {
-          unsigned int const seqno = dbindex_getmapping(i);
+          auto const seqno = dbindex_getmapping(i);
           unsigned int const length = db_getsequencelen(seqno);
 
           elem_t novel;
@@ -282,29 +327,11 @@ auto search_topscores(struct searchinfo_s * si) -> void
           novel.seqno = seqno;
           novel.length = length;
 
-          minheap_add(si->m, & novel);
+          minheap_add(searchinfo->m, & novel);
         }
     }
 
-  minheap_sort(si->m);
-}
-
-auto seqncmp(char * a, char * b, uint64_t n) -> int
-{
-  for(unsigned int i = 0; i < n; i++)
-    {
-      const int x = chrmap_4bit[(int)(a[i])];
-      const int y = chrmap_4bit[(int)(b[i])];
-      if (x < y)
-        {
-          return -1;
-        }
-      else if (x > y)
-        {
-          return +1;
-        }
-    }
-  return 0;
+  minheap_sort(searchinfo->m);
 }
 
 
@@ -324,15 +351,15 @@ auto align_trim(struct hit * hit) -> void
 
   /* left trim alignment */
 
-  char * p = hit->nwalignment;
-  char op = '\0';
+  auto * p = hit->nwalignment;
+  auto op = '\0';
   int64_t run = 0;
-  if (*p)
+  if (*p != 0)
     {
       run = 1;
-      int scanlength = 0;
+      auto scanlength = 0;
       sscanf(p, "%" PRId64 "%n", &run, &scanlength);
-      op = *(p+scanlength);
+      op = *(p + scanlength);
       if (op != 'M')
         {
           hit->trim_aln_left = 1 + scanlength;
@@ -349,14 +376,14 @@ auto align_trim(struct hit * hit) -> void
 
   /* right trim alignment */
 
-  char * e = hit->nwalignment + strlen(hit->nwalignment);
+  auto * e = hit->nwalignment + strlen(hit->nwalignment);
   if (e > hit->nwalignment)
     {
       p = e - 1;
       op = *p;
       if (op != 'M')
         {
-          while ((p > hit->nwalignment) && (*(p-1) <= '9'))
+          while ((p > hit->nwalignment) and (*(p - 1) <= '9'))
             {
               --p;
             }
@@ -406,7 +433,7 @@ auto align_trim(struct hit * hit) -> void
   hit->id2 = (hit->matches - opt_idoffset) > 0 && (hit->internal_alignmentlength - opt_idoffset) > 0 ?
     100.0 * (hit->matches - opt_idoffset) / (hit->internal_alignmentlength - opt_idoffset) : 0.0;
   /* Marine Biology Lab */
-  hit->id3 = MAX(0.0, 100.0 * (1.0 - (1.0 * (hit->mismatches + hit->nwgaps) /
+  hit->id3 = std::max(0.0, 100.0 * (1.0 - (1.0 * (hit->mismatches + hit->nwgaps) /
                                       (hit->longest - opt_idoffset))));
   /* BLAST */
   hit->id4 = (hit->matches - opt_idoffset) > 0 && (hit->nwalignmentlength - opt_idoffset) > 0 ?
@@ -432,111 +459,107 @@ auto align_trim(struct hit * hit) -> void
     }
 }
 
-auto search_acceptable_unaligned(struct searchinfo_s * si,
-                                 int target) -> bool
+
+auto search_acceptable_unaligned(struct searchinfo_s const & searchinfo,
+                                 int const target) -> bool
 {
-  /* consider whether a hit satisfies accept criteria before alignment */
+  /* consider whether a hit satisfies accepted criteria before alignment */
 
-  char * qseq = si->qsequence;
-  char * dlabel = db_getheader(target);
-  char * dseq = db_getsequence(target);
-  const int64_t dseqlen = db_getsequencelen(target);
-  const int64_t tsize = db_getabundance(target);
+  // true: needs further consideration
+  // false: reject
 
-  if (
-      /* maxqsize */
-      (si->qsize <= opt_maxqsize)
-      &&
-      /* mintsize */
-      (tsize >= opt_mintsize)
-      &&
-      /* minsizeratio */
-      (si->qsize >= opt_minsizeratio * tsize)
-      &&
-      /* maxsizeratio */
-      (si->qsize <= opt_maxsizeratio * tsize)
-      &&
-      /* minqt */
-      (si->qseqlen >= opt_minqt * dseqlen)
-      &&
-      /* maxqt */
-      (si->qseqlen <= opt_maxqt * dseqlen)
-      &&
-      /* minsl */
-      (si->qseqlen < dseqlen ?
-       si->qseqlen >= opt_minsl * dseqlen :
-       dseqlen >= opt_minsl * si->qseqlen)
-      &&
-      /* maxsl */
-      (si->qseqlen < dseqlen ?
-       si->qseqlen <= opt_maxsl * dseqlen :
-       dseqlen <= opt_maxsl * si->qseqlen)
-      &&
-      /* idprefix */
-      ((si->qseqlen >= opt_idprefix) &&
-       (dseqlen >= opt_idprefix) &&
-       (not seqncmp(qseq, dseq, opt_idprefix)))
-      &&
-      /* idsuffix */
-      ((si->qseqlen >= opt_idsuffix) &&
-       (dseqlen >= opt_idsuffix) &&
-       (not seqncmp(qseq+si->qseqlen-opt_idsuffix,
-                 dseq+dseqlen-opt_idsuffix,
-                 opt_idsuffix)))
-      &&
-      /* self */
-      ((not opt_self) or (strcmp(si->query_head, dlabel)))
-      &&
-      /* selfid */
-      ((not opt_selfid) or
-       (si->qseqlen != dseqlen) or
-       (seqncmp(qseq, dseq, si->qseqlen)))
-      )
-    {
-      /* needs further consideration */
-      return true;
-    }
-  else
-    {
-      /* reject */
-      return false;
-    }
+  auto const * qseq = searchinfo.qsequence;
+  auto const * dlabel = db_getheader(target);
+  auto const * dseq = db_getsequence(target);
+  int64_t const dseqlen = db_getsequencelen(target);
+  int64_t const tsize = db_getabundance(target);
+
+  return (
+          /* maxqsize */
+          (searchinfo.qsize <= opt_maxqsize)
+          and
+          /* mintsize */
+          (tsize >= opt_mintsize)
+          and
+          /* minsizeratio */
+          (searchinfo.qsize >= opt_minsizeratio * tsize)
+          and
+          /* maxsizeratio */
+          (searchinfo.qsize <= opt_maxsizeratio * tsize)
+          and
+          /* minqt */
+          (searchinfo.qseqlen >= opt_minqt * dseqlen)
+          and
+          /* maxqt */
+          (searchinfo.qseqlen <= opt_maxqt * dseqlen)
+          and
+          /* minsl */
+          (searchinfo.qseqlen < dseqlen ?
+           searchinfo.qseqlen >= opt_minsl * dseqlen :
+           dseqlen >= opt_minsl * searchinfo.qseqlen)
+          and
+          /* maxsl */
+          (searchinfo.qseqlen < dseqlen ?
+           searchinfo.qseqlen <= opt_maxsl * dseqlen :
+           dseqlen <= opt_maxsl * searchinfo.qseqlen)
+          and
+          /* idprefix */
+          ((searchinfo.qseqlen >= opt_idprefix) and
+           (dseqlen >= opt_idprefix) and
+           (seqcmp(qseq, dseq, opt_idprefix) == 0))
+          and
+          /* idsuffix */
+          ((searchinfo.qseqlen >= opt_idsuffix) and
+           (dseqlen >= opt_idsuffix) and
+           (seqcmp(qseq + searchinfo.qseqlen - opt_idsuffix,
+                    dseq + dseqlen - opt_idsuffix,
+                    opt_idsuffix) == 0))
+          and
+          /* self */
+          ((opt_self == 0) or (std::strcmp(searchinfo.query_head, dlabel) != 0))
+          and
+          /* selfid */
+          ((opt_selfid == 0) or
+           (searchinfo.qseqlen != dseqlen) or
+           (seqcmp(qseq, dseq, searchinfo.qseqlen) != 0))
+          );
 }
 
-auto search_acceptable_aligned(struct searchinfo_s * si,
+
+auto search_acceptable_aligned(struct searchinfo_s const & searchinfo,
                                struct hit * hit) -> bool
 {
   if (/* weak_id */
-      (hit->id >= 100.0 * opt_weak_id) &&
+      (hit->id >= 100.0 * opt_weak_id) and
       /* maxsubs */
-      (hit->mismatches <= opt_maxsubs) &&
+      (hit->mismatches <= opt_maxsubs) and
       /* maxgaps */
-      (hit->internal_gaps <= opt_maxgaps) &&
+      (hit->internal_gaps <= opt_maxgaps) and
       /* mincols */
-      (hit->internal_alignmentlength >= opt_mincols) &&
+      (hit->internal_alignmentlength >= opt_mincols) and
       /* leftjust */
-      ((not opt_leftjust) or (hit->trim_q_left +
-                           hit->trim_t_left == 0)) &&
+      ((opt_leftjust == 0) or (hit->trim_q_left +
+                           hit->trim_t_left == 0)) and
       /* rightjust */
-      ((not opt_rightjust) or (hit->trim_q_right +
-                            hit->trim_t_right == 0)) &&
+      ((opt_rightjust == 0) or (hit->trim_q_right +
+                            hit->trim_t_right == 0)) and
       /* query_cov */
-      (hit->matches + hit->mismatches >= opt_query_cov * si->qseqlen) &&
+      (hit->matches + hit->mismatches >= opt_query_cov * searchinfo.qseqlen) and
       /* target_cov */
       (hit->matches + hit->mismatches >=
-       opt_target_cov * db_getsequencelen(hit->target)) &&
+       opt_target_cov * db_getsequencelen(hit->target)) and
       /* maxid */
-      (hit->id <= 100.0 * opt_maxid) &&
+      (hit->id <= 100.0 * opt_maxid) and
       /* mid */
-      (100.0 * hit->matches / (hit->matches + hit->mismatches) >= opt_mid) &&
+      (100.0 * hit->matches / (hit->matches + hit->mismatches) >= opt_mid) and
       /* maxdiffs */
       (hit->mismatches + hit->internal_indels <= opt_maxdiffs))
     {
-      if (opt_cluster_unoise)
+      if (opt_cluster_unoise != nullptr)
         {
           const auto mismatches = hit->mismatches;
-          const double skew = 1.0 * si->qsize / db_getabundance(hit->target);
-          const double beta = 1.0 / pow(2, (1.0 * opt_unoise_alpha * mismatches) + 1);
+          auto const skew = 1.0 * searchinfo.qsize / db_getabundance(hit->target);
+          auto const beta = 1.0 / std::pow(2, (1.0 * opt_unoise_alpha * mismatches) + 1);
 
           if (skew <= beta or mismatches == 0)
             {
@@ -545,89 +568,80 @@ auto search_acceptable_aligned(struct searchinfo_s * si,
               hit->weak = false;
               return true;
             }
-          else
-            {
-              /* rejected, but weak hit */
-              hit->rejected = true;
-              hit->weak = true;
-              return false;
-            }
+          /* rejected, but weak hit */
+          hit->rejected = true;
+          hit->weak = true;
+          return false;
         }
-      else
+
+      if (hit->id >= 100.0 * opt_id)
         {
-          if (hit->id >= 100.0 * opt_id)
-            {
-              /* accepted */
-              hit->accepted = true;
-              hit->weak = false;
-              return true;
-            }
-          else
-            {
-              /* rejected, but weak hit */
-              hit->rejected = true;
-              hit->weak = true;
-              return false;
-            }
+          /* accepted */
+          hit->accepted = true;
+          hit->weak = false;
+          return true;
         }
-    }
-  else
-    {
-      /* rejected */
+      /* rejected, but weak hit */
       hit->rejected = true;
-      hit->weak = false;
+      hit->weak = true;
       return false;
     }
+
+  /* rejected */
+  hit->rejected = true;
+  hit->weak = false;
+  return false;
 }
 
-auto align_delayed(struct searchinfo_s * si) -> void
+
+auto align_delayed(struct searchinfo_s * searchinfo) -> void
 {
   /* compute global alignment */
 
-  unsigned int target_list[MAXDELAYED];
-  CELL  nwscore_list[MAXDELAYED];
-  unsigned short nwalignmentlength_list[MAXDELAYED];
-  unsigned short nwmatches_list[MAXDELAYED];
-  unsigned short nwmismatches_list[MAXDELAYED];
-  unsigned short nwgaps_list[MAXDELAYED];
-  char * nwcigar_list[MAXDELAYED];
+  std::array<unsigned int, MAXDELAYED> target_list {{}};
+  std::array<CELL, MAXDELAYED> nwscore_list {{}};
+  std::array<unsigned short, MAXDELAYED> nwalignmentlength_list {{}};
+  std::array<unsigned short, MAXDELAYED> nwmatches_list {{}};
+  std::array<unsigned short, MAXDELAYED> nwmismatches_list {{}};
+  std::array<unsigned short, MAXDELAYED> nwgaps_list {{}};
+  std::array<char *, MAXDELAYED> nwcigar_list {{}};
 
   int target_count = 0;
 
-  for(int x = si->finalized; x < si->hit_count; x++)
+  for (int x = searchinfo->finalized; x < searchinfo->hit_count; x++)
     {
-      struct hit * hit = si->hits + x;
+      struct hit const * hit = searchinfo->hits + x;
       if (not hit->rejected)
         {
           target_list[target_count++] = hit->target;
         }
     }
 
-  if (target_count)
+  if (target_count != 0)
     {
-      search16(si->s,
+      search16(searchinfo->s,
                target_count,
-               target_list,
-               nwscore_list,
-               nwalignmentlength_list,
-               nwmatches_list,
-               nwmismatches_list,
-               nwgaps_list,
-               nwcigar_list);
+               target_list.data(),
+               nwscore_list.data(),
+               nwalignmentlength_list.data(),
+               nwmatches_list.data(),
+               nwmismatches_list.data(),
+               nwgaps_list.data(),
+               nwcigar_list.data());
     }
 
   int i = 0;
 
-  for(int x = si->finalized; x < si->hit_count; x++)
+  for (int x = searchinfo->finalized; x < searchinfo->hit_count; x++)
     {
       /* maxrejects or maxaccepts reached - ignore remaining hits */
-      if ((si->rejects < opt_maxrejects) && (si->accepts < opt_maxaccepts))
+      if ((searchinfo->rejects < opt_maxrejects) and (searchinfo->accepts < opt_maxaccepts))
         {
-          struct hit * hit = si->hits + x;
+          struct hit * hit = searchinfo->hits + x;
 
           if (hit->rejected)
             {
-              si->rejects++;
+              searchinfo->rejects++;
             }
           else
             {
@@ -650,18 +664,18 @@ auto align_delayed(struct searchinfo_s * si) -> void
 
                   char * dseq = db_getsequence(target);
 
-                  if (nwcigar_list[i])
+                  if (nwcigar_list[i] != nullptr)
                     {
                       xfree(nwcigar_list[i]);
                     }
 
-                  nwcigar = xstrdup(si->lma->align(si->qsequence,
+                  nwcigar = xstrdup(searchinfo->lma->align(searchinfo->qsequence,
                                                    dseq,
-                                                   si->qseqlen,
+                                                   searchinfo->qseqlen,
                                                    dseqlen));
 
-                  si->lma->alignstats(nwcigar,
-                                      si->qsequence,
+                  searchinfo->lma->alignstats(nwcigar,
+                                      searchinfo->qsequence,
                                       dseq,
                                       & nwscore,
                                       & nwalignmentlength,
@@ -679,8 +693,8 @@ auto align_delayed(struct searchinfo_s * si) -> void
                 }
 
               hit->aligned = true;
-              hit->shortest = MIN(si->qseqlen, dseqlen);
-              hit->longest = MAX(si->qseqlen, dseqlen);
+              hit->shortest = std::min(searchinfo->qseqlen, static_cast<int>(dseqlen));
+              hit->longest = std::max(searchinfo->qseqlen, static_cast<int>(dseqlen));
               hit->nwalignment = nwcigar;
               hit->nwscore = nwscore;
               hit->nwdiff = nwalignmentlength - nwmatches;
@@ -696,13 +710,13 @@ auto align_delayed(struct searchinfo_s * si) -> void
               align_trim(hit);
 
               /* test accept/reject criteria after alignment */
-              if (search_acceptable_aligned(si, hit))
+              if (search_acceptable_aligned(*searchinfo, hit))
                 {
-                  si->accepts++;
+                  searchinfo->accepts++;
                 }
               else
                 {
-                  si->rejects++;
+                  searchinfo->rejects++;
                 }
 
               ++i;
@@ -716,60 +730,65 @@ auto align_delayed(struct searchinfo_s * si) -> void
       xfree(nwcigar_list[i++]);
     }
 
-  si->finalized = si->hit_count;
+  searchinfo->finalized = searchinfo->hit_count;
 }
 
-auto search_onequery(struct searchinfo_s * si, int seqmask) -> void
+
+auto search_onequery(struct searchinfo_s * searchinfo, int seqmask) -> void
 {
-  si->hit_count = 0;
+  searchinfo->hit_count = 0;
 
-  search16_qprep(si->s, si->qsequence, si->qseqlen);
+  search16_qprep(searchinfo->s, searchinfo->qsequence, searchinfo->qseqlen);
 
-  si->lma = new LinearMemoryAligner;
+  struct Scoring scoring;
+  scoring.match = opt_match;
+  scoring.mismatch = opt_mismatch;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_open_query_left = opt_gap_open_query_left;
+  scoring.gap_open_target_left = opt_gap_open_target_left;
+  scoring.gap_open_query_interior = opt_gap_open_query_interior;
+  scoring.gap_open_target_interior = opt_gap_open_target_interior;
+  scoring.gap_open_query_right = opt_gap_open_query_right;
+  scoring.gap_open_target_right = opt_gap_open_target_right;
+  scoring.gap_extension_query_left = opt_gap_extension_query_left;
+  scoring.gap_extension_target_left = opt_gap_extension_target_left;
+  scoring.gap_extension_query_interior = opt_gap_extension_query_interior;
+  scoring.gap_extension_target_interior = opt_gap_extension_target_interior;
+  scoring.gap_extension_query_right = opt_gap_extension_query_right;
+  scoring.gap_extension_target_right = opt_gap_extension_target_right;
 
-  int64_t * scorematrix = si->lma->scorematrix_create(opt_match, opt_mismatch);
 
-  si->lma->set_parameters(scorematrix,
-                          opt_gap_open_query_left,
-                          opt_gap_open_target_left,
-                          opt_gap_open_query_interior,
-                          opt_gap_open_target_interior,
-                          opt_gap_open_query_right,
-                          opt_gap_open_target_right,
-                          opt_gap_extension_query_left,
-                          opt_gap_extension_target_left,
-                          opt_gap_extension_query_interior,
-                          opt_gap_extension_target_interior,
-                          opt_gap_extension_query_right,
-                          opt_gap_extension_target_right);
+  searchinfo->lma = new LinearMemoryAligner(scoring);
+
 
   /* extract unique kmer samples from query*/
-  unique_count(si->uh, opt_wordlength,
-               si->qseqlen, si->qsequence,
-               &si->kmersamplecount, &si->kmersample, seqmask);
+  unique_count(searchinfo->uh, opt_wordlength,
+               searchinfo->qseqlen, searchinfo->qsequence,
+               &searchinfo->kmersamplecount, &searchinfo->kmersample, seqmask);
 
   /* find database sequences with the most kmer hits */
-  search_topscores(si);
+  search_topscores(searchinfo);
 
   /* analyse targets with the highest number of kmer hits */
-  si->accepts = 0;
-  si->rejects = 0;
-  si->finalized = 0;
+  searchinfo->accepts = 0;
+  searchinfo->rejects = 0;
+  searchinfo->finalized = 0;
 
   int delayed = 0;
 
-  while ((si->finalized + delayed < opt_maxaccepts + opt_maxrejects - 1) &&
-         (si->rejects < opt_maxrejects) &&
-         (si->accepts < opt_maxaccepts) &&
-         (not minheap_isempty(si->m)))
+  while ((searchinfo->finalized + delayed < opt_maxaccepts + opt_maxrejects - 1) and
+         (searchinfo->rejects < opt_maxrejects) and
+         (searchinfo->accepts < opt_maxaccepts) and
+         (not minheap_isempty(searchinfo->m)))
     {
-      elem_t const e = minheap_poplast(si->m);
+      elem_t const e = minheap_poplast(searchinfo->m);
 
-      struct hit * hit = si->hits + si->hit_count;
+      struct hit * hit = searchinfo->hits + searchinfo->hit_count;
 
       hit->target = e.seqno;
       hit->count = e.count;
-      hit->strand = si->strand;
+      hit->strand = searchinfo->strand;
       hit->rejected = false;
       hit->accepted = false;
       hit->aligned = false;
@@ -777,7 +796,7 @@ auto search_onequery(struct searchinfo_s * si, int seqmask) -> void
       hit->nwalignment = nullptr;
 
       /* Test some accept/reject criteria before alignment */
-      if (search_acceptable_unaligned(si, e.seqno))
+      if (search_acceptable_unaligned(*searchinfo, e.seqno))
         {
           ++delayed;
         }
@@ -786,80 +805,81 @@ auto search_onequery(struct searchinfo_s * si, int seqmask) -> void
           hit->rejected = true;
         }
 
-      si->hit_count++;
+      searchinfo->hit_count++;
 
       if (delayed == MAXDELAYED)
         {
-          align_delayed(si);
+          align_delayed(searchinfo);
           delayed = 0;
         }
     }
   if (delayed > 0)
     {
-      align_delayed(si);
+      align_delayed(searchinfo);
     }
 
-  delete si->lma;
-  xfree(scorematrix);
+  delete searchinfo->lma;
 }
+
 
 auto search_findbest2_byid(struct searchinfo_s * si_p,
                            struct searchinfo_s * si_m) -> struct hit *
 {
   struct hit * best = nullptr;
 
-  for(int i = 0; i < si_p->hit_count; i++)
+  for (int i = 0; i < si_p->hit_count; i++)
     {
-      if ((not best) or (hit_compare_byid_typed(si_p->hits + i, best) < 0))
+      if ((best == nullptr) or (hit_compare_byid_typed(si_p->hits + i, best) < 0))
         {
           best = si_p->hits + i;
         }
     }
 
-  if (opt_strand>1)
+  if (opt_strand > 1)
     {
-      for(int i = 0; i < si_m->hit_count; i++)
+      for (int i = 0; i < si_m->hit_count; i++)
         {
-          if ((not best) or (hit_compare_byid_typed(si_m->hits + i, best) < 0))
+          if ((best == nullptr) or (hit_compare_byid_typed(si_m->hits + i, best) < 0))
             {
               best = si_m->hits + i;
             }
         }
     }
 
-  if (best and not best->accepted)
+  if ((best != nullptr) and not best->accepted)
     {
       best = nullptr;
     }
 
   return best;
 }
+
 
 auto search_findbest2_bysize(struct searchinfo_s * si_p,
                              struct searchinfo_s * si_m) -> struct hit *
 {
   struct hit * best = nullptr;
 
-  for(int i = 0; i < si_p->hit_count; i++)
+  for (int i = 0; i < si_p->hit_count; i++)
     {
-      if ((not best) or (hit_compare_bysize_typed(si_p->hits + i, best) < 0))
+      if ((best == nullptr) or (hit_compare_bysize_typed(si_p->hits + i, best) < 0))
         {
           best = si_p->hits + i;
         }
     }
 
-  if (opt_strand>1)
+  if (opt_strand > 1)
     {
-      for(int i = 0; i < si_m->hit_count; i++)
+      for (int i = 0; i < si_m->hit_count; i++)
         {
-          if ((not best) or (hit_compare_bysize_typed(si_m->hits + i, best) < 0))
+          if ((best == nullptr) or (hit_compare_bysize_typed(si_m->hits + i, best) < 0))
             {
               best = si_m->hits + i;
             }
         }
     }
 
-  if (best and not best->accepted)
+  if ((best != nullptr) and not best->accepted)
     {
       best = nullptr;
     }
@@ -867,54 +887,25 @@ auto search_findbest2_bysize(struct searchinfo_s * si_p,
   return best;
 }
 
-auto search_joinhits(struct searchinfo_s * si_p,
-                     struct searchinfo_s * si_m,
-                     struct hit * * hitsp,
-                     int * hit_count) -> void
+
+auto search_joinhits(struct searchinfo_s * si_plus,
+                     struct searchinfo_s * si_minus,
+                     std::vector<struct hit> & hits) -> void
 {
   /* join and sort accepted and weak hits from both strands */
   /* free the remaining alignments */
 
-  /* first, just count the number of hits to keep */
-  int a = 0;
-  for (int s = 0; s < opt_strand; s++)
-    {
-      struct searchinfo_s * si = s ? si_m : si_p;
-      for(int i=0; i<si->hit_count; i++)
-        {
-          struct hit * h = si->hits + i;
-          if (h->accepted || h->weak)
-            {
-              ++a;
-            }
-        }
-    }
+  auto const counter = count_number_of_hits_to_keep(si_plus) + count_number_of_hits_to_keep(si_minus);
 
   /* allocate new array of hits */
-  auto * hits = (struct hit *) xmalloc(a * sizeof(struct hit));
+  hits.reserve(counter);
 
-  /* copy over the hits to be kept */
-  a = 0;
-  for (int s = 0; s < opt_strand; s++)
-    {
-      struct searchinfo_s * si = s ? si_m : si_p;
-      for(int i = 0; i<si->hit_count; i++)
-        {
-          struct hit * h = si->hits + i;
-          if (h->accepted || h->weak)
-            {
-              hits[a++] = *h;
-            }
-          else if (h->aligned)
-            {
-              xfree(h->nwalignment);
-            }
-        }
-    }
+  copy_over_hits_to_be_kept(hits, si_plus);
+  copy_over_hits_to_be_kept(hits, si_minus);
+
+  free_rejected_alignments(si_plus);
+  free_rejected_alignments(si_minus);
 
   /* last, sort the hits */
-  qsort(hits, a, sizeof(struct hit), hit_compare_byid);
-
-  *hitsp = hits;
-  *hit_count = a;
+  std::qsort(hits.data(), counter, sizeof(struct hit), hit_compare_byid);
 }

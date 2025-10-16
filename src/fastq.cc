@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -63,13 +62,139 @@
 
 #include "vsearch5d.h"
 #include "attributes.h"
-#include "maps.h"
+#include "utils/fatal.hpp"
+#include <array>
 #include <cstdint> // int64_t, uint64_t
-#include <cstdio>  // std::FILE, std::fprintf, std::snprintf
+#include <cstdio>  // std::FILE, std::fprintf, std::snprintf, std::size_t
 #include <cstring>  // std::memcmp, std::memchr, std::strlen
+#include <vector>
 
 
-auto fastq_fatal(uint64_t lineno, const char * msg) -> void
+// anonymous namespace: limit visibility and usage to this translation unit
+namespace {
+
+  // refactoring: eliminate and replace with an overload of buffer_filter_extend()?
+  const std::vector<unsigned char> chrmap_identity = {
+    /* identity map: does nothing */
+
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+    0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
+    0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+    0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
+  };
+
+
+  const std::vector<unsigned int> char_fq_action_seq =
+    {
+      /*
+        How to handle input characters for FASTQ:
+        All IUPAC characters are valid.
+        CR (^M) silently stripped.
+        LF is newline.
+        Rest is fatal
+
+        0=stripped, 1=legal, 2=fatal, 3=silently stripped, 4=newline
+
+        @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
+        P   Q   R   S   T   U   V   W   X   Y   Z   [   \   ]   ^   _
+      */
+
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  4,  2,  2,  3,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  1,  1,  1,  1,  2,  2,  1,  1,  2,  2,  1,  2,  1,  1,  2,
+      2,  2,  1,  1,  1,  1,  1,  1,  2,  1,  2,  2,  2,  2,  2,  2,
+      2,  1,  1,  1,  1,  2,  2,  1,  1,  2,  2,  1,  2,  1,  1,  2,
+      2,  2,  1,  1,  1,  1,  1,  1,  2,  1,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+    };
+
+
+  const std::vector<unsigned int> char_fq_action_qual =
+    {
+      /*
+        Quality characters, any from 33 to 126 is valid (legal).
+        CR (^M) silently stripped.
+        LF is newline.
+        Rest is fatal
+
+        @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
+        P   Q   R   S   T   U   V   W   X   Y   Z   [   \   ]   ^   _
+      */
+
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  4,  2,  2,  3,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
+      1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,
+      2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2
+    };
+
+}  // end of anonymous namespace
+
+
+auto fastq_fatal(uint64_t const lineno, const char * msg) -> void
 {
   char * string = nullptr;
   if (xsprintf(&string,
@@ -80,7 +205,7 @@ auto fastq_fatal(uint64_t lineno, const char * msg) -> void
       fatal("Out of memory");
     }
 
-  if (string)
+  if (string != nullptr)
     {
       fatal(string);
       xfree(string);
@@ -94,10 +219,10 @@ auto fastq_fatal(uint64_t lineno, const char * msg) -> void
 
 auto buffer_filter_extend(fastx_handle input_handle,
                           struct fastx_buffer_s * dest_buffer,
-                          char * source_buf,
-                          uint64_t len,
-                          unsigned int * char_action,
-                          const unsigned char * char_mapping,
+                          char const * source_buf,
+                          uint64_t const len,
+                          unsigned int const * char_action,
+                          unsigned char const * char_mapping,
                           bool * ok,
                           char * illegal_char) -> void
 {
@@ -106,7 +231,7 @@ auto buffer_filter_extend(fastx_handle input_handle,
   /* Strip unwanted characters from the string and raise warnings or
      errors on certain characters. */
 
-  auto * p = source_buf;
+  auto const * p = source_buf;
   auto * d = dest_buffer->data + dest_buffer->length;
   auto * q = d;
   *ok = true;
@@ -116,7 +241,7 @@ auto buffer_filter_extend(fastx_handle input_handle,
       auto const c = *p++;
       char const m = char_action[(unsigned char) (c)];
 
-      switch(m)
+      switch (m)
         {
         case 0:
           /* stripped */
@@ -158,7 +283,7 @@ auto fastq_open(const char * filename) -> fastx_handle
 {
   auto * input_handle = fastx_open(filename);
 
-  if (! fastx_is_fastq(input_handle))
+  if (not fastx_is_fastq(input_handle))
     {
       fatal("FASTQ file expected, FASTA file found (%s)", filename);
     }
@@ -188,7 +313,8 @@ auto fastq_next(fastx_handle input_handle,
 
   input_handle->lineno_start = input_handle->lineno;
 
-  char msg[200];
+  static constexpr auto max_message_length = std::size_t{200};
+  std::array<char, max_message_length> message {{}};
   auto ok = true;
   char illegal_char = '\0';
 
@@ -210,10 +336,10 @@ auto fastq_next(fastx_handle input_handle,
       fastq_fatal(input_handle->lineno, "Header line must start with '@' character");
     }
   input_handle->file_buffer.position++;
-  rest--;
+  --rest;
 
-  char * lf = nullptr;
-  while (lf == nullptr)
+  char const * line_end = nullptr;
+  while (line_end == nullptr)
     {
       /* get more data if buffer empty */
       rest = fastx_file_fill_buffer(input_handle);
@@ -223,16 +349,16 @@ auto fastq_next(fastx_handle input_handle,
         }
 
       /* find LF */
-      lf = (char *) memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
+      line_end = (char *) std::memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
                            '\n',
                            rest);
 
       /* copy to header buffer */
       auto len = rest;
-      if (lf)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
+          len = line_end - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
           input_handle->lineno++;
         }
       buffer_extend(&input_handle->header_buffer,
@@ -243,7 +369,7 @@ auto fastq_next(fastx_handle input_handle,
     }
 
   /* read sequence line(s) */
-  lf = nullptr;
+  line_end = nullptr;
   while (true)
     {
       /* get more data, if necessary */
@@ -256,21 +382,21 @@ auto fastq_next(fastx_handle input_handle,
         }
 
       /* end when new line starting with + is seen */
-      if (lf && (input_handle->file_buffer.data[input_handle->file_buffer.position] == '+'))
+      if ((line_end != nullptr) && (input_handle->file_buffer.data[input_handle->file_buffer.position] == '+'))
         {
           break;
         }
 
       /* find LF */
-      lf = (char *) memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
+      line_end = (char *) std::memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
                            '\n', rest);
 
       /* copy to sequence buffer */
       auto len = rest;
-      if (lf)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
+          len = line_end - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
           input_handle->lineno++;
         }
 
@@ -278,7 +404,7 @@ auto fastq_next(fastx_handle input_handle,
                            &input_handle->sequence_buffer,
                            input_handle->file_buffer.data + input_handle->file_buffer.position,
                            len,
-                           char_fq_action_seq, char_mapping,
+                           char_fq_action_seq.data(), char_mapping,
                            &ok, &illegal_char);
       input_handle->file_buffer.position += len;
       rest -= len;
@@ -287,19 +413,19 @@ auto fastq_next(fastx_handle input_handle,
         {
           if ((illegal_char >= 32) && (illegal_char < 127))
             {
-              snprintf(msg,
-                       200,
+              snprintf(message.data(),
+                       max_message_length,
                        "Illegal sequence character '%c'",
                        illegal_char);
             }
           else
             {
-              snprintf(msg,
-                       200,
+              snprintf(message.data(),
+                       max_message_length,
                        "Illegal sequence character (unprintable, no %d)",
                        (unsigned char) illegal_char);
             }
-          fastq_fatal(input_handle->lineno - (lf ? 1 : 0), msg);
+          fastq_fatal(input_handle->lineno - ((line_end != nullptr) ? 1 : 0), message.data());
         }
     }
 
@@ -307,10 +433,10 @@ auto fastq_next(fastx_handle input_handle,
 
   /* skip + character */
   input_handle->file_buffer.position++;
-  rest--;
+  --rest;
 
-  lf = nullptr;
-  while (lf == nullptr)
+  line_end = nullptr;
+  while (line_end == nullptr)
     {
       /* get more data if buffer empty */
       rest = fastx_file_fill_buffer(input_handle);
@@ -322,15 +448,15 @@ auto fastq_next(fastx_handle input_handle,
         }
 
       /* find LF */
-      lf = (char *) memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
+      line_end = (char *) std::memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
                            '\n',
                            rest);
       /* copy to plusline buffer */
       auto len = rest;
-      if (lf)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
+          len = line_end - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
           input_handle->lineno++;
         }
       buffer_extend(&input_handle->plusline_buffer,
@@ -342,12 +468,12 @@ auto fastq_next(fastx_handle input_handle,
 
   /* check that the plus line is empty or identical to @ line */
 
-  bool plusline_invalid = false;
+  auto plusline_invalid = false;
   if (input_handle->header_buffer.length == input_handle->plusline_buffer.length)
     {
-      if (memcmp(input_handle->header_buffer.data,
+      if ((memcmp(input_handle->header_buffer.data,
                  input_handle->plusline_buffer.data,
-                 input_handle->header_buffer.length))
+                  input_handle->header_buffer.length) != 0))
         {
           plusline_invalid = true;
         }
@@ -362,13 +488,13 @@ auto fastq_next(fastx_handle input_handle,
     }
   if (plusline_invalid)
     {
-      fastq_fatal(input_handle->lineno - (lf ? 1 : 0),
+      fastq_fatal(input_handle->lineno - ((line_end != nullptr) ? 1 : 0),
                   "'+' line must be empty or identical to header");
     }
 
   /* read quality line(s) */
 
-  lf = nullptr;
+  line_end = nullptr;
   while (true)
     {
       /* get more data, if necessary */
@@ -381,7 +507,7 @@ auto fastq_next(fastx_handle input_handle,
         }
 
       /* end if next entry starts : LF + '@' + correct length */
-      if (lf &&
+      if ((line_end != nullptr) &&
           (input_handle->file_buffer.data[input_handle->file_buffer.position] == '@') &&
           (input_handle->quality_buffer.length == input_handle->sequence_buffer.length))
         {
@@ -389,15 +515,15 @@ auto fastq_next(fastx_handle input_handle,
         }
 
       /* find LF */
-      lf = (char *) memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
+      line_end = (char *) std::memchr(input_handle->file_buffer.data + input_handle->file_buffer.position,
                            '\n', rest);
 
       /* copy to quality buffer */
       auto len = rest;
-      if (lf)
+      if (line_end != nullptr)
         {
           /* LF found, copy up to and including LF */
-          len = lf - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
+          len = line_end - (input_handle->file_buffer.data + input_handle->file_buffer.position) + 1;
           input_handle->lineno++;
         }
 
@@ -405,7 +531,7 @@ auto fastq_next(fastx_handle input_handle,
                            &input_handle->quality_buffer,
                            input_handle->file_buffer.data + input_handle->file_buffer.position,
                            len,
-                           char_fq_action_qual, chrmap_identity,
+                           char_fq_action_qual.data(), chrmap_identity.data(),
                            &ok, &illegal_char);
       input_handle->file_buffer.position += len;
       rest -= len;
@@ -420,25 +546,25 @@ auto fastq_next(fastx_handle input_handle,
         {
           if ((illegal_char >= 32) && (illegal_char < 127))
             {
-              snprintf(msg,
-                       200,
+              snprintf(message.data(),
+                       max_message_length,
                        "Illegal quality character '%c'",
                        illegal_char);
             }
           else
             {
-              snprintf(msg,
-                       200,
+              snprintf(message.data(),
+                       max_message_length,
                        "Illegal quality character (unprintable, no %d)",
                        (unsigned char) illegal_char);
             }
-          fastq_fatal(input_handle->lineno - (lf ? 1 : 0), msg);
+          fastq_fatal(input_handle->lineno - ((line_end != nullptr) ? 1 : 0), message.data());
         }
     }
 
   if (input_handle->sequence_buffer.length != input_handle->quality_buffer.length)
     {
-      fastq_fatal(input_handle->lineno - (lf ? 1 : 0),
+      fastq_fatal(input_handle->lineno - ((line_end != nullptr) ? 1 : 0),
                   "Sequence and quality lines must be equally long");
     }
 
@@ -450,7 +576,7 @@ auto fastq_next(fastx_handle input_handle,
 }
 
 
-auto fastq_get_quality(fastx_handle input_handle) -> char *
+auto fastq_get_quality(fastx_handle input_handle) -> char const *
 {
   return input_handle->quality_buffer.data;
 }
@@ -498,13 +624,13 @@ auto fastq_get_sequence_length(fastx_handle input_handle) -> uint64_t
 }
 
 
-auto fastq_get_header(fastx_handle input_handle) -> char *
+auto fastq_get_header(fastx_handle input_handle) -> char const *
 {
   return input_handle->header_buffer.data;
 }
 
 
-auto fastq_get_sequence(fastx_handle input_handle) -> char *
+auto fastq_get_sequence(fastx_handle input_handle) -> char const *
 {
   return input_handle->sequence_buffer.data;
 }
@@ -519,10 +645,7 @@ auto fastq_get_abundance(fastx_handle input_handle) -> int64_t
     {
       return size;
     }
-  else
-    {
-      return 1;
-    }
+  return 1;
 }
 
 
@@ -533,7 +656,7 @@ auto fastq_get_abundance_and_presence(fastx_handle input_handle) -> int64_t
 }
 
 
-inline auto fprint_seq_label(std::FILE * output_handle, char * seq, int len) -> void
+inline auto fprint_seq_label(std::FILE * output_handle, char const * seq, int const len) -> void
 {
   /* normalize first? */
   std::fprintf(output_handle, "%.*s", len, seq);
@@ -541,14 +664,14 @@ inline auto fprint_seq_label(std::FILE * output_handle, char * seq, int len) -> 
 
 
 auto fastq_print_general(FILE * output_handle,
-                         char * seq,
-                         int len,
-                         char * header,
-                         int header_len,
-                         char * quality,
-                         int abundance,
-                         int ordinal,
-                         double ee) -> void
+                         char const * seq,
+                         int const len,
+                         char const * header,
+                         int const header_len,
+                         char const * quality,
+                         int const abundance,
+                         int const ordinal,
+                         double const expected_error) -> void
 {
   std::fprintf(output_handle, "@");
 
@@ -564,14 +687,14 @@ auto fastq_print_general(FILE * output_handle,
     {
       fprint_seq_digest_md5(output_handle, seq, len);
     }
-  else if (opt_relabel && (ordinal > 0))
+  else if ((opt_relabel != nullptr) && (ordinal > 0))
     {
       std::fprintf(output_handle, "%s%d", opt_relabel, ordinal);
     }
   else
     {
       auto const xsize = opt_xsize || (opt_sizeout && (abundance > 0));
-      auto const xee = opt_xee || ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0));
+      auto const xee = opt_xee || ((opt_eeout || opt_fastq_eeout) && (expected_error >= 0.0));
       auto const xlength = opt_xlength || opt_lengthout;
       header_fprint_strip(output_handle,
                           header,
@@ -581,12 +704,12 @@ auto fastq_print_general(FILE * output_handle,
                           xlength);
     }
 
-  if (opt_label_suffix)
+  if (opt_label_suffix != nullptr)
     {
       std::fprintf(output_handle, "%s", opt_label_suffix);
     }
 
-  if (opt_sample)
+  if (opt_sample != nullptr)
     {
       std::fprintf(output_handle, ";sample=%s", opt_sample);
     }
@@ -596,28 +719,28 @@ auto fastq_print_general(FILE * output_handle,
       std::fprintf(output_handle, ";size=%u", abundance);
     }
 
-  if ((opt_eeout || opt_fastq_eeout) && (ee >= 0.0))
+  if ((opt_eeout || opt_fastq_eeout) && (expected_error >= 0.0))
     {
-      if (ee < 0.000000001) {
-        std::fprintf(output_handle, ";ee=%.13lf", ee);
-      } else if (ee < 0.00000001) {
-        std::fprintf(output_handle, ";ee=%.12lf", ee);
-      } else if (ee < 0.0000001) {
-        std::fprintf(output_handle, ";ee=%.11lf", ee);
-      } else if (ee < 0.000001) {
-        std::fprintf(output_handle, ";ee=%.10lf", ee);
-      } else if (ee < 0.00001) {
-        std::fprintf(output_handle, ";ee=%.9lf", ee);
-      } else if (ee < 0.0001) {
-        std::fprintf(output_handle, ";ee=%.8lf", ee);
-      } else if (ee < 0.001) {
-        std::fprintf(output_handle, ";ee=%.7lf", ee);
-      } else if (ee < 0.01) {
-        std::fprintf(output_handle, ";ee=%.6lf", ee);
-      } else if (ee < 0.1) {
-        std::fprintf(output_handle, ";ee=%.5lf", ee);
+      if (expected_error < 0.000000001) {
+        std::fprintf(output_handle, ";ee=%.13lf", expected_error);
+      } else if (expected_error < 0.00000001) {
+        std::fprintf(output_handle, ";ee=%.12lf", expected_error);
+      } else if (expected_error < 0.0000001) {
+        std::fprintf(output_handle, ";ee=%.11lf", expected_error);
+      } else if (expected_error < 0.000001) {
+        std::fprintf(output_handle, ";ee=%.10lf", expected_error);
+      } else if (expected_error < 0.00001) {
+        std::fprintf(output_handle, ";ee=%.9lf", expected_error);
+      } else if (expected_error < 0.0001) {
+        std::fprintf(output_handle, ";ee=%.8lf", expected_error);
+      } else if (expected_error < 0.001) {
+        std::fprintf(output_handle, ";ee=%.7lf", expected_error);
+      } else if (expected_error < 0.01) {
+        std::fprintf(output_handle, ";ee=%.6lf", expected_error);
+      } else if (expected_error < 0.1) {
+        std::fprintf(output_handle, ";ee=%.5lf", expected_error);
       } else {
-        std::fprintf(output_handle, ";ee=%.4lf", ee);
+        std::fprintf(output_handle, ";ee=%.4lf", expected_error);
       }
     }
 
@@ -627,7 +750,7 @@ auto fastq_print_general(FILE * output_handle,
     }
 
   if (opt_relabel_keep &&
-      ((opt_relabel && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5 || opt_relabel_self))
+      (((opt_relabel != nullptr) && (ordinal > 0)) || opt_relabel_sha1 || opt_relabel_md5 || opt_relabel_self))
     {
       std::fprintf(output_handle, " %.*s", header_len, header);
     }
@@ -636,7 +759,7 @@ auto fastq_print_general(FILE * output_handle,
 }
 
 
-auto fastq_print(std::FILE * output_handle, char * header, char * sequence, char * quality) -> void
+auto fastq_print(std::FILE * output_handle, char const * header, char const * sequence, char const * quality) -> void
 {
   auto const slen = static_cast<int>(std::strlen(sequence));
   auto const hlen = static_cast<int>(std::strlen(header));

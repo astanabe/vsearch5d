@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -62,12 +61,15 @@
 */
 
 #include "vsearch5d.h"
-#include "maps.h"
+#include "linmemalign.h"
+#include "utils/fatal.hpp"
+#include "utils/maps.hpp"
 #include <algorithm>  // std::max
 #include <cinttypes>  // macros PRIu64 and PRId64
 #include <cstdint>  // int64_t
-#include <cstdio>  // std::FILE, std::printf, std::size_t, std::snprintf, std::sscanf
+#include <cstdio>  // std::printf, std::size_t, std::snprintf, std::sscanf
 #include <limits>
+// #include <vector>
 
 
 /*
@@ -93,106 +95,110 @@
 
 */
 
-LinearMemoryAligner::LinearMemoryAligner()
+constexpr auto minimal_length = int64_t{64};
+
+
+LinearMemoryAligner::LinearMemoryAligner(struct Scoring const & scoring)
+    : go_q_l(scoring.gap_open_query_left),
+      go_t_l(scoring.gap_open_target_left),
+      go_q_i(scoring.gap_open_query_interior),
+      go_t_i(scoring.gap_open_target_interior),
+      go_q_r(scoring.gap_open_query_right),
+      go_t_r(scoring.gap_open_target_right),
+      ge_q_l(scoring.gap_extension_query_left),
+      ge_t_l(scoring.gap_extension_target_left),
+      ge_q_i(scoring.gap_extension_query_interior),
+      ge_t_i(scoring.gap_extension_target_interior),
+      ge_q_r(scoring.gap_extension_query_right),
+      ge_t_r(scoring.gap_extension_target_right)
 {
-  scorematrix = nullptr;
-
-  cigar_alloc = 0;
-  cigar_string = nullptr;
-
-  vector_alloc = 0;
-  HH = nullptr;
-  EE = nullptr;
-  XX = nullptr;
-  YY = nullptr;
+  scorematrix_fill(scoring);
 }
 
 
-LinearMemoryAligner::~LinearMemoryAligner()
-{
-  if (cigar_string)
-    {
-      xfree(cigar_string);
+/*
+  Expected score matrix (if option N is mismatch):
+
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+     -  A  C  M  G  R  S  V  T  W  Y  H  K  D  B  N
+0  - M  X  X  0  X  0  0  0  X  0  0  0  0  0  0  X
+1  A X  M  X  0  X  0  0  0  X  0  0  0  0  0  0  X
+2  C X  X  M  0  X  0  0  0  X  0  0  0  0  0  0  X
+3  M 0  0  0  M  0  0  0  0  0  0  0  0  0  0  0  X
+4  G X  X  X  0  M  0  0  0  X  0  0  0  0  0  0  X
+5  R 0  0  0  0  0  M  0  0  0  0  0  0  0  0  0  X
+6  S 0  0  0  0  0  0  M  0  0  0  0  0  0  0  0  X
+7  V 0  0  0  0  0  0  0  M  0  0  0  0  0  0  0  X
+8  T X  X  X  0  X  0  0  0  M  0  0  0  0  0  0  X
+9  W 0  0  0  0  0  0  0  0  0  M  0  0  0  0  0  X
+10 Y 0  0  0  0  0  0  0  0  0  0  M  0  0  0  0  X
+11 H 0  0  0  0  0  0  0  0  0  0  0  M  0  0  0  X
+12 K 0  0  0  0  0  0  0  0  0  0  0  0  M  0  0  X
+13 D 0  0  0  0  0  0  0  0  0  0  0  0  0  M  0  X
+14 B 0  0  0  0  0  0  0  0  0  0  0  0  0  0  M  X
+15 N X  X  X  X  X  X  X  X  X  X  X  X  X  X  X  M
+
+  M = match, X = mismatch
+
+  Map from ascii to 4-bit nucleotide code
+  -:  0
+  A:  1
+  C:  2
+  M:  3
+  G:  4
+  R:  5
+  S:  6
+  V:  7
+  T:  8
+  W:  9
+  Y: 10
+  H: 11
+  K: 12
+  D: 13
+  B: 14
+  N: 15
+*/
+
+auto LinearMemoryAligner::scorematrix_fill(struct Scoring const & scoring) -> void {
+ std::vector<char> const nucleotides = {'-', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
+
+  // fill-in the score matrix
+  for (auto const row_nuc : nucleotides) {
+    auto const row = map_4bit(row_nuc);
+    for (auto const column_nuc : nucleotides) {
+      auto const column = map_4bit(column_nuc);
+      if (is_ambiguous_4bit(row) or is_ambiguous_4bit(column)) {
+        continue;  // then score is 0; already zero-initialized
+      }
+      if (row == column) { // diagonal
+        scorematrix[row][column] = scoring.match;
+      }
+      else {
+        scorematrix[row][column] = scoring.mismatch;
+      }
     }
-  if (HH)
-    {
-      xfree(HH);
+  }
+
+  // if alignment with N is set to be a mismatch
+  if (opt_n_mismatch) {
+    // last column
+    for (auto & row : scorematrix) {
+      row.back() = scoring.mismatch;
     }
-  if (EE)
-    {
-      xfree(EE);
-    }
-  if (XX)
-    {
-      xfree(XX);
-    }
-  if (YY)
-    {
-      xfree(YY);
-    }
+    // last row
+    auto & last_row = scorematrix.back();
+    std::fill(last_row.begin(), last_row.end(), scoring.mismatch);
+  }
 }
 
 
-auto LinearMemoryAligner::scorematrix_create(int64_t match, int64_t mismatch) -> int64_t *
-{
-  auto * newscorematrix = (int64_t *) xmalloc(16 * 16 * sizeof(int64_t));
-
-  for (int i = 0; i < 16; i++)
-    {
-      for (int j = 0; j < 16; j++)
-        {
-          int64_t value = 0;
-          if (opt_n_mismatch && ((i == 15) || (j == 15)))
-            {
-              value = mismatch;
-            }
-          else if (ambiguous_4bit[i] || ambiguous_4bit[j])
-            {
-              value = 0;
-            }
-          else if (i == j)
-            {
-              value = match;
-            }
-          else
-            {
-              value = mismatch;
-            }
-          newscorematrix[(16 * i) + j] = value;
-        }
-    }
-  return newscorematrix;
-}
-
-
-auto LinearMemoryAligner::alloc_vectors(size_t x) -> void
-{
-  if (vector_alloc < x)
-    {
-      vector_alloc = x;
-
-      if (HH)
-        {
-          xfree(HH);
-        }
-      if (EE)
-        {
-          xfree(EE);
-        }
-      if (XX)
-        {
-          xfree(XX);
-        }
-      if (YY)
-        {
-          xfree(YY);
-        }
-
-      HH = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
-      EE = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
-      XX = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
-      YY = (int64_t *) xmalloc(vector_alloc * (sizeof(int64_t)));
-    }
+auto LinearMemoryAligner::alloc_vectors(std::size_t const size) -> void {
+  if (vector_alloc >= size) { return; }
+  vector_alloc = size;
+  HH.resize(vector_alloc);
+  EE.resize(vector_alloc);
+  XX.resize(vector_alloc);
+  YY.resize(vector_alloc);
 }
 
 
@@ -200,54 +206,60 @@ auto LinearMemoryAligner::cigar_reset() -> void
 {
   if (cigar_alloc < 1)
     {
-      cigar_alloc = 64;
-      cigar_string = (char *) xrealloc(cigar_string, cigar_alloc);
+      cigar_alloc = minimal_length;
+      cigar_string.resize(cigar_alloc);
     }
-  cigar_string[0] = 0;
+  cigar_string[0] = '\0';
   cigar_length = 0;
-  op = 0;
+  op = '\0';
   op_run = 0;
 }
 
 
 auto LinearMemoryAligner::cigar_flush() -> void
 {
-  if (op_run > 0)
+  if (op_run <= 0) { return; }
+  while (true)
     {
-      while (true)
-        {
-          /* try writing string until enough memory has been allocated */
+      /* try writing string until enough memory has been allocated */
 
-          int64_t const rest = cigar_alloc - cigar_length;
-          int n = 0;
-          if (op_run > 1)
-            {
-              n = snprintf(cigar_string + cigar_length,
-                           rest,
-                           "%" PRId64 "%c", op_run, op);
-            }
-          else
-            {
-              n = snprintf(cigar_string + cigar_length,
-                           rest,
-                           "%c", op);
-            }
-          if (n < 0)
-            {
-              fatal("snprintf returned a negative number.\n");
-            }
-          else if (n >= rest)
-            {
-              cigar_alloc += MAX(n - rest + 1, 64);
-              cigar_string = (char *) xrealloc(cigar_string, cigar_alloc);
-            }
-          else
-            {
-              cigar_length += n;
-              break;
-            }
+      auto const rest = cigar_alloc - cigar_length;
+      auto n = 0;
+      if (op_run > 1)
+        {
+          n = std::snprintf(&cigar_string[cigar_length],
+                       rest,
+                       "%" PRId64 "%c", op_run, op);
+        }
+      else
+        {
+          n = std::snprintf(&cigar_string[cigar_length],
+                       rest,
+                       "%c", op);
+        }
+      if (n < 0)
+        {
+          fatal("snprintf returned a negative number.\n");
+        }
+      else if (n >= rest)
+        {
+          cigar_alloc += std::max(n - rest + 1, minimal_length);
+          cigar_string.resize(cigar_alloc);
+        }
+      else
+        {
+          cigar_length += n;
+          break;
         }
     }
+}
+
+
+auto LinearMemoryAligner::subst_score(char const lhs, char const rhs) -> int64_t
+{
+  /* return substitution score for replacing char lhs (sequence a),
+     with char rhs (sequence b) */
+  return scorematrix[map_4bit(rhs)][map_4bit(lhs)];
 }
 
 
@@ -266,20 +278,6 @@ auto LinearMemoryAligner::cigar_add(char _op, int64_t run) -> void
 }
 
 
-auto LinearMemoryAligner::show_matrix() -> void
-{
-  for (int i = 0; i < 16; i++)
-    {
-      printf("%2d:", i);
-      for (int j = 0; j < 16; j++)
-        {
-          printf(" %2" PRId64, scorematrix[(16 * i) + j]);
-        }
-      printf("\n");
-    }
-}
-
-
 auto LinearMemoryAligner::diff(int64_t a_start,
                                int64_t b_start,
                                int64_t a_len,
@@ -291,7 +289,10 @@ auto LinearMemoryAligner::diff(int64_t a_start,
                                bool b_left,      /* includes left end of b  */
                                bool b_right) -> void  /* includes right end of b */
 {
-  static constexpr auto long_min = std::numeric_limits<long>::min();
+  static constexpr auto int64_min = std::numeric_limits<int64_t>::min();
+  // auto span_A = Span{std::next(a_seq, a_start), a_len};
+  // auto span_B = Span{std::next(b_seq, b_start), b_len};
+
   if (b_len == 0)
     {
       /* B and possibly A is empty */
@@ -335,7 +336,7 @@ auto LinearMemoryAligner::diff(int64_t a_start,
 
       /* gap penalty for gap in B of length 1 */
 
-      if (! gap_b_left)
+      if (not gap_b_left)
         {
           Score -= b_left ? go_t_l : go_t_i;
         }
@@ -362,7 +363,7 @@ auto LinearMemoryAligner::diff(int64_t a_start,
 
       /* gap penalty for gap in B of length 1 */
 
-      if (! gap_b_right)
+      if (not gap_b_right)
         {
           Score -= b_right ? go_t_r : go_t_i;
         }
@@ -378,7 +379,7 @@ auto LinearMemoryAligner::diff(int64_t a_start,
 
       /* Third possibility */
 
-      for (int64_t j = 0; j < b_len; j++)
+      for (int64_t i = 0; i < b_len; i++)
         {
           // Insert zero or more from B, replace 1, insert rest of B
           // -A--
@@ -386,24 +387,24 @@ auto LinearMemoryAligner::diff(int64_t a_start,
 
           Score = 0;
 
-          if (j > 0)
+          if (i > 0)
             {
-              Score -= a_left ? go_q_l + (j * ge_q_l) : go_q_i + (j * ge_q_i);
+              Score -= a_left ? go_q_l + (i * ge_q_l) : go_q_i + (i * ge_q_i);
             }
 
-          Score += subst_score(a_start, b_start + j);
+          Score += subst_score(a_seq[a_start], b_seq[b_start + i]);
 
-          if (j < b_len - 1)
+          if (i < b_len - 1)
             {
               Score -= a_right ?
-                go_q_r + ((b_len - 1 - j) * ge_q_r) :
-                go_q_i + ((b_len - 1 - j) * ge_q_i);
+                go_q_r + ((b_len - 1 - i) * ge_q_r) :
+                go_q_i + ((b_len - 1 - i) * ge_q_i);
             }
 
           if (Score > MaxScore)
             {
               MaxScore = Score;
-              best = j;
+              best = i;
             }
         }
 
@@ -434,50 +435,50 @@ auto LinearMemoryAligner::diff(int64_t a_start,
     {
       /* a_len >= 2, b_len >= 1 */
 
-      int64_t const I = a_len / 2;
+      int64_t const I = a_len / 2;  // rename: median?
 
       // Compute HH & EE in forward phase
       // Upper part
 
       /* initialize HH and EE for values corresponding to
-         empty seq A vs B of j symbols,
-         i.e. a gap of length j in A                 */
+         empty seq A vs B of i symbols,
+         i.e. a gap of length i in A                 */
 
       HH[0] = 0;
       EE[0] = 0;
 
-      for (int64_t j = 1; j <= b_len; j++)
+      for (int64_t i = 1; i <= b_len; i++)
         {
-          HH[j] = - (a_left ? go_q_l + (j * ge_q_l) : go_q_i + (j * ge_q_i));
-          EE[j] = long_min;
+          HH[i] = - (a_left ? go_q_l + (i * ge_q_l) : go_q_i + (i * ge_q_i));
+          EE[i] = int64_min;
         }
 
       /* compute matrix */
 
       for (int64_t i = 1; i <= I; i++)
         {
-          int64_t p = HH[0];
+          auto p = HH[0];
 
           int64_t h = - (b_left ?
                          (gap_b_left ? 0 : go_t_l) + (i * ge_t_l) :
                          (gap_b_left ? 0 : go_t_i) + (i * ge_t_i));
 
           HH[0] = h;
-          int64_t f = long_min;
+          auto f = int64_min;
 
           for (int64_t j = 1; j <= b_len; j++)
             {
-              f = MAX(f, h - go_q_i) - ge_q_i;
-              if (b_right && (j == b_len))
+              f = std::max(f, h - go_q_i) - ge_q_i;
+              if (b_right and (j == b_len))
                 {
-                  EE[j] = MAX(EE[j], HH[j] - go_t_r) - ge_t_r;
+                  EE[j] = std::max(EE[j], HH[j] - go_t_r) - ge_t_r;
                 }
               else
                 {
-                  EE[j] = MAX(EE[j], HH[j] - go_t_i) - ge_t_i;
+                  EE[j] = std::max(EE[j], HH[j] - go_t_i) - ge_t_i;
                 }
 
-              h = p + subst_score(a_start + i - 1, b_start + j - 1);
+              h = p + subst_score(a_seq[a_start + i - 1], b_seq[b_start + j - 1]);
 
               h = std::max(f, h);
               h = std::max(EE[j], h);
@@ -496,37 +497,37 @@ auto LinearMemoryAligner::diff(int64_t a_start,
       XX[0] = 0;
       YY[0] = 0;
 
-      for (int64_t j = 1; j <= b_len; j++)
+      for (int64_t i = 1; i <= b_len; i++)
         {
-          XX[j] = - (a_right ? go_q_r + (j * ge_q_r) : go_q_i + (j * ge_q_i));
-          YY[j] = long_min;
+          XX[i] = - (a_right ? go_q_r + (i * ge_q_r) : go_q_i + (i * ge_q_i));
+          YY[i] = int64_min;
         }
 
       /* compute matrix */
 
       for (int64_t i = 1; i <= a_len - I; i++)
         {
-          int64_t p = XX[0];
+          auto p = XX[0];
 
           int64_t h = - (b_right ?
                          (gap_b_right ? 0 : go_t_r) + (i * ge_t_r) :
                          (gap_b_right ? 0 : go_t_i) + (i * ge_t_i));
           XX[0] = h;
-          int64_t f = long_min;
+          auto f = int64_min;
 
           for (int64_t j = 1; j <= b_len; j++)
             {
-              f = MAX(f, h - go_q_i) - ge_q_i;
-              if (b_left && (j==b_len))
+              f = std::max(f, h - go_q_i) - ge_q_i;
+              if (b_left and (j == b_len))
                 {
-                  YY[j] = MAX(YY[j], XX[j] - go_t_l) - ge_t_l;
+                  YY[j] = std::max(YY[j], XX[j] - go_t_l) - ge_t_l;
                 }
               else
                 {
-                  YY[j] = MAX(YY[j], XX[j] - go_t_i) - ge_t_i;
+                  YY[j] = std::max(YY[j], XX[j] - go_t_i) - ge_t_i;
                 }
 
-              h = p + subst_score(a_start + a_len - i, b_start + b_len - j);
+              h = p + subst_score(a_seq[a_start + a_len - i], b_seq[b_start + b_len - j]);
 
               h = std::max(f, h);
               h = std::max(YY[j], h);
@@ -540,35 +541,35 @@ auto LinearMemoryAligner::diff(int64_t a_start,
 
       /* find maximum score along division line */
 
-      int64_t MaxScore0 = long_min;
+      auto MaxScore0 = int64_min;
       int64_t best0 = -1;
 
       /* solutions with diagonal at break */
 
-      for (int64_t j = 0; j <= b_len; j++)
+      for (int64_t i = 0; i <= b_len; i++)
         {
-          int64_t const Score = HH[j] + XX[b_len - j];
+          auto const Score = HH[i] + XX[b_len - i];
 
           if (Score > MaxScore0)
             {
               MaxScore0 = Score;
-              best0 = j;
+              best0 = i;
             }
         }
 
-      int64_t MaxScore1 = long_min;
+      auto MaxScore1 = int64_min;
       int64_t best1 = -1;
 
       /* solutions that end with a gap in b from both ends at break */
 
-      for (int64_t j = 0; j <= b_len; j++)
+      for (int64_t i = 0; i <= b_len; i++)
         {
           int64_t g = 0;
-          if (b_left && (j == 0))
+          if (b_left and (i == 0))
             {
               g = go_t_l;
             }
-          else if (b_right && (j == b_len))
+          else if (b_right and (i == b_len))
             {
               g = go_t_r;
             }
@@ -577,16 +578,16 @@ auto LinearMemoryAligner::diff(int64_t a_start,
               g = go_t_i;
             }
 
-          int64_t const Score = EE[j] + YY[b_len - j] + g;
+          auto const Score = EE[i] + YY[b_len - i] + g;
 
           if (Score > MaxScore1)
             {
               MaxScore1 = Score;
-              best1 = j;
+              best1 = i;
             }
         }
 
-      int64_t P = 0;
+      int64_t P = 0;  // rename: is_parted?? convert to bool?
       int64_t best = 0;
 
       if (MaxScore0 > MaxScore1)
@@ -621,13 +622,13 @@ auto LinearMemoryAligner::diff(int64_t a_start,
                I,                     best,
                gap_b_left,            false,
                a_left,                false,
-               b_left,                b_right && (best == b_len));
+               b_left,                b_right and (best == b_len));
 
           diff(a_start + I,           b_start + best,
                a_len - I,             b_len - best,
                false,                 gap_b_right,
                false,                 a_right,
-               b_left && (best == 0), b_right);
+               b_left and (best == 0), b_right);
         }
       else if (P == 1)
         {
@@ -635,7 +636,7 @@ auto LinearMemoryAligner::diff(int64_t a_start,
                I - 1,                 best,
                gap_b_left,            true,
                a_left,                false,
-               b_left,                b_right && (best == b_len));
+               b_left,                b_right and (best == b_len));
 
           cigar_add('D', 2);
 
@@ -643,53 +644,16 @@ auto LinearMemoryAligner::diff(int64_t a_start,
                a_len - I - 1,         b_len - best,
                true,                  gap_b_right,
                false,                 a_right,
-               b_left && (best == 0), b_right);
+               b_left and (best == 0), b_right);
         }
     }
 }
 
 
-auto LinearMemoryAligner::set_parameters(int64_t * _scorematrix,
-                                         int64_t _gap_open_query_left,
-                                         int64_t _gap_open_target_left,
-                                         int64_t _gap_open_query_interior,
-                                         int64_t _gap_open_target_interior,
-                                         int64_t _gap_open_query_right,
-                                         int64_t _gap_open_target_right,
-                                         int64_t _gap_extension_query_left,
-                                         int64_t _gap_extension_target_left,
-                                         int64_t _gap_extension_query_interior,
-                                         int64_t _gap_extension_target_interior,
-                                         int64_t _gap_extension_query_right,
-                                         int64_t _gap_extension_target_right) -> void
-{
-  scorematrix = _scorematrix;
-
-  /* a = query/q   b = t/target */
-
-  go_q_l = _gap_open_query_left;
-  go_t_l = _gap_open_target_left;
-  go_q_i = _gap_open_query_interior;
-  go_t_i = _gap_open_target_interior;
-  go_q_r = _gap_open_query_right;
-  go_t_r = _gap_open_target_right;
-  ge_q_l = _gap_extension_query_left;
-  ge_t_l = _gap_extension_target_left;
-  ge_q_i = _gap_extension_query_interior;
-  ge_t_i = _gap_extension_target_interior;
-  ge_q_r = _gap_extension_query_right;
-  ge_t_r = _gap_extension_target_right;
-
-  q = _gap_open_query_interior;
-  r = _gap_extension_query_interior;
-}
-
-
-
 auto LinearMemoryAligner::align(char * _a_seq,
-                                  char * _b_seq,
-                                  int64_t a_len,
-                                  int64_t b_len) -> char *
+                                char * _b_seq,
+                                int64_t a_len,
+                                int64_t b_len) -> char *
 {
   /* copy parameters */
   a_seq = _a_seq;
@@ -708,8 +672,9 @@ auto LinearMemoryAligner::align(char * _a_seq,
   cigar_flush();
 
   /* return cigar */
-  return cigar_string;
+  return cigar_string.data();
 }
+
 
 auto LinearMemoryAligner::alignstats(char * cigar,
                                      char * _a_seq,
@@ -720,6 +685,7 @@ auto LinearMemoryAligner::alignstats(char * cigar,
                                      int64_t * _nwmismatches,
                                      int64_t * _nwgaps) -> void
 {
+  static constexpr auto is_N = 15;  // 4-bit code for 'N' or 'n'
   a_seq = _a_seq;
   b_seq = _b_seq;
 
@@ -732,83 +698,85 @@ auto LinearMemoryAligner::alignstats(char * cigar,
   int64_t a_pos = 0;
   int64_t b_pos = 0;
 
-  char * p = cigar;
+  auto * p = cigar;
 
   int64_t g = 0;
 
-  while (*p)
+  while (*p != '\0')
     {
-      int64_t run = 1;
-      int scanlength = 0;
-      sscanf(p, "%" PRId64 "%n", &run, &scanlength);
+      int64_t runlength = 1;
+      auto scanlength = 0;
+      std::sscanf(p, "%" PRId64 "%n", &runlength, &scanlength);
       p += scanlength;
       switch (*p++)
         {
         case 'M':
-          nwalignmentlength += run;
-          for (int64_t k = 0; k < run; k++)
+          nwalignmentlength += runlength;
+          for (int64_t k = 0; k < runlength; k++)
             {
-              nwscore += subst_score(a_pos, b_pos);
+              auto const a_nuc = a_seq[a_pos];
+              auto const b_nuc = b_seq[b_pos];
+              nwscore += subst_score(a_nuc, b_nuc);
 
-              if (opt_n_mismatch && ((chrmap_4bit[(int) (a_seq[a_pos])] == 15) ||
-                                     (chrmap_4bit[(int) (b_seq[b_pos])] == 15)))
+              if (opt_n_mismatch and ((map_4bit(a_nuc) == is_N) or
+                                     (map_4bit(b_nuc) == is_N)))
                 {
-                  nwmismatches++;
+                  ++nwmismatches;
                 }
-              else if (chrmap_4bit[(int)(a_seq[a_pos])] &
-                       chrmap_4bit[(int)(b_seq[b_pos])])
+              else if ((map_4bit(a_nuc) &
+                        map_4bit(b_nuc)) != 0U)
                 {
-                  nwmatches++;
+                  ++nwmatches;
                 }
               else
                 {
-                  nwmismatches++;
+                  ++nwmismatches;
                 }
 
-              a_pos++;
-              b_pos++;
+              ++a_pos;
+              ++b_pos;
             }
           break;
 
         case 'I':
-          if ((a_pos == 0) && (b_pos == 0))
+          if ((a_pos == 0) and (b_pos == 0))
             {
-              g = go_q_l + run * ge_q_l;
+              g = go_q_l + (runlength * ge_q_l);
             }
-          else if (*p == 0)
+          else if (*p == '\0')  // last operation?
             {
-              g = go_q_r + run * ge_q_r;
+              g = go_q_r + (runlength * ge_q_r);
             }
           else
             {
-              g = go_q_i + run * ge_q_i;
+              g = go_q_i + (runlength * ge_q_i);
             }
           nwscore -= g;
-          nwgaps++;
-          nwalignmentlength += run;
-          b_pos += run;
+          ++nwgaps;
+          nwalignmentlength += runlength;
+          b_pos += runlength;
           break;
 
         case 'D':
-          if ((a_pos == 0) && (b_pos == 0))
+          if ((a_pos == 0) and (b_pos == 0))
             {
-              g = go_t_l + run * ge_t_l;
+              g = go_t_l + (runlength * ge_t_l);
             }
-          else if (*p == 0)
+          else if (*p == '\0')  // last operation?
             {
-              g = go_t_r + run * ge_t_r;
+              g = go_t_r + (runlength * ge_t_r);
             }
           else
             {
-              g = go_t_i + run * ge_t_i;
+              g = go_t_i + (runlength * ge_t_i);
             }
           nwscore -= g;
-          nwgaps++;
-          nwalignmentlength += run;
-          a_pos += run;
+          ++nwgaps;
+          nwalignmentlength += runlength;
+          a_pos += runlength;
           break;
-        }
-    }
+        }  // end of switch
+    }  // end of cigar parsing
 
   *_nwscore = nwscore;
   *_nwalignmentlength = nwalignmentlength;
@@ -816,3 +784,17 @@ auto LinearMemoryAligner::alignstats(char * cigar,
   *_nwmismatches = nwmismatches;
   *_nwgaps = nwgaps;
 }
+
+
+// TODO: include guards span.hpp, linmemalign.h  *DONE*
+//       scorematrix as vector of vectors? fix scorematrix_create? *DONE*
+//       pass nucleotides to subst_score(char const lhs, char const rhs) *DONE*
+//       struct scoring as class private member (rename struct members everywhere),
+//       inject struct Span in diff(),
+//       pass a Pair<nucleotides>
+//       design a struct Pair<sequences>?
+
+// struct Pair {
+//   Span seq_A;
+//   Span seq_B;
+// };

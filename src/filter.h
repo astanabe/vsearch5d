@@ -11,7 +11,6 @@
   Copyright (C) 2014-2025, Torbjorn Rognes, Frederic Mahe and Tomas Flouri
   All rights reserved.
 
-
   This software is dual-licensed and available under a choice
   of one of two licenses, either under the terms of the GNU
   General Public License version 3 or the BSD 2-Clause License.
@@ -61,5 +60,5 @@
 
 */
 
-auto fastq_filter() -> void;
-auto fastx_filter() -> void;
+auto fastq_filter(struct Parameters const & parameters) -> void;
+auto fastx_filter(struct Parameters const & parameters) -> void;
